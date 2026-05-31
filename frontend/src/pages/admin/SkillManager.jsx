@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, Zap, Loader } from 'lucide-react'
 
-const API_BASE = 'http://localhost:8080'
+const API_BASE = ''
 
 export default function SkillManager() {
   const [skills, setSkills] = useState([])

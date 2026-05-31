@@ -3,7 +3,6 @@
 **/target/
 
 # 构建产物
-frontend/dist/
 backend/target/
 
 # 数据和日志

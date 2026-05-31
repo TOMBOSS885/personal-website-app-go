@@ -17,7 +17,7 @@ import LoginPage from './pages/admin/LoginPage'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 
-const API_BASE = 'http://localhost:8080'
+const API_BASE = ''
 
 // 覆盖 window.fetch，统一处理管理后台 API 的 401 响应
 function setupAdminApiInterceptor() {

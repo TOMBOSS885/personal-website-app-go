@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 
 const ThemeContext = createContext(null)
-const API_BASE = 'http://localhost:8080'
+const API_BASE = ''
 
 // 调整颜色亮度
 function adjustBrightness(hex, percent) {

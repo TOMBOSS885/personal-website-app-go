@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Palette, Check, Loader, Sparkles, RotateCcw, Eye } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
-const API_BASE = 'http://localhost:8080'
+const API_BASE = ''
 
 export default function ThemeManager() {
   const { 

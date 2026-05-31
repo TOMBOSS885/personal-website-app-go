@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, FolderGit, Star, ExternalLink, Loader } from 'lucide-react'
 
-const API_BASE = 'http://localhost:8080'
+const API_BASE = ''
 
 export default function ProjectManager() {
   const [projects, setProjects] = useState([])

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash } from 'lucide-react'
 import RichTextEditor from '../../components/RichTextEditor'
 
-const API_BASE = 'http://localhost:8080'
+const API_BASE = ''
 
 export default function ArticleManager() {
   const [articles, setArticles] = useState([])

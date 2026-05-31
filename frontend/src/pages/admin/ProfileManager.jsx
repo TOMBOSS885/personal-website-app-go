@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { User, Mail, Tag, MessageSquare, Target, Coffee, Star, Loader, ChevronDown, ChevronUp, Globe } from 'lucide-react'
 
-const API_BASE = 'http://localhost:8080'
+const API_BASE = ''
 
 export default function ProfileManager() {
   const [profile, setProfile] = useState(null)

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { FileText, Folder, Award, Eye, TrendingUp, Sparkles } from 'lucide-react'
 
-const API_BASE = 'http://localhost:8080'
+const API_BASE = ''
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ articles: 0, projects: 0, skills: 0, views: 0 })

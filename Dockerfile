@@ -46,8 +46,8 @@ COPY --from=backend-builder /app/backend/target/*.jar app.jar
 # 复制本地预构建的前端产物
 COPY frontend/dist /var/www/html
 
-# 复制 nginx 配置
-COPY docker/nginx.conf /etc/nginx/http.d/default.conf
+# 复制 nginx 配置 (覆盖默认站点)
+COPY docker/nginx.conf /etc/nginx/sites-enabled/default
 
 # 复制 supervisor 配置 (管理多个进程)
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
