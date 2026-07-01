@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, Check, Loader, Trash2, UploadCloud } from 'lucide-react'
+import { Bot, Check, ImageOff, Loader, Trash2, UploadCloud } from 'lucide-react'
 
 const API_BASE = ''
 
@@ -203,14 +203,35 @@ export default function Live2DManager() {
 
             {models.map(model => (
               <div key={model.id} className="border border-gray-100 rounded-xl p-4 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-semibold text-gray-900 truncate">{model.name}</h3>
-                    {model.active && (
-                      <span className="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700">当前启用</span>
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="w-20 h-20 rounded-lg border border-gray-100 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0">
+                    {model.thumbnailPath ? (
+                      <img
+                        src={model.thumbnailPath}
+                        alt={model.name}
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="text-center text-gray-400 px-2">
+                        <ImageOff className="w-5 h-5 mx-auto mb-1" />
+                        <span className="text-[10px] leading-tight">无缩略图</span>
+                      </div>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 mt-1 truncate">{model.modelPath}</p>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900 truncate">{model.name}</h3>
+                      {model.active && (
+                        <span className="text-xs px-2 py-1 rounded-full bg-green-50 text-green-700">当前启用</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 truncate">{model.modelPath}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {model.thumbnailPath ? '已从上传文件中找到缩略图' : '上传文件中未找到可用图片'}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button

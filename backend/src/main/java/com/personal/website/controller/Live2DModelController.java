@@ -10,8 +10,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -122,13 +124,15 @@ public class Live2DModelController {
     }
 
     private Map<String, Object> toDto(Live2DModel model) {
-        return Map.of(
-            "id", model.getId(),
-            "name", model.getName(),
-            "modelPath", model.getModelPath(),
-            "active", model.getActive(),
-            "createdAt", model.getCreatedAt()
-        );
+        Optional<String> thumbnailPath = findThumbnailPath(model);
+        Map<String, Object> dto = new java.util.LinkedHashMap<>();
+        dto.put("id", model.getId());
+        dto.put("name", model.getName());
+        dto.put("modelPath", model.getModelPath());
+        dto.put("thumbnailPath", thumbnailPath.orElse(""));
+        dto.put("active", model.getActive());
+        dto.put("createdAt", model.getCreatedAt());
+        return dto;
     }
 
     private String normalizeRelativePath(String path) {
@@ -140,6 +144,50 @@ public class Live2DModelController {
     private boolean isModelJson(String path) {
         String lower = path.toLowerCase();
         return lower.endsWith("model.json") || lower.endsWith(".model3.json");
+    }
+
+    private Optional<String> findThumbnailPath(Live2DModel model) {
+        Path modelDir = Paths.get(uploadProperties.getDir()).toAbsolutePath().normalize()
+            .resolve("live2d")
+            .resolve(model.getDirectory())
+            .normalize();
+        if (!Files.exists(modelDir)) {
+            return Optional.empty();
+        }
+
+        try (var stream = Files.walk(modelDir)) {
+            return stream
+                .filter(Files::isRegularFile)
+                .filter(this::isImageFile)
+                .sorted(Comparator
+                    .comparingInt((Path path) -> imagePriority(modelDir.relativize(path).toString()))
+                    .thenComparing(path -> modelDir.relativize(path).toString()))
+                .findFirst()
+                .map(path -> "/uploads/live2d/" + model.getDirectory() + "/"
+                    + modelDir.relativize(path).toString().replace("\\", "/"));
+        } catch (IOException ignored) {
+            return Optional.empty();
+        }
+    }
+
+    private boolean isImageFile(Path path) {
+        String lower = path.getFileName().toString().toLowerCase();
+        return lower.endsWith(".png")
+            || lower.endsWith(".jpg")
+            || lower.endsWith(".jpeg")
+            || lower.endsWith(".webp")
+            || lower.endsWith(".gif");
+    }
+
+    private int imagePriority(String relativePath) {
+        String lower = relativePath.replace("\\", "/").toLowerCase();
+        if (lower.contains("preview") || lower.contains("thumb") || lower.contains("cover") || lower.contains("icon")) {
+            return 0;
+        }
+        if (!lower.contains("texture")) {
+            return 1;
+        }
+        return 2;
     }
 
     private void deleteDirectory(Path directory) throws IOException {
