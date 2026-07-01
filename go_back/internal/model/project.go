@@ -16,3 +16,7 @@ type Project struct {
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
+
+func (Project) TableName() string {
+	return "projects"
+}

@@ -15,11 +15,16 @@ type Live2DSettings struct {
 	ShowAboutButton    bool   `gorm:"column:show_about_button" json:"showAboutButton"`
 }
 
+func (Live2DSettings) TableName() string {
+	return "live2d_settings"
+}
+
 type Live2DModel struct {
 	ID              uint64    `gorm:"primaryKey" json:"id"`
 	Name            string    `gorm:"column:name" json:"name"`
+	Directory       string    `gorm:"column:directory" json:"-"`
 	ModelPath       string    `gorm:"column:model_path" json:"modelPath"`
-	ThumbnailPath   string    `gorm:"column:thumbnail_path" json:"thumbnailPath"`
+	ThumbnailPath   string    `gorm:"-" json:"thumbnailPath"`
 	Active          bool      `gorm:"column:active" json:"active"`
 	Switchable      bool      `gorm:"column:switchable" json:"switchable"`
 	DisplayOrder    int       `gorm:"column:display_order" json:"displayOrder"`
@@ -40,6 +45,10 @@ type Live2DModel struct {
 	TypingMinValue  float64   `gorm:"column:typing_min_value" json:"typingMinValue"`
 	TypingMaxValue  float64   `gorm:"column:typing_max_value" json:"typingMaxValue"`
 	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
+}
+
+func (Live2DModel) TableName() string {
+	return "live2d_models"
 }
 
 type Live2DResponse struct {

@@ -15,3 +15,7 @@ type Article struct {
 	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt  time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
+
+func (Article) TableName() string {
+	return "articles"
+}

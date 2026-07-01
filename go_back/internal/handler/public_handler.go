@@ -16,19 +16,34 @@ func GetProfile(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "获取资料失败")
 		return
 	}
-	response.Success(c, user)
+	isEn := strings.EqualFold(c.DefaultQuery("lang", "zh"), "en")
+	response.Success(c, gin.H{
+		"nickname":       user.Nickname,
+		"location":       user.Location,
+		"website":        user.Website,
+		"github":         user.Github,
+		"twitter":        user.Twitter,
+		"linkedin":       user.Linkedin,
+		"emailPublic":    user.EmailPublic,
+		"coffeeCount":    user.CoffeeCount,
+		"starsCount":     user.StarsCount,
+		"bio":            localized(isEn, user.Bio, user.BioEn),
+		"tags":           localized(isEn, user.Tags, user.TagsEn),
+		"welcomeText":    localized(isEn, user.WelcomeText, user.WelcomeTextEn),
+		"ctaTitle":       localized(isEn, user.CtaTitle, user.CtaTitleEn),
+		"ctaDescription": localized(isEn, user.CtaDesc, user.CtaDescEn),
+	})
 }
 
 func GetStats(c *gin.Context) {
 	user, err := repository.GetFirstUser()
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, "Failed to get user")
+		response.Error(c, http.StatusInternalServerError, "获取用户失败")
 		return
 	}
 
 	projectCount, _ := repository.GetProjectCount()
 	articleCount, _ := repository.GetArticleCount()
-	
 	starsCount := int64(user.StarsCount)
 	if starsCount == 0 {
 		starsCount, _ = repository.GetTotalStars()
@@ -52,7 +67,6 @@ func GetArticles(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "获取文章失败")
 		return
 	}
-
 	response.Page(c, articles, total, size, page)
 }
 
@@ -63,7 +77,8 @@ func GetArticle(c *gin.Context) {
 		response.Error(c, http.StatusNotFound, "文章不存在")
 		return
 	}
-	repository.IncrementArticleViews(id)
+	_ = repository.IncrementArticleViews(id)
+	article.Views++
 	response.Success(c, article)
 }
 
@@ -76,13 +91,12 @@ func GetTags(c *gin.Context) {
 
 	tagSet := make(map[string]bool)
 	var tags []string
-	for _, rt := range rawTags {
-		parts := strings.Split(rt, ",")
-		for _, t := range parts {
-			t = strings.TrimSpace(t)
-			if t != "" && !tagSet[t] {
-				tagSet[t] = true
-				tags = append(tags, t)
+	for _, raw := range rawTags {
+		for _, tag := range strings.Split(raw, ",") {
+			tag = strings.TrimSpace(tag)
+			if tag != "" && !tagSet[tag] {
+				tagSet[tag] = true
+				tags = append(tags, tag)
 			}
 		}
 	}
@@ -131,35 +145,12 @@ func GetTheme(c *gin.Context) {
 		response.Success(c, gin.H{"preset": "purple-pink"})
 		return
 	}
-
-	if theme.PresetKey != "" {
-		response.Success(c, gin.H{
-			"id":     theme.ID,
-			"name":   theme.Name,
-			"preset": theme.PresetKey,
-		})
-	} else {
-		response.Success(c, gin.H{
-			"id":   theme.ID,
-			"name": theme.Name,
-			"custom": gin.H{
-				"primary":         theme.PrimaryColor,
-				"secondary":       theme.SecondaryColor,
-				"accent":          theme.AccentColor,
-				"background":      theme.Background,
-				"backgroundStyle": theme.BackgroundStyle,
-				"backgroundImage": theme.BackgroundImage,
-				"cardBg":          theme.CardBg,
-				"textPrimary":     theme.TextPrimary,
-				"textSecondary":   theme.TextSecondary,
-			},
-		})
-	}
+	writeThemeResponse(c, theme)
 }
 
 func GetLive2DModel(c *gin.Context) {
-	settings, err := repository.GetLive2DSettings()
-	if err != nil || !settings.Enabled {
+	settings := getOrCreateLive2DSettings()
+	if !settings.Enabled {
 		response.Success(c, gin.H{"enabled": false})
 		return
 	}
@@ -168,15 +159,22 @@ func GetLive2DModel(c *gin.Context) {
 	if len(models) == 0 {
 		models, _ = repository.GetLive2DModels(false, true)
 	}
-	
 	if len(models) == 0 {
 		response.Success(c, gin.H{"enabled": false})
 		return
 	}
 
+	attachLive2DThumbnails(models)
 	response.Success(c, gin.H{
 		"enabled":  true,
 		"settings": settings,
 		"models":   models,
 	})
+}
+
+func localized(isEn bool, zh, en string) string {
+	if isEn && en != "" {
+		return en
+	}
+	return zh
 }

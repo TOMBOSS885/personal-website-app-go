@@ -15,7 +15,7 @@ func SaveFile(file *multipart.FileHeader, dest string) error {
 	if strings.Contains(dest, "..") {
 		return errors.New("invalid path")
 	}
-	
+
 	// 确保目录存在
 	dir := filepath.Dir(dest)
 	if err := os.MkdirAll(dir, 0755); err != nil {

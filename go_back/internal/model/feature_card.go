@@ -11,3 +11,7 @@ type FeatureCard struct {
 	DisplayOrder  int    `gorm:"column:display_order" json:"displayOrder"`
 	Enabled       bool   `gorm:"column:enabled" json:"enabled"`
 }
+
+func (FeatureCard) TableName() string {
+	return "feature_cards"
+}

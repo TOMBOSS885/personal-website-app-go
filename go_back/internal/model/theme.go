@@ -16,6 +16,10 @@ type Theme struct {
 	IsActive        bool   `gorm:"column:is_active" json:"-"`
 }
 
+func (Theme) TableName() string {
+	return "themes"
+}
+
 // CustomTheme 对应 JSON 返回的 custom 部分
 type CustomTheme struct {
 	Primary         string `json:"primary"`

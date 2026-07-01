@@ -27,9 +27,7 @@ func Login(c *gin.Context) {
 		response.Error(c, http.StatusUnauthorized, "用户名或密码错误")
 		return
 	}
-
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
-	if err != nil {
+	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)) != nil {
 		response.Error(c, http.StatusUnauthorized, "用户名或密码错误")
 		return
 	}
@@ -39,6 +37,5 @@ func Login(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "Token 生成失败")
 		return
 	}
-
 	response.Success(c, gin.H{"token": token})
 }

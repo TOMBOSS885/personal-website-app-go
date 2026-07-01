@@ -2,6 +2,7 @@ package config
 
 import (
 	"log"
+	"net/url"
 	"os"
 	"strconv"
 
@@ -9,44 +10,59 @@ import (
 )
 
 type Config struct {
-	ServerPort  string
-	MySQLDSN    string
-	JWTSecret   string
-	JWTExpireMs int64
-	UploadDir   string
-	GinMode     string
+	ServerPort         string
+	MySQLDSN           string
+	JWTSecret          string
+	JWTExpireMs        int64
+	UploadDir          string
+	GinMode            string
+	CORSAllowedOrigins string
+	AutoMigrate        bool
+	AdminUsername      string
+	AdminPassword      string
+	AdminEmail         string
 }
 
 var AppConfig *Config
 
 func InitConfig() {
-	// 尝试加载 .env 文件，如果失败则静默（可能在生产环境直接使用环境变量）
 	_ = godotenv.Load()
-
-	serverPort := getEnv("SERVER_PORT", "8080")
-	mysqlHost := getEnv("MYSQL_HOST", "127.0.0.1")
-	mysqlPort := getEnv("MYSQL_PORT", "3306")
-	mysqlDatabase := getEnv("MYSQL_DATABASE", "personal_website")
-	mysqlUsername := getEnv("MYSQL_USERNAME", "root")
-	mysqlPassword := getEnv("MYSQL_PASSWORD", "")
-
-	// 构建 DSN
-	dsn := mysqlUsername + ":" + mysqlPassword + "@tcp(" + mysqlHost + ":" + mysqlPort + ")/" + mysqlDatabase + "?charset=utf8mb4&parseTime=true&loc=Local"
 
 	jwtExpireMs, err := strconv.ParseInt(getEnv("JWT_EXPIRATION", "86400000"), 10, 64)
 	if err != nil {
-		log.Printf("Invalid JWT_EXPIRATION, using default 86400000: %v", err)
+		log.Printf("invalid JWT_EXPIRATION, using default 86400000: %v", err)
 		jwtExpireMs = 86400000
 	}
 
 	AppConfig = &Config{
-		ServerPort:  serverPort,
-		MySQLDSN:    dsn,
-		JWTSecret:   getEnv("JWT_SECRET", "please-change-this-secret-key-at-least-32-chars"),
-		JWTExpireMs: jwtExpireMs,
-		UploadDir:   getEnv("APP_UPLOAD_DIR", "uploads"),
-		GinMode:     getEnv("GIN_MODE", "debug"),
+		ServerPort:         getEnv("SERVER_PORT", "8080"),
+		MySQLDSN:           buildMySQLDSN(),
+		JWTSecret:          getEnv("JWT_SECRET", "please-change-this-secret-key-at-least-32-chars"),
+		JWTExpireMs:        jwtExpireMs,
+		UploadDir:          getEnv("APP_UPLOAD_DIR", "uploads"),
+		GinMode:            getEnv("GIN_MODE", "debug"),
+		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),
+		AutoMigrate:        getEnv("AUTO_MIGRATE", "true") == "true",
+		AdminUsername:      getEnv("ADMIN_USERNAME", "admin"),
+		AdminPassword:      getEnv("ADMIN_PASSWORD", "admin123"),
+		AdminEmail:         getEnv("ADMIN_EMAIL", "admin@example.com"),
 	}
+}
+
+func buildMySQLDSN() string {
+	if dsn := os.Getenv("MYSQL_DSN"); dsn != "" {
+		return dsn
+	}
+
+	username := getEnv("MYSQL_USERNAME", "root")
+	password := getEnv("MYSQL_PASSWORD", "")
+	host := getEnv("MYSQL_HOST", "127.0.0.1")
+	port := getEnv("MYSQL_PORT", "3306")
+	database := getEnv("MYSQL_DATABASE", "personal_website")
+	loc := url.QueryEscape(getEnv("MYSQL_LOC", "Asia/Shanghai"))
+
+	return username + ":" + password + "@tcp(" + host + ":" + port + ")/" + database +
+		"?charset=utf8mb4&parseTime=true&loc=" + loc
 }
 
 func getEnv(key, fallback string) string {

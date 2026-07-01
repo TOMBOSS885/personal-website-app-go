@@ -1,67 +1,52 @@
-# Personal website full-stack Docker image.
-# Frontend, backend, and nginx are packaged in one container.
+# Full-stack image for the Go backend version.
+# It builds l2d-widget, the React/Vite frontend, and the Go API, then runs
+# Nginx plus the Go API in one small runtime container.
 
-# Stage 1: build frontend
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/l2d-widget
-
 COPY l2d-widget/package*.json ./
 RUN npm install --legacy-peer-deps
-
 COPY l2d-widget/ ./
 RUN npm run build
 
 WORKDIR /app/frontend
-
 COPY frontend/package*.json ./
 RUN npm ci
-
 COPY frontend/ ./
 RUN npm run build
 
-# Stage 2: build backend
-FROM maven:3.9-eclipse-temurin-21-alpine AS backend-builder
+FROM golang:1.22-alpine AS backend-builder
 
-WORKDIR /app/backend
+WORKDIR /app/go_back
+COPY go_back/go.mod go_back/go.sum ./
+RUN go mod download
+COPY go_back/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/personal-website-api ./cmd/server
 
-COPY backend/pom.xml ./
-
-RUN mvn dependency:go-offline -B
-
-COPY backend/src ./src
-
-RUN mvn clean package -DskipTests -B
-
-# Stage 3: runtime image
-FROM ubuntu:22.04
+FROM alpine:3.20
 
 LABEL maintainer="Claw"
-LABEL description="Personal Website - Full Stack (Frontend + Backend)"
-LABEL version="1.0"
+LABEL description="Personal Website - Go Backend + Frontend"
+LABEL version="2.0"
 
-RUN apt-get update && apt-get install -y \
-    nginx \
-    supervisor \
-    openjdk-21-jre-headless \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache nginx supervisor wget tzdata \
+    && addgroup -S app \
+    && adduser -S app -G app \
+    && mkdir -p /app/uploads /run/nginx /var/log/supervisor /var/www/html
 
 WORKDIR /app
 
-COPY --from=backend-builder /app/backend/target/*.jar app.jar
-
+COPY --from=backend-builder /out/personal-website-api /app/personal-website-api
 COPY --from=frontend-builder /app/frontend/dist /var/www/html
+COPY docker/nginx.conf /etc/nginx/http.d/default.conf
+COPY docker/supervisord.conf /etc/supervisord.conf
 
-COPY docker/nginx.conf /etc/nginx/sites-enabled/default
-
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-RUN mkdir -p /app/uploads
+RUN chown -R app:app /app/uploads /var/log/supervisor
 
 EXPOSE 3718 8080
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/public/profile || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8080/api/public/profile >/dev/null || exit 1
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

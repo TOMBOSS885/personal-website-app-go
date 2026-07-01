@@ -1,15 +1,15 @@
 package repository
 
 import (
+	"gorm.io/gorm"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/model"
-	"gorm.io/gorm"
 )
 
 func GetArticles(page, size int, tag string, onlyPublished bool) ([]model.Article, int64, error) {
 	var articles []model.Article
 	var total int64
-	
+
 	query := db.DB.Model(&model.Article{})
 	if onlyPublished {
 		query = query.Where("published = ?", true)
@@ -17,12 +17,12 @@ func GetArticles(page, size int, tag string, onlyPublished bool) ([]model.Articl
 	if tag != "" {
 		query = query.Where("tags LIKE ?", "%"+tag+"%")
 	}
-	
+
 	err := query.Count(&total).Error
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	offset := page * size
 	err = query.Order("created_at DESC").Offset(offset).Limit(size).Find(&articles).Error
 	return articles, total, err

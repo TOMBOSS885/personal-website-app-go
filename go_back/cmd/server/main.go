@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"personal-website-go/internal/bootstrap"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/handler"
@@ -12,44 +13,35 @@ import (
 )
 
 func main() {
-	// 1. 初始化配置
 	config.InitConfig()
-
-	// 2. 初始化数据库
 	db.InitDB()
 
-	// 自动迁移
-	db.DB.AutoMigrate(
-		&model.User{},
-		&model.Article{},
-		&model.Project{},
-		&model.Skill{},
-		&model.FeatureCard{},
-		&model.Theme{},
-		&model.Live2DModel{},
-		&model.Live2DSettings{},
-	)
+	if config.AppConfig.AutoMigrate {
+		if err := db.DB.AutoMigrate(
+			&model.User{},
+			&model.Article{},
+			&model.Project{},
+			&model.Skill{},
+			&model.FeatureCard{},
+			&model.Theme{},
+			&model.Live2DModel{},
+			&model.Live2DSettings{},
+		); err != nil {
+			log.Fatalf("database migration failed: %v", err)
+		}
+	}
+	bootstrap.SeedDefaultData()
 
-	// 3. 设置 Gin 模式
 	gin.SetMode(config.AppConfig.GinMode)
-
-	// 4. 创建引擎
 	r := gin.New()
 	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.CORS())
-
-	// 静态文件服务
 	r.Static("/uploads", config.AppConfig.UploadDir)
 
-	// API 路由
 	api := r.Group("/api")
 	{
-		// 认证
 		auth := api.Group("/auth")
-		{
-			auth.POST("/login", handler.Login)
-		}
+		auth.POST("/login", handler.Login)
 
-		// 公开接口
 		public := api.Group("/public")
 		{
 			public.GET("/profile", handler.GetProfile)
@@ -65,7 +57,6 @@ func main() {
 			public.GET("/live2d-model", handler.GetLive2DModel)
 		}
 
-		// 管理端接口
 		admin := api.Group("/admin")
 		admin.Use(middleware.JWTAuth())
 		{
@@ -73,16 +64,47 @@ func main() {
 			admin.POST("/articles", handler.AdminCreateArticle)
 			admin.PUT("/articles/:id", handler.AdminUpdateArticle)
 			admin.DELETE("/articles/:id", handler.AdminDeleteArticle)
+			admin.GET("/article-images", handler.AdminListArticleImages)
+			admin.POST("/article-images", handler.AdminUploadArticleImage)
+
+			admin.GET("/projects", handler.AdminGetProjects)
+			admin.POST("/projects", handler.AdminCreateProject)
+			admin.PUT("/projects/:id", handler.AdminUpdateProject)
+			admin.DELETE("/projects/:id", handler.AdminDeleteProject)
+
+			admin.GET("/skills", handler.AdminGetSkills)
+			admin.POST("/skills", handler.AdminCreateSkill)
+			admin.PUT("/skills/:id", handler.AdminUpdateSkill)
+			admin.DELETE("/skills/:id", handler.AdminDeleteSkill)
+
+			admin.GET("/feature-cards", handler.AdminGetFeatureCards)
+			admin.POST("/feature-cards", handler.AdminCreateFeatureCard)
+			admin.PUT("/feature-cards/:id", handler.AdminUpdateFeatureCard)
+			admin.DELETE("/feature-cards/:id", handler.AdminDeleteFeatureCard)
+
+			admin.GET("/profile", handler.AdminGetProfile)
+			admin.PUT("/profile", handler.AdminUpdateProfile)
+			admin.PUT("/account/password", handler.AdminChangePassword)
+
+			admin.POST("/theme", handler.AdminSaveTheme)
+			admin.POST("/theme/background-image", handler.AdminUploadThemeBackground)
+			admin.GET("/themes", handler.AdminGetThemes)
+
+			admin.GET("/live2d-models", handler.AdminGetLive2DModels)
+			admin.POST("/live2d-models", handler.AdminUploadLive2DModel)
+			admin.PUT("/live2d-models/:id", handler.AdminUpdateLive2DModel)
+			admin.PUT("/live2d-models/:id/activate", handler.AdminActivateLive2DModel)
+			admin.DELETE("/live2d-models/:id", handler.AdminDeleteLive2DModel)
+			admin.PUT("/live2d-settings", handler.AdminUpdateLive2DSettings)
 		}
 	}
 
-	// 5. 启动服务
 	port := config.AppConfig.ServerPort
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("Starting server on port %s...", port)
+	log.Printf("starting server on port %s", port)
 	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+		log.Fatalf("server failed to start: %v", err)
 	}
 }

@@ -8,3 +8,7 @@ type Skill struct {
 	Icon         string `gorm:"column:icon" json:"icon"`
 	DisplayOrder int    `gorm:"column:display_order" json:"displayOrder"`
 }
+
+func (Skill) TableName() string {
+	return "skills"
+}
