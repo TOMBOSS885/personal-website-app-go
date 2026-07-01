@@ -6,10 +6,10 @@ spring:
     name: personal-website
   
   datasource:
-    url: jdbc:mysql://192.168.3.10:3306/personal_website?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/personal_website?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: cdh.2580
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   
   jpa:
     hibernate:
@@ -21,8 +21,8 @@ spring:
         dialect: org.hibernate.dialect.MySQLDialect
 
 jwt:
-  secret: your-256-bit-secret-key-for-jwt-token-generation-min-32-characters
-  expiration: 86400000
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-token-generation-min-32-characters}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 cors:
   allowed-origins: http://localhost:3000,http://localhost:5173

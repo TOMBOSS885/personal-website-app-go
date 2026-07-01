@@ -1,16 +1,14 @@
-# 生产环境配置
+# Production configuration
 spring:
   application:
     name: personal-website
   
-  # MySQL 数据库配置
   datasource:
-    url: jdbc:mysql://192.168.3.10:3306/personal_website?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/personal_website?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: cdh.2580
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   
-  # JPA 配置
   jpa:
     hibernate:
       ddl-auto: update
@@ -19,17 +17,14 @@ spring:
       hibernate:
         format_sql: false
 
-# 服务器配置
 server:
   port: 8080
   address: 0.0.0.0
 
-# JWT 配置
 jwt:
-  secret: your-production-secret-key-change-this-in-production
-  expiration: 86400000
+  secret: ${JWT_SECRET:please-change-this-secret-key-at-least-32-chars}
+  expiration: ${JWT_EXPIRATION:86400000}
 
-# 日志配置
 logging:
   level:
     root: INFO
