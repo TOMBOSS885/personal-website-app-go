@@ -112,7 +112,41 @@ CREATE TABLE IF NOT EXISTS live2d_models (
     directory VARCHAR(255) NOT NULL UNIQUE,
     model_path VARCHAR(1000) NOT NULL,
     active BIT DEFAULT 0,
+    switchable BIT DEFAULT 1,
+    display_order INT DEFAULT 0,
+    scale DOUBLE DEFAULT 1,
+    offset_x DOUBLE DEFAULT 0,
+    offset_y DOUBLE DEFAULT 0,
+    volume DOUBLE DEFAULT 0,
+    tips_enabled BIT DEFAULT 1,
+    welcome_messages VARCHAR(2000),
+    tip_messages VARCHAR(4000),
+    tip_duration INT DEFAULT 3500,
+    tip_interval INT DEFAULT 9000,
+    tip_offset_x INT DEFAULT 0,
+    tip_offset_y INT DEFAULT 0,
+    typing_enabled BIT DEFAULT 0,
+    typing_param VARCHAR(255),
+    typing_speed INT DEFAULT 120,
+    typing_min_value DOUBLE DEFAULT 0,
+    typing_max_value DOUBLE DEFAULT 1,
     created_at DATETIME
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================
+-- Live2D 全局设置表
+-- ========================================
+CREATE TABLE IF NOT EXISTS live2d_settings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    enabled BIT DEFAULT 1,
+    position VARCHAR(50) DEFAULT 'bottom-right',
+    size INT DEFAULT 280,
+    primary_color VARCHAR(100) DEFAULT 'rgba(96,165,250,0.92)',
+    transition_type VARCHAR(50) DEFAULT 'slide',
+    transition_duration INT DEFAULT 1500,
+    menu_align VARCHAR(50) DEFAULT 'right',
+    show_sleep_button BIT DEFAULT 1,
+    show_about_button BIT DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========================================
@@ -127,6 +161,7 @@ TRUNCATE TABLE projects;
 TRUNCATE TABLE skills;
 TRUNCATE TABLE themes;
 TRUNCATE TABLE live2d_models;
+TRUNCATE TABLE live2d_settings;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 管理员用户 (密码: admin123)

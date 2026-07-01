@@ -8,4 +8,5 @@ import java.util.Optional;
 public interface Live2DModelRepository extends JpaRepository<Live2DModel, Long> {
     Optional<Live2DModel> findByActiveTrue();
     List<Live2DModel> findAllByOrderByCreatedAtDesc();
+    List<Live2DModel> findAllBySwitchableTrueOrderByDisplayOrderAscCreatedAtDesc();
 }
