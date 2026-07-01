@@ -130,6 +130,38 @@
   font-family: inherit;
 }
 
+.markdown-editor-textarea {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  padding: 1.25rem;
+  color: #111827;
+  background: #fff;
+  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+  font-size: 15px;
+  line-height: 1.75;
+  letter-spacing: 0;
+  tab-size: 2;
+  white-space: pre-wrap;
+  overflow: auto;
+  caret-color: #7c3aed;
+}
+
+.markdown-editor-textarea::placeholder {
+  color: #9ca3af;
+}
+
+.article-editor-preview {
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.article-editor-preview > div > *:first-child {
+  margin-top: 0;
+}
+
 .admin-input {
   width: 100%;
   border-radius: 0.75rem;
