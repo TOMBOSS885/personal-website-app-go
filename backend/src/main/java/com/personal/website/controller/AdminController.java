@@ -6,8 +6,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -19,17 +22,20 @@ public class AdminController {
     private final SkillRepository skillRepository;
     private final FeatureCardRepository featureCardRepository;
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
     
     public AdminController(ArticleRepository articleRepository,
                           ProjectRepository projectRepository,
                           SkillRepository skillRepository,
                           FeatureCardRepository featureCardRepository,
-                          UserRepository userRepository) {
+                          UserRepository userRepository,
+                          PasswordEncoder passwordEncoder) {
         this.articleRepository = articleRepository;
         this.projectRepository = projectRepository;
         this.skillRepository = skillRepository;
         this.featureCardRepository = featureCardRepository;
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
     
     // === Article Management ===
@@ -204,5 +210,40 @@ public class AdminController {
                 return ResponseEntity.ok(userRepository.save(existing));
             })
             .orElse(ResponseEntity.notFound().build());
+    }
+
+    // === Account Management ===
+    @PutMapping("/account/password")
+    public ResponseEntity<?> changePassword(@RequestBody Map<String, String> request, Authentication authentication) {
+        if (authentication == null || authentication.getName() == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "请先登录"));
+        }
+
+        String currentPassword = request.get("currentPassword");
+        String newPassword = request.get("newPassword");
+
+        if (currentPassword == null || currentPassword.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "请输入当前密码"));
+        }
+
+        if (newPassword == null || newPassword.length() < 8) {
+            return ResponseEntity.badRequest().body(Map.of("message", "新密码至少需要 8 位"));
+        }
+
+        return userRepository.findByUsername(authentication.getName())
+            .map(user -> {
+                if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "当前密码不正确"));
+                }
+
+                if (passwordEncoder.matches(newPassword, user.getPassword())) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "新密码不能和当前密码相同"));
+                }
+
+                user.setPassword(passwordEncoder.encode(newPassword));
+                userRepository.save(user);
+                return ResponseEntity.ok(Map.of("message", "密码修改成功，请重新登录"));
+            })
+            .orElse(ResponseEntity.status(404).body(Map.of("message", "账号不存在")));
     }
 }

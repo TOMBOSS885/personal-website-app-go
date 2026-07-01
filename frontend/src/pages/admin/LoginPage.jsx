@@ -121,7 +121,7 @@ export default function LoginPage() {
 
           <div className="mt-6 pt-4 border-t border-white/10">
             <p className="text-center text-sm text-gray-400">
-              默认账号：<span className="text-purple-400 font-mono">admin</span> / <span className="text-pink-400 font-mono">admin123</span>
+              登录后可在账号安全中修改密码
             </p>
           </div>
         </form>

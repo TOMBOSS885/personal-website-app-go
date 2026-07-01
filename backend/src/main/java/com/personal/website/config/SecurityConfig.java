@@ -37,6 +37,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/public/**").permitAll()
                 .requestMatchers("/h2-console/**").permitAll()
+                .requestMatchers("/api/admin/**").authenticated()
                 .requestMatchers("/**").permitAll()  // Allow all requests for development
             )
             .headers(headers -> headers.frameOptions(frame -> frame.disable()))

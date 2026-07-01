@@ -15,6 +15,7 @@ import FeatureCardManager from './pages/admin/FeatureCardManager'
 import ProfileManager from './pages/admin/ProfileManager'
 import ThemeManager from './pages/admin/ThemeManager'
 import Live2DManager from './pages/admin/Live2DManager'
+import AccountSettings from './pages/admin/AccountSettings'
 import LoginPage from './pages/admin/LoginPage'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
@@ -81,6 +82,7 @@ function App() {
               <Route path="feature-cards" element={<FeatureCardManager />} />
               <Route path="skills" element={<SkillManager />} />
               <Route path="profile" element={<ProfileManager />} />
+              <Route path="account" element={<AccountSettings />} />
               <Route path="theme" element={<ThemeManager />} />
               <Route path="live2d" element={<Live2DManager />} />
             </Route>
