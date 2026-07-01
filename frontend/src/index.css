@@ -130,6 +130,22 @@
   font-family: inherit;
 }
 
+.admin-input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 0.625rem 1rem;
+  color: #111827;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.admin-input:focus {
+  border-color: #a855f7;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+
 /* Blog Markdown Rendering */
 .article-content {
   color: #1f2937;

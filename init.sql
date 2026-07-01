@@ -88,6 +88,21 @@ CREATE TABLE IF NOT EXISTS skills (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========================================
+-- 首页能力卡片表（“我能做什么 / 专业技能”模块）
+-- ========================================
+CREATE TABLE IF NOT EXISTS feature_cards (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    title_en VARCHAR(255),
+    description VARCHAR(500),
+    description_en VARCHAR(500),
+    icon VARCHAR(100) DEFAULT 'Code',
+    gradient VARCHAR(100) DEFAULT 'from-blue-500 to-cyan-500',
+    display_order INT DEFAULT 0,
+    enabled BIT DEFAULT 1
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================
 -- 主题表
 -- ========================================
 CREATE TABLE IF NOT EXISTS themes (
@@ -159,6 +174,7 @@ TRUNCATE TABLE users;
 TRUNCATE TABLE articles;
 TRUNCATE TABLE projects;
 TRUNCATE TABLE skills;
+TRUNCATE TABLE feature_cards;
 TRUNCATE TABLE themes;
 TRUNCATE TABLE live2d_models;
 TRUNCATE TABLE live2d_settings;
@@ -209,3 +225,10 @@ INSERT INTO skills (name, category, proficiency, display_order) VALUES
 ('Kubernetes',  'DevOps', 70, 7),
 ('MySQL',       '数据库', 85, 8),
 ('Redis',       '数据库', 78, 9);
+
+-- 首页能力卡片
+INSERT INTO feature_cards (title, title_en, description, description_en, icon, gradient, display_order, enabled) VALUES
+('全栈开发', 'Full Stack Dev', '前后端技术栈全面掌握，构建完整解决方案', 'Mastering frontend and backend technologies to build complete solutions', 'Code', 'from-blue-500 to-cyan-500', 1, 1),
+('系统架构', 'System Architecture', '设计高可用、可扩展的分布式系统架构', 'Designing highly available and scalable distributed systems', 'Database', 'from-purple-500 to-pink-500', 2, 1),
+('技术写作', 'Technical Writing', '分享技术心得与实践经验，记录成长历程', 'Sharing insights and experiences, documenting the growth journey', 'Globe', 'from-amber-500 to-orange-500', 3, 1),
+('持续创新', 'Continuous Innovation', '保持对新技术的探索热情，拥抱变化', 'Maintaining passion for exploring new technologies and embracing change', 'Rocket', 'from-emerald-500 to-teal-500', 4, 1);

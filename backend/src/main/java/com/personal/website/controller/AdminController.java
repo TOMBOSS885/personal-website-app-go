@@ -17,15 +17,18 @@ public class AdminController {
     private final ArticleRepository articleRepository;
     private final ProjectRepository projectRepository;
     private final SkillRepository skillRepository;
+    private final FeatureCardRepository featureCardRepository;
     private final UserRepository userRepository;
     
     public AdminController(ArticleRepository articleRepository,
                           ProjectRepository projectRepository,
                           SkillRepository skillRepository,
+                          FeatureCardRepository featureCardRepository,
                           UserRepository userRepository) {
         this.articleRepository = articleRepository;
         this.projectRepository = projectRepository;
         this.skillRepository = skillRepository;
+        this.featureCardRepository = featureCardRepository;
         this.userRepository = userRepository;
     }
     
@@ -127,6 +130,40 @@ public class AdminController {
     @DeleteMapping("/skills/{id}")
     public ResponseEntity<Void> deleteSkill(@PathVariable Long id) {
         skillRepository.deleteById(id);
+        return ResponseEntity.ok().build();
+    }
+
+    // === Feature Card Management ===
+    @GetMapping("/feature-cards")
+    public ResponseEntity<List<FeatureCard>> getAllFeatureCards() {
+        return ResponseEntity.ok(featureCardRepository.findAllByOrderByDisplayOrderAsc());
+    }
+
+    @PostMapping("/feature-cards")
+    public ResponseEntity<FeatureCard> createFeatureCard(@RequestBody FeatureCard featureCard) {
+        return ResponseEntity.ok(featureCardRepository.save(featureCard));
+    }
+
+    @PutMapping("/feature-cards/{id}")
+    public ResponseEntity<FeatureCard> updateFeatureCard(@PathVariable Long id, @RequestBody FeatureCard featureCard) {
+        return featureCardRepository.findById(id)
+            .map(existing -> {
+                existing.setTitle(featureCard.getTitle());
+                existing.setTitleEn(featureCard.getTitleEn());
+                existing.setDescription(featureCard.getDescription());
+                existing.setDescriptionEn(featureCard.getDescriptionEn());
+                existing.setIcon(featureCard.getIcon());
+                existing.setGradient(featureCard.getGradient());
+                existing.setDisplayOrder(featureCard.getDisplayOrder());
+                existing.setEnabled(featureCard.getEnabled());
+                return ResponseEntity.ok(featureCardRepository.save(existing));
+            })
+            .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/feature-cards/{id}")
+    public ResponseEntity<Void> deleteFeatureCard(@PathVariable Long id) {
+        featureCardRepository.deleteById(id);
         return ResponseEntity.ok().build();
     }
     

@@ -13,6 +13,7 @@ export default function HomePage() {
   const [articles, setArticles] = useState([])
   const [projects, setProjects] = useState([])
   const [skills, setSkills] = useState([])
+  const [featureCards, setFeatureCards] = useState([])
   const [profile, setProfile] = useState(null)
   const [stats, setStats] = useState(null)
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
@@ -53,6 +54,11 @@ export default function HomePage() {
           setSkills(module.default.getSkills())
         })
       })
+
+    fetch('/api/public/feature-cards')
+      .then(res => res.json())
+      .then(data => setFeatureCards(Array.isArray(data) ? data : []))
+      .catch(() => setFeatureCards([]))
 
     // 获取统计数据
     fetch('/api/public/stats')
@@ -109,7 +115,19 @@ export default function HomePage() {
     { icon: Star, value: stats?.starsCount || 1000, label: t('home.stats.stars'), color: 'from-yellow-500 to-amber-500' }
   ]
 
-  const features = [
+  const featureIconMap = {
+    Code,
+    Database,
+    Globe,
+    Rocket,
+    PenTool,
+    Briefcase,
+    Sparkles,
+    Zap,
+    Cpu
+  }
+
+  const defaultFeatures = [
     { 
       icon: Code, 
       title: t('home.features.fullStack.title'), 
@@ -139,6 +157,18 @@ export default function HomePage() {
       shadowColor: 'emerald'
     },
   ]
+
+  const features = featureCards.length > 0
+    ? featureCards.map((feature) => {
+        const Icon = featureIconMap[feature.icon] || Code
+        return {
+          icon: Icon,
+          title: language === 'en' ? (feature.titleEn || feature.title) : feature.title,
+          desc: language === 'en' ? (feature.descriptionEn || feature.description) : feature.description,
+          gradient: feature.gradient || 'from-blue-500 to-cyan-500'
+        }
+      })
+    : defaultFeatures
 
   return (
     <div className="min-h-screen relative overflow-hidden">

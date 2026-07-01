@@ -14,15 +14,18 @@ public class DataInitializer implements CommandLineRunner {
     private final ArticleRepository articleRepository;
     private final ProjectRepository projectRepository;
     private final SkillRepository skillRepository;
+    private final FeatureCardRepository featureCardRepository;
     private final PasswordEncoder passwordEncoder;
     
     public DataInitializer(UserRepository userRepository, ArticleRepository articleRepository,
                           ProjectRepository projectRepository, SkillRepository skillRepository,
+                          FeatureCardRepository featureCardRepository,
                           PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.articleRepository = articleRepository;
         this.projectRepository = projectRepository;
         this.skillRepository = skillRepository;
+        this.featureCardRepository = featureCardRepository;
         this.passwordEncoder = passwordEncoder;
     }
     
@@ -96,6 +99,16 @@ public class DataInitializer implements CommandLineRunner {
             );
    skillRepository.saveAll(skills);
         }
+
+        if (featureCardRepository.count() == 0) {
+            List<FeatureCard> featureCards = List.of(
+                createFeatureCard("全栈开发", "Full Stack Dev", "前后端技术栈全面掌握，构建完整解决方案", "Mastering frontend and backend technologies to build complete solutions", "Code", "from-blue-500 to-cyan-500", 1),
+                createFeatureCard("系统架构", "System Architecture", "设计高可用、可扩展的分布式系统架构", "Designing highly available and scalable distributed systems", "Database", "from-purple-500 to-pink-500", 2),
+                createFeatureCard("技术写作", "Technical Writing", "分享技术心得与实践经验，记录成长历程", "Sharing insights and experiences, documenting the growth journey", "Globe", "from-amber-500 to-orange-500", 3),
+                createFeatureCard("持续创新", "Continuous Innovation", "保持对新技术的探索热情，拥抱变化", "Maintaining passion for exploring new technologies and embracing change", "Rocket", "from-emerald-500 to-teal-500", 4)
+            );
+            featureCardRepository.saveAll(featureCards);
+        }
     }
     
     private Skill createSkill(String name, String category, int proficiency, int order) {
@@ -105,5 +118,18 @@ public class DataInitializer implements CommandLineRunner {
         skill.setProficiency(proficiency);
         skill.setDisplayOrder(order);
         return skill;
+    }
+
+    private FeatureCard createFeatureCard(String title, String titleEn, String description, String descriptionEn, String icon, String gradient, int order) {
+        FeatureCard featureCard = new FeatureCard();
+        featureCard.setTitle(title);
+        featureCard.setTitleEn(titleEn);
+        featureCard.setDescription(description);
+        featureCard.setDescriptionEn(descriptionEn);
+        featureCard.setIcon(icon);
+        featureCard.setGradient(gradient);
+        featureCard.setDisplayOrder(order);
+        featureCard.setEnabled(true);
+        return featureCard;
     }
 }

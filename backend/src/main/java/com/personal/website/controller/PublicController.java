@@ -20,15 +20,18 @@ public class PublicController {
     private final ArticleRepository articleRepository;
     private final ProjectRepository projectRepository;
     private final SkillRepository skillRepository;
+    private final FeatureCardRepository featureCardRepository;
     private final UserRepository userRepository;
     
     public PublicController(ArticleRepository articleRepository, 
                            ProjectRepository projectRepository,
                            SkillRepository skillRepository,
+                           FeatureCardRepository featureCardRepository,
                            UserRepository userRepository) {
         this.articleRepository = articleRepository;
         this.projectRepository = projectRepository;
         this.skillRepository = skillRepository;
+        this.featureCardRepository = featureCardRepository;
         this.userRepository = userRepository;
     }
     
@@ -102,6 +105,11 @@ public class PublicController {
     @GetMapping("/skills")
     public ResponseEntity<List<Skill>> getSkills() {
         return ResponseEntity.ok(skillRepository.findAllByOrderByDisplayOrderAsc());
+    }
+
+    @GetMapping("/feature-cards")
+    public ResponseEntity<List<FeatureCard>> getFeatureCards() {
+        return ResponseEntity.ok(featureCardRepository.findByEnabledTrueOrderByDisplayOrderAsc());
     }
     
     @GetMapping("/profile")

@@ -77,7 +77,7 @@ export default function Dashboard() {
           <h2 className="text-lg font-semibold text-white">欢迎使用管理后台</h2>
         </div>
         <p className="text-white/80">
-          在这里你可以管理文章、项目、专业技能和个人信息。使用左侧导航栏切换不同的管理模块。
+          在这里你可以管理文章、项目、首页能力卡片、专业技能和个人信息。使用左侧导航栏切换不同的管理模块。
         </p>
         <div className="mt-4 flex gap-3">
           <a href="/admin/articles" className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
@@ -85,6 +85,9 @@ export default function Dashboard() {
           </a>
           <a href="/admin/projects" className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
             管理项目
+          </a>
+          <a href="/admin/feature-cards" className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
+            管理能力卡片
           </a>
           <a href="/admin/skills" className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
             管理专业技能
@@ -105,6 +108,9 @@ export default function Dashboard() {
             <a href="/admin/projects" className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <span className="text-gray-700">📁 新建项目</span>
             </a>
+            <a href="/admin/feature-cards" className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+              <span className="text-gray-700">管理能力卡片</span>
+            </a>
             <a href="/admin/skills" className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <span className="text-gray-700">⚡ 添加专业技能</span>
             </a>
@@ -119,6 +125,7 @@ export default function Dashboard() {
           <div className="space-y-2 text-sm text-gray-600">
             <p>• 文章支持 Markdown 格式编写</p>
             <p>• 精选项目会在首页优先展示</p>
+            <p>• 能力卡片对应首页“我能做什么”模块</p>
             <p>• 专业技能熟练度用于首页进度条展示</p>
             <p>• 个人信息会显示在网站各处</p>
           </div>

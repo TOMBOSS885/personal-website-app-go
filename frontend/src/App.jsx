@@ -11,6 +11,7 @@ import Dashboard from './pages/admin/Dashboard'
 import ArticleManager from './pages/admin/ArticleManager'
 import ProjectManager from './pages/admin/ProjectManager'
 import SkillManager from './pages/admin/SkillManager'
+import FeatureCardManager from './pages/admin/FeatureCardManager'
 import ProfileManager from './pages/admin/ProfileManager'
 import ThemeManager from './pages/admin/ThemeManager'
 import Live2DManager from './pages/admin/Live2DManager'
@@ -77,6 +78,7 @@ function App() {
               <Route index element={<Dashboard />} />
               <Route path="articles" element={<ArticleManager />} />
               <Route path="projects" element={<ProjectManager />} />
+              <Route path="feature-cards" element={<FeatureCardManager />} />
               <Route path="skills" element={<SkillManager />} />
               <Route path="profile" element={<ProfileManager />} />
               <Route path="theme" element={<ThemeManager />} />
