@@ -87,6 +87,12 @@ export default function HomePage() {
     return acc
   }, {})
 
+  const normalizeProficiency = (value) => {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) return 0
+    return Math.min(100, Math.max(0, Math.round(numeric)))
+  }
+
   // 职业标签：从 profile.tags 解析，或使用默认值
   const defaultTags = language === 'en' 
     ? ['Full Stack Developer', 'Tech Enthusiast', 'Lifelong Learner', 'Open Source Contributor']
@@ -449,29 +455,30 @@ export default function HomePage() {
                     {category}
                   </h3>
                   <div className="space-y-5">
-                    {categorySkills.map((skill, i) => (
-                      <motion.div 
-                        key={skill.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        whileInView={{ opacity: 1, x: 0 }}
-                        viewport={{ once: true }}
-                        transition={{ delay: i * 0.1 }}
-                      >
-                        <div className="flex justify-between text-sm mb-2">
-                          <span className="text-gray-700 font-medium">{skill.name}</span>
-                          <span className="text-indigo-600 font-semibold">{skill.proficiency}%</span>
-                        </div>
-                        <div className="skill-bar">
-                          <motion.div
-                            className="skill-bar-fill"
-                            initial={{ width: 0 }}
-                            whileInView={{ width: `${skill.proficiency}%` }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 1, delay: 0.5 }}
-                          />
-                        </div>
-                      </motion.div>
-                    ))}
+                    {categorySkills.map((skill, i) => {
+                      const proficiency = normalizeProficiency(skill.proficiency)
+
+                      return (
+                        <motion.div 
+                          key={skill.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          whileInView={{ opacity: 1, x: 0 }}
+                          viewport={{ once: true }}
+                          transition={{ delay: i * 0.1 }}
+                        >
+                          <div className="flex justify-between text-sm mb-2">
+                            <span className="text-gray-700 font-medium">{skill.name}</span>
+                            <span className="text-indigo-600 font-semibold">{proficiency}%</span>
+                          </div>
+                          <div className="skill-bar">
+                            <div
+                              className="skill-bar-fill"
+                              style={{ width: `${proficiency}%` }}
+                            />
+                          </div>
+                        </motion.div>
+                      )
+                    })}
                   </div>
                 </motion.div>
               ))}

@@ -495,7 +495,7 @@ body {
     position: absolute;
     inset-y: 0;
     left: 0;
-    background: var(--theme-gradient);
+    background: var(--theme-gradient, linear-gradient(135deg, #10b981, #6366f1));
     border-radius: 9999px;
     transition: width 1s ease-out;
     animation: shimmer 2s infinite;
