@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw } from 'lucide-react'
 import RichTextEditor from '../../components/RichTextEditor'
 
 const API_BASE = ''
@@ -11,6 +11,11 @@ export default function ArticleManager() {
   const [saving, setSaving] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingArticle, setEditingArticle] = useState(null)
+  const [showCoverPicker, setShowCoverPicker] = useState(false)
+  const [coverImages, setCoverImages] = useState([])
+  const [loadingCoverImages, setLoadingCoverImages] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const coverFileInputRef = useRef(null)
   const [form, setForm] = useState({ 
     title: '', 
     summary: '', 
@@ -63,6 +68,66 @@ export default function ArticleManager() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchCoverImages = async () => {
+    setLoadingCoverImages(true)
+    try {
+      const tokenValue = localStorage.getItem('token')
+      const headers = tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {}
+      const res = await fetch(`${API_BASE}/api/admin/article-images`, { headers })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      setCoverImages(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('获取封面图库失败:', err)
+      setCoverImages([])
+    } finally {
+      setLoadingCoverImages(false)
+    }
+  }
+
+  const openCoverPicker = () => {
+    setShowCoverPicker(true)
+    fetchCoverImages()
+  }
+
+  const uploadCoverImage = async (file) => {
+    if (!file) return
+
+    setUploadingCover(true)
+    try {
+      const tokenValue = localStorage.getItem('token')
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch(`${API_BASE}/api/admin/article-images`, {
+        method: 'POST',
+        headers: tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {},
+        body: formData
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `HTTP ${res.status}`)
+      }
+
+      const image = await res.json()
+      setForm(current => ({ ...current, coverImage: image.url }))
+      setCoverImages(current => [image, ...current])
+    } catch (err) {
+      console.error('上传封面图片失败:', err)
+      alert('封面图片上传失败，请确认文件是 jpg、png、gif 或 webp，且大小不超过 10MB')
+    } finally {
+      setUploadingCover(false)
+      if (coverFileInputRef.current) {
+        coverFileInputRef.current.value = ''
+      }
+    }
+  }
+
+  const selectCoverImage = (url) => {
+    setForm(current => ({ ...current, coverImage: url }))
+    setShowCoverPicker(false)
   }
 
   const handleSubmit = async (e) => {
@@ -326,18 +391,48 @@ export default function ArticleManager() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
                     <input
                       type="text"
-                      placeholder="https://example.com/image.jpg"
+                      placeholder="输入图片地址，或上传/选择服务器图片"
                       value={form.coverImage}
                       onChange={e => setForm({ ...form, coverImage: e.target.value })}
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
                     />
+                    <input
+                      ref={coverFileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/gif,image/webp"
+                      className="hidden"
+                      onChange={(e) => uploadCoverImage(e.target.files?.[0])}
+                    />
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => coverFileInputRef.current?.click()}
+                        disabled={uploadingCover}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium disabled:opacity-50"
+                      >
+                        {uploadingCover ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
+                        {uploadingCover ? '上传中' : '上传封面'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openCoverPicker}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-medium"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        选择图片
+                      </button>
+                    </div>
                     {form.coverImage && (
-                      <img 
-                        src={form.coverImage} 
-                        alt="封面预览" 
-                        className="mt-2 w-full h-32 object-cover rounded-lg"
-                        onError={(e) => e.target.style.display = 'none'}
-                      />
+                      <div className="mt-2 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
+                        <img
+                          src={form.coverImage}
+                          alt="封面预览"
+                          className="w-full h-32 object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </div>
                     )}
                   </div>
                   
@@ -404,8 +499,87 @@ export default function ArticleManager() {
           </div>
         </div>
       )}
+
+      {showCoverPicker && (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[82vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gradient-to-r from-purple-500 to-pink-500">
+              <div>
+                <h3 className="text-lg font-semibold text-white">选择封面图片</h3>
+                <p className="text-xs text-white/75 mt-0.5">从服务器文章图片中选择，或上传一张新封面</p>
+              </div>
+              <button type="button" onClick={() => setShowCoverPicker(false)} className="text-white/80 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-wrap items-center gap-3 border-b border-gray-100">
+              <button
+                type="button"
+                onClick={() => coverFileInputRef.current?.click()}
+                disabled={uploadingCover}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-50"
+              >
+                {uploadingCover ? <Loader className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                {uploadingCover ? '上传中...' : '上传封面'}
+              </button>
+              <button
+                type="button"
+                onClick={fetchCoverImages}
+                disabled={loadingCoverImages}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingCoverImages ? 'animate-spin' : ''}`} />
+                刷新图库
+              </button>
+              <span className="text-xs text-gray-500">选择后会立即显示在封面预览中</span>
+            </div>
+
+            <div className="p-4 overflow-y-auto">
+              {loadingCoverImages ? (
+                <div className="py-12 flex items-center justify-center text-gray-500">
+                  <Loader className="w-5 h-5 animate-spin mr-2" />
+                  加载图片中...
+                </div>
+              ) : coverImages.length === 0 ? (
+                <div className="py-12 text-center text-gray-500">
+                  服务器还没有文章图片，可以先上传一张封面
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {coverImages.map((image) => (
+                    <button
+                      type="button"
+                      key={image.url}
+                      onClick={() => selectCoverImage(image.url)}
+                      className={`group text-left rounded-xl border overflow-hidden hover:border-purple-300 hover:shadow-lg transition-all bg-white ${
+                        form.coverImage === image.url ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="aspect-video bg-gray-100 overflow-hidden">
+                        <img src={image.url} alt={image.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                      </div>
+                      <div className="p-2">
+                        <div className="text-xs font-medium text-gray-700 truncate">{image.name}</div>
+                        <div className="text-[11px] text-gray-400 mt-0.5">{formatImageSize(image.size)}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+function formatImageSize(size) {
+  const bytes = Number(size)
+  if (!Number.isFinite(bytes) || bytes <= 0) return ''
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
 // ========== TagInput 组件 ==========
