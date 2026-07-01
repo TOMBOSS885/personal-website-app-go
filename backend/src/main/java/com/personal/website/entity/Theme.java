@@ -25,6 +25,12 @@ public class Theme {
     private String accent;
     
     private String background;
+
+    @Column(name = "background_style")
+    private String backgroundStyle;
+
+    @Column(name = "background_image")
+    private String backgroundImage;
     
     @Column(name = "card_bg")
     private String cardBg;
@@ -62,6 +68,12 @@ public class Theme {
     
     public String getBackground() { return background; }
     public void setBackground(String background) { this.background = background; }
+
+    public String getBackgroundStyle() { return backgroundStyle; }
+    public void setBackgroundStyle(String backgroundStyle) { this.backgroundStyle = backgroundStyle; }
+
+    public String getBackgroundImage() { return backgroundImage; }
+    public void setBackgroundImage(String backgroundImage) { this.backgroundImage = backgroundImage; }
     
     public String getCardBg() { return cardBg; }
     public void setCardBg(String cardBg) { this.cardBg = cardBg; }

@@ -171,7 +171,7 @@ export default function HomePage() {
     : defaultFeatures
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    <div className="min-h-screen relative overflow-hidden" style={{ background: 'var(--theme-page-bg)' }}>
       {/* 粒子背景 */}
       <ParticleBackground />
       
@@ -182,6 +182,7 @@ export default function HomePage() {
       >
         {/* 动态渐变背景 */}
         <div className="absolute inset-0 hero-gradient opacity-10" />
+        <div className="absolute inset-0 bg-white/70 backdrop-blur-[1px]" />
         
         {/* 装饰圆形 */}
         <div className="absolute top-20 left-10 w-72 h-72 bg-purple-300/30 rounded-full blur-3xl float" />
