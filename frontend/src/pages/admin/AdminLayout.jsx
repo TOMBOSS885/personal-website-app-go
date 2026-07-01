@@ -15,7 +15,7 @@ export default function AdminLayout() {
     { path: '/admin', label: '概览', icon: LayoutDashboard, exact: true },
     { path: '/admin/articles', label: '文章管理', icon: FileText },
     { path: '/admin/projects', label: '项目管理', icon: Folder },
-    { path: '/admin/skills', label: '技能管理', icon: Award },
+    { path: '/admin/skills', label: '专业技能', icon: Award },
     { path: '/admin/theme', label: '主题管理', icon: Palette },
     { path: '/admin/live2d', label: 'Live2D 管理', icon: Bot },
     { path: '/admin/profile', label: '个人信息', icon: User },

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Calendar, Eye, Clock, User, Share2, Bookmark, Heart, Tag } from 'lucide-react'
+import { ArrowLeft, Check, Share2, Tag } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -10,6 +10,7 @@ export default function ArticleDetailPage() {
   const { id } = useParams()
   const [article, setArticle] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [shareStatus, setShareStatus] = useState('idle')
 
   useEffect(() => {
     // 使用真实后端 API
@@ -67,16 +68,36 @@ export default function ArticleDetailPage() {
     )
   }
 
-  // 根据分类生成渐变色
-  const categoryGradients = {
-    '前端开发': 'from-blue-500 to-cyan-500',
-    '后端开发': 'from-purple-500 to-pink-500',
-    'DevOps': 'from-emerald-500 to-teal-500',
-    '架构设计': 'from-amber-500 to-orange-500',
-    '默认': 'from-indigo-500 to-purple-500'
-  }
+  const handleShare = async () => {
+    const shareUrl = window.location.href
 
-  const gradient = categoryGradients[article.category] || categoryGradients['默认']
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = shareUrl
+        textarea.setAttribute('readonly', '')
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        const copied = document.execCommand('copy')
+        document.body.removeChild(textarea)
+
+        if (!copied) {
+          throw new Error('execCommand copy returned false')
+        }
+      }
+
+      setShareStatus('copied')
+      window.setTimeout(() => setShareStatus('idle'), 2000)
+    } catch (error) {
+      console.error('复制分享链接失败:', error)
+      setShareStatus('failed')
+      window.setTimeout(() => setShareStatus('idle'), 2500)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -138,6 +159,19 @@ export default function ArticleDetailPage() {
           <ReactMarkdown 
             remarkPlugins={[remarkGfm]}
             rehypePlugins={[rehypeHighlight]}
+            components={{
+              a: ({ node, ...props }) => (
+                <a {...props} target="_blank" rel="noreferrer" />
+              ),
+              table: ({ node, ...props }) => (
+                <div className="article-table-wrap">
+                  <table {...props} />
+                </div>
+              ),
+              img: ({ node, ...props }) => (
+                <img {...props} loading="lazy" />
+              )
+            }}
           >
             {article.content}
           </ReactMarkdown>
@@ -166,40 +200,27 @@ export default function ArticleDetailPage() {
           </motion.div>
         )}
 
-        {/* 操作按钮 */}
+        {/* 分享按钮 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="mt-8 flex items-center justify-between"
+          className="mt-8 flex items-center justify-end"
         >
-          <div className="flex items-center space-x-4">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              className="flex items-center space-x-2 px-4 py-2 rounded-full bg-gray-100 hover:bg-pink-50 text-gray-600 hover:text-pink-600 transition-colors"
-            >
-              <Heart className="w-5 h-5" />
-              <span>喜欢</span>
-            </motion.button>
-
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              className="flex items-center space-x-2 px-4 py-2 rounded-full bg-gray-100 hover:bg-indigo-50 text-gray-600 hover:text-indigo-600 transition-colors"
-            >
-              <Bookmark className="w-5 h-5" />
-              <span>收藏</span>
-            </motion.button>
-          </div>
-
           <motion.button
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
+            onClick={handleShare}
             className="flex items-center space-x-2 px-4 py-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg"
           >
-            <Share2 className="w-5 h-5" />
-            <span>分享</span>
+            {shareStatus === 'copied' ? <Check className="w-5 h-5" /> : <Share2 className="w-5 h-5" />}
+            <span>
+              {shareStatus === 'copied'
+                ? '已复制分享链接'
+                : shareStatus === 'failed'
+                  ? '复制失败，请手动复制'
+                  : '分享'}
+            </span>
           </motion.button>
         </motion.div>
 

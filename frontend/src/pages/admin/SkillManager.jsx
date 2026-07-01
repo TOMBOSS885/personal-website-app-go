@@ -123,9 +123,9 @@ export default function SkillManager() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Zap className="w-7 h-7 text-purple-600" />
-            技能管理
+            专业技能
           </h1>
-          <p className="text-gray-500 text-sm mt-1">管理您的技能和熟练度</p>
+          <p className="text-gray-500 text-sm mt-1">管理首页“专业技能”栏目展示的技能、分类和熟练度</p>
         </div>
         <button 
           onClick={() => { 
@@ -136,7 +136,7 @@ export default function SkillManager() {
           className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all"
         >
           <Plus className="w-4 h-4" />
-          添加技能
+          添加专业技能
         </button>
       </div>
 
@@ -149,7 +149,7 @@ export default function SkillManager() {
         ) : skills.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Zap className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>暂无技能，点击上方按钮添加</p>
+            <p>暂无专业技能，点击上方按钮添加</p>
           </div>
         ) : (
           <table className="w-full">
@@ -212,7 +212,7 @@ export default function SkillManager() {
             <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gradient-to-r from-purple-500 to-pink-500">
               <h2 className="text-lg font-semibold text-white flex items-center gap-2">
                 <Zap className="w-5 h-5" />
-                {editingSkill ? '编辑技能' : '添加技能'}
+                {editingSkill ? '编辑专业技能' : '添加专业技能'}
               </h2>
               <button 
                 onClick={() => setShowModal(false)} 
