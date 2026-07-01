@@ -78,8 +78,11 @@ export default function Live2DManager() {
       })
 
       if (!res.ok) {
-        const error = await res.json().catch(() => ({}))
-        throw new Error(error.message || '上传失败')
+        const contentType = res.headers.get('content-type') || ''
+        const error = contentType.includes('application/json')
+          ? await res.json().catch(() => ({}))
+          : { message: await res.text().catch(() => '') }
+        throw new Error(error.message || `上传失败，HTTP ${res.status}`)
       }
 
       setName('')
