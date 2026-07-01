@@ -73,11 +73,16 @@ export function createTips(primaryColor: string, config?: TipsConfig): TipsHandl
     color: 'rgba(255,255,255,0.95)',
     fontSize: '13px',
     lineHeight: '1.5',
-    maxWidth: '200px',
+    width: 'max-content',
+    minWidth: '48px',
+    maxWidth: 'min(260px, calc(100vw - 32px))',
+    boxSizing: 'border-box',
     textAlign: 'center',
+    overflowWrap: 'anywhere',
     wordBreak: 'break-word',
+    hyphens: 'auto',
     opacity: '0',
-    whiteSpace: 'nowrap',
+    whiteSpace: 'normal',
   });
 
   if (style)
@@ -100,6 +105,10 @@ export function createTips(primaryColor: string, config?: TipsConfig): TipsHandl
   outer.appendChild(inner);
 
   const textEl = document.createElement('span');
+  Object.assign(textEl.style, {
+    display: 'block',
+    maxWidth: '100%',
+  });
   inner.prepend(textEl);
 
   function closeMouth() {
