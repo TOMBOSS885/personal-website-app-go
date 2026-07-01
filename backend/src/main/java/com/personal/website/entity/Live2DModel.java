@@ -80,9 +80,33 @@ public class Live2DModel {
     private LocalDateTime createdAt;
 
     @PrePersist
+    @PreUpdate
     public void prePersist() {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
+        applyDefaults();
+    }
+
+    public void applyDefaults() {
+        if (active == null) active = false;
+        if (switchable == null) switchable = true;
+        if (displayOrder == null) displayOrder = 0;
+        if (scale == null) scale = 1.0;
+        if (offsetX == null) offsetX = 0.0;
+        if (offsetY == null) offsetY = 0.0;
+        if (volume == null) volume = 0.0;
+        if (tipsEnabled == null) tipsEnabled = true;
+        if (welcomeMessages == null) welcomeMessages = "Welcome back!";
+        if (tipMessages == null) tipMessages = "Take a short break.\nRemember to save your ideas.";
+        if (tipDuration == null) tipDuration = 3500;
+        if (tipInterval == null) tipInterval = 9000;
+        if (tipOffsetX == null) tipOffsetX = 0;
+        if (tipOffsetY == null) tipOffsetY = 0;
+        if (typingEnabled == null) typingEnabled = false;
+        if (typingParam == null) typingParam = "PARAM_MOUTH_OPEN_Y";
+        if (typingSpeed == null) typingSpeed = 120;
+        if (typingMinValue == null) typingMinValue = 0.0;
+        if (typingMaxValue == null) typingMaxValue = 1.0;
     }
 }

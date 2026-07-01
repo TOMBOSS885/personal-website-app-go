@@ -34,4 +34,18 @@ public class Live2DSettings {
 
     @Column(name = "show_about_button")
     private Boolean showAboutButton = false;
+
+    @PrePersist
+    @PreUpdate
+    public void applyDefaults() {
+        if (enabled == null) enabled = true;
+        if (position == null) position = "bottom-right";
+        if (size == null) size = 280;
+        if (primaryColor == null) primaryColor = "rgba(96,165,250,0.92)";
+        if (transitionType == null) transitionType = "slide";
+        if (transitionDuration == null) transitionDuration = 1500;
+        if (menuAlign == null) menuAlign = "right";
+        if (showSleepButton == null) showSleepButton = true;
+        if (showAboutButton == null) showAboutButton = false;
+    }
 }

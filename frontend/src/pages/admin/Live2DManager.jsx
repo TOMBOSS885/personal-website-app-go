@@ -153,7 +153,7 @@ export default function Live2DManager() {
         body: JSON.stringify(settings),
       })
       if (!res.ok) {
-        throw new Error('保存全局设置失败')
+        throw new Error(await readErrorMessage(res, '保存全局设置失败'))
       }
       setSettings(await res.json())
       alert('Live2D 全局设置已保存')
@@ -180,7 +180,7 @@ export default function Live2DManager() {
         body: JSON.stringify(draft),
       })
       if (!res.ok) {
-        throw new Error('保存模型设置失败')
+        throw new Error(await readErrorMessage(res, '保存模型设置失败'))
       }
       const saved = await res.json()
       setModels(prev => prev.map(model => model.id === saved.id ? saved : model))
@@ -587,4 +587,14 @@ function rgbaToHex(value) {
     return '#60a5fa'
   }
   return `#${[match[1], match[2], match[3]].map(part => Number(part).toString(16).padStart(2, '0')).join('')}`
+}
+
+async function readErrorMessage(res, fallback) {
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    const error = await res.json().catch(() => ({}))
+    return error.message || `${fallback}，HTTP ${res.status}`
+  }
+  const text = await res.text().catch(() => '')
+  return text || `${fallback}，HTTP ${res.status}`
 }

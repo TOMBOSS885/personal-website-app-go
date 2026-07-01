@@ -141,25 +141,27 @@ public class Live2DModelController {
     public ResponseEntity<?> updateModel(@PathVariable Long id, @RequestBody Map<String, Object> payload) {
         return live2DModelRepository.findById(id)
             .map(model -> {
+                model.applyDefaults();
                 model.setName(stringValue(payload.get("name"), model.getName()));
-                model.setSwitchable(boolValue(payload.get("switchable"), model.getSwitchable()));
-                model.setDisplayOrder(intValue(payload.get("displayOrder"), model.getDisplayOrder()));
-                model.setScale(doubleValue(payload.get("scale"), model.getScale()));
-                model.setOffsetX(doubleValue(payload.get("offsetX"), model.getOffsetX()));
-                model.setOffsetY(doubleValue(payload.get("offsetY"), model.getOffsetY()));
-                model.setVolume(doubleValue(payload.get("volume"), model.getVolume()));
-                model.setTipsEnabled(boolValue(payload.get("tipsEnabled"), model.getTipsEnabled()));
+                model.setSwitchable(boolValue(payload.get("switchable"), true));
+                model.setDisplayOrder(intValue(payload.get("displayOrder"), 0));
+                model.setScale(doubleValue(payload.get("scale"), 1.0));
+                model.setOffsetX(doubleValue(payload.get("offsetX"), 0.0));
+                model.setOffsetY(doubleValue(payload.get("offsetY"), 0.0));
+                model.setVolume(doubleValue(payload.get("volume"), 0.0));
+                model.setTipsEnabled(boolValue(payload.get("tipsEnabled"), true));
                 model.setWelcomeMessages(stringValue(payload.get("welcomeMessages"), model.getWelcomeMessages()));
                 model.setTipMessages(stringValue(payload.get("tipMessages"), model.getTipMessages()));
-                model.setTipDuration(intValue(payload.get("tipDuration"), model.getTipDuration()));
-                model.setTipInterval(intValue(payload.get("tipInterval"), model.getTipInterval()));
-                model.setTipOffsetX(intValue(payload.get("tipOffsetX"), model.getTipOffsetX()));
-                model.setTipOffsetY(intValue(payload.get("tipOffsetY"), model.getTipOffsetY()));
-                model.setTypingEnabled(boolValue(payload.get("typingEnabled"), model.getTypingEnabled()));
+                model.setTipDuration(intValue(payload.get("tipDuration"), 3500));
+                model.setTipInterval(intValue(payload.get("tipInterval"), 9000));
+                model.setTipOffsetX(intValue(payload.get("tipOffsetX"), 0));
+                model.setTipOffsetY(intValue(payload.get("tipOffsetY"), 0));
+                model.setTypingEnabled(boolValue(payload.get("typingEnabled"), false));
                 model.setTypingParam(stringValue(payload.get("typingParam"), model.getTypingParam()));
-                model.setTypingSpeed(intValue(payload.get("typingSpeed"), model.getTypingSpeed()));
-                model.setTypingMinValue(doubleValue(payload.get("typingMinValue"), model.getTypingMinValue()));
-                model.setTypingMaxValue(doubleValue(payload.get("typingMaxValue"), model.getTypingMaxValue()));
+                model.setTypingSpeed(intValue(payload.get("typingSpeed"), 120));
+                model.setTypingMinValue(doubleValue(payload.get("typingMinValue"), 0.0));
+                model.setTypingMaxValue(doubleValue(payload.get("typingMaxValue"), 1.0));
+                model.applyDefaults();
                 return ResponseEntity.ok(toDto(live2DModelRepository.save(model)));
             })
             .orElse(ResponseEntity.notFound().build());
@@ -195,6 +197,7 @@ public class Live2DModelController {
     }
 
     private Map<String, Object> toDto(Live2DModel model) {
+        model.applyDefaults();
         Optional<String> thumbnailPath = findThumbnailPath(model);
         Map<String, Object> dto = new java.util.LinkedHashMap<>();
         dto.put("id", model.getId());
@@ -225,6 +228,7 @@ public class Live2DModelController {
     }
 
     private Map<String, Object> settingsToDto(Live2DSettings settings) {
+        settings.applyDefaults();
         Map<String, Object> dto = new java.util.LinkedHashMap<>();
         dto.put("enabled", settings.getEnabled());
         dto.put("position", settings.getPosition());
