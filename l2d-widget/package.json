@@ -1,0 +1,73 @@
+{
+  "name": "l2d-widget",
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.32.1",
+  "description": "",
+  "author": "hacxy",
+  "license": "MIT",
+  "keywords": [
+    "l2d",
+    "Live2D",
+    "cubism2",
+    "cubism6",
+    "Live2D for Web"
+  ],
+  "main": "dist/index.min.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite build --watch --sourcemap",
+    "demo": "vite --config vite.demo.config.ts",
+    "build": "vite build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "lint:staged": "eslint --fix",
+    "prepare": "simple-git-hooks",
+    "commit": "git-cz",
+    "release": "bump",
+    "docs:dev": "typedoc && vitepress dev docs",
+    "docs:build": "typedoc && pnpm build && vitepress build docs",
+    "docs:preview": "vitepress preview docs"
+  },
+  "devDependencies": {
+    "@hacxy/bump": "^0.3.2",
+    "@hacxy/eslint-config": "^0.5.5",
+    "@hacxy/fe": "^0.6.1",
+    "@hacxy/tsconfig": "^0.1.0",
+    "@iconify/vue": "^5.0.1",
+    "commitizen": "^4.3.1",
+    "cz-git": "^1.11.0",
+    "eslint": "^10.2.0",
+    "l2d": "^2.1.1",
+    "lint-staged": "^15.4.3",
+    "naive-ui": "^2.44.1",
+    "simple-git-hooks": "^2.11.1",
+    "typedoc": "^0.28.19",
+    "typedoc-plugin-markdown": "^4.11.0",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.8",
+    "vite-plugin-dts": "^4.5.4",
+    "vitepress": "^1.6.4",
+    "vitepress-theme-mild": "^0.10.0",
+    "vue": "^3.5.34"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged",
+    "commit-msg": "npx fe msg"
+  },
+  "lint-staged": {
+    "*": [
+      "npm run lint:staged"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "node_modules/cz-git",
+      "useEmoji": false
+    }
+  }
+}

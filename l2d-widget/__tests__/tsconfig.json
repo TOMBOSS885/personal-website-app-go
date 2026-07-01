@@ -1,0 +1,12 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "rootDir": "../",
+    "paths": {
+      "l2d-widget": ["../src/index.ts"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": ["./**/*.ts"]
+}

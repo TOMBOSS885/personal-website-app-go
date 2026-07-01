@@ -13,9 +13,11 @@ import ProjectManager from './pages/admin/ProjectManager'
 import SkillManager from './pages/admin/SkillManager'
 import ProfileManager from './pages/admin/ProfileManager'
 import ThemeManager from './pages/admin/ThemeManager'
+import Live2DManager from './pages/admin/Live2DManager'
 import LoginPage from './pages/admin/LoginPage'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
+import Live2DWidget from './components/Live2DWidget'
 
 const API_BASE = ''
 
@@ -78,6 +80,7 @@ function App() {
               <Route path="skills" element={<SkillManager />} />
               <Route path="profile" element={<ProfileManager />} />
               <Route path="theme" element={<ThemeManager />} />
+              <Route path="live2d" element={<Live2DManager />} />
             </Route>
             <Route path="/*" element={
               <>
@@ -91,6 +94,7 @@ function App() {
                   </Routes>
                 </main>
                 <Footer profile={profile} />
+                <Live2DWidget />
               </>
             } />
           </Routes>

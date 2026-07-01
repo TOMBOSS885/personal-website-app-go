@@ -13,6 +13,7 @@ services:
 
     volumes:
       - ./logs:/var/log/supervisor
+      - ./uploads:/app/uploads
 
     environment:
       JAVA_OPTS: ${JAVA_OPTS:--Xms256m -Xmx512m}
@@ -23,6 +24,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?Set SPRING_DATASOURCE_PASSWORD in .env}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      APP_UPLOAD_DIR: ${APP_UPLOAD_DIR:-/app/uploads}
 
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/public/profile"]

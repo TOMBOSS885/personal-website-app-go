@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: system-ui, sans-serif;
+      }
+      html {
+        background: #ffffff;
+      }
+      html.dark {
+        background: #1b1b1f;
+      }
+
+      .editor {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        transition: opacity 0.5s ease;
+      }
+      .editor.hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .editor-body {
+        flex: 1;
+        padding: 16px 20px;
+        overflow: hidden;
+        white-space: pre-wrap;
+        word-break: break-all;
+        font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+        font-size: 12px;
+        line-height: 1.7;
+        color: #383a42;
+        background: #fafafa;
+      }
+      html.dark .editor-body {
+        color: #abb2bf;
+        background: #1e1e1e;
+      }
+
+      .editor-toolbar {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 8px 12px;
+        background: #f0f0f0;
+        border-top: 1px solid rgba(0, 0, 0, 0.06);
+      }
+      html.dark .editor-toolbar {
+        background: #252526;
+        border-top-color: rgba(255, 255, 255, 0.06);
+      }
+
+      .run-btn {
+        padding: 5px 18px;
+        border: none;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        background: rgba(255, 130, 160, 0.9);
+        color: #fff;
+        opacity: 0;
+        transform: scale(0.95);
+        transition:
+          opacity 0.3s,
+          transform 0.3s,
+          filter 0.15s;
+      }
+      .run-btn.visible {
+        opacity: 1;
+        transform: scale(1);
+      }
+      .run-btn.pressed {
+        filter: brightness(0.85);
+        transform: scale(0.93);
+      }
+
+      .kw {
+        color: #a626a4;
+      }
+      .fn {
+        color: #4078f2;
+      }
+      .str {
+        color: #50a14f;
+      }
+      .prop {
+        color: #e45649;
+      }
+      .punc {
+        color: #383a42;
+      }
+      html.dark .kw {
+        color: #c678dd;
+      }
+      html.dark .fn {
+        color: #61afef;
+      }
+      html.dark .str {
+        color: #98c379;
+      }
+      html.dark .prop {
+        color: #e06c75;
+      }
+      html.dark .punc {
+        color: #abb2bf;
+      }
+
+      .cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1.1em;
+        background: #383a42;
+        vertical-align: text-bottom;
+        animation: blink 1s step-end infinite;
+      }
+      html.dark .cursor {
+        background: #abb2bf;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      .mouse-ptr {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        opacity: 0;
+        z-index: 10;
+        pointer-events: none;
+        transition:
+          top 0.6s cubic-bezier(0.33, 1, 0.68, 1),
+          left 0.6s cubic-bezier(0.33, 1, 0.68, 1),
+          opacity 0.3s;
+      }
+      .mouse-ptr.visible {
+        opacity: 1;
+      }
+    </style>
+    <script>
+      if (new URLSearchParams(location.search).get('dark') === '1') document.documentElement.classList.add('dark')
+      window.addEventListener('message', function (e) {
+        if (e.data && e.data.type === 'theme-change') {
+          document.documentElement.classList.toggle('dark', e.data.dark)
+        }
+      })
+    </script>
+  </head>
+  <body>
+    <div class="editor" id="editor">
+      <div class="editor-body" id="code"></div>
+      <div class="editor-toolbar">
+        <button class="run-btn" id="runBtn">▶ Run</button>
+      </div>
+    </div>
+    <div class="mouse-ptr" id="mousePtr">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M5 3l14 8-6.5 1.5L10 19z" fill="#333" stroke="#fff" stroke-width="1.5" stroke-linejoin="round" />
+      </svg>
+    </div>
+    <script type="module" src="./hero.ts"></script>
+  </body>
+</html>

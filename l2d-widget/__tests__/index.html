@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>l2d-widget demos</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #1a1a1a;
+        color: #ccc;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+      }
+
+      main {
+        width: 100%;
+        max-width: 720px;
+        padding: 72px 40px;
+        text-align: center;
+      }
+
+      .page-title {
+        font-size: 18px;
+        font-weight: 700;
+        color: #eee;
+        margin-bottom: 32px;
+        letter-spacing: 0.02em;
+      }
+
+      .page-title span {
+        font-weight: 400;
+        color: #555;
+        font-size: 14px;
+        margin-left: 6px;
+      }
+
+      /* ── Demo 切换按钮 ── */
+      #demo-list {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        margin-bottom: 48px;
+      }
+
+      .demo-btn {
+        padding: 8px 16px;
+        border: none;
+        background: none;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #888;
+        cursor: pointer;
+        text-align: left;
+        transition:
+          background 0.1s,
+          color 0.1s;
+      }
+
+      .demo-btn:hover {
+        background: #2a2a2a;
+        color: #ddd;
+      }
+
+      .demo-btn.active {
+        background: #1e1b4b;
+        color: #818cf8;
+        font-weight: 500;
+      }
+
+      .empty {
+        font-size: 13px;
+        color: #444;
+      }
+
+      /* ── 当前 Demo 信息 ── */
+      #demo-name {
+        font-size: 22px;
+        font-weight: 700;
+        color: #eee;
+        margin-bottom: 10px;
+      }
+
+      #demo-desc {
+        font-size: 14px;
+        color: #555;
+        line-height: 1.7;
+      }
+
+      .hint {
+        margin-top: 64px;
+        font-size: 12px;
+        color: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="page-title">l2d-widget <span>demos</span></div>
+      <div id="demo-list"></div>
+      <div id="demo-name"></div>
+      <div id="demo-desc"></div>
+      <p class="hint">修改 src/ 或 demos/ 后热更新自动生效</p>
+    </main>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

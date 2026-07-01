@@ -1,0 +1,40 @@
+name: Deploy
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, l2d-widget]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - name: Build docs
+        env:
+          NODE_OPTIONS: --max_old_space_size=4096
+        run: pnpm docs:build
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy
+        run: |
+          rsync -avz --delete -e "ssh -i ~/.ssh/deploy_key" \
+            docs/.vitepress/dist/ \
+            deploy@${{ secrets.SSH_HOST }}:/srv/projects/l2d-widget/

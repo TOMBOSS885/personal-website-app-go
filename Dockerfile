@@ -4,6 +4,14 @@
 # Stage 1: build frontend
 FROM node:20-alpine AS frontend-builder
 
+WORKDIR /app/l2d-widget
+
+COPY l2d-widget/package*.json ./
+RUN npm install --legacy-peer-deps
+
+COPY l2d-widget/ ./
+RUN npm run build
+
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
@@ -49,7 +57,7 @@ COPY docker/nginx.conf /etc/nginx/sites-enabled/default
 
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-RUN mkdir -p /app/data
+RUN mkdir -p /app/uploads
 
 EXPOSE 3718 8080
 

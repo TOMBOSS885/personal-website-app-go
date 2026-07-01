@@ -16,6 +16,11 @@ spring:
     properties:
       hibernate:
         format_sql: false
+  
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 200MB
 
 server:
   port: 8080
@@ -31,3 +36,7 @@ logging:
     com.personal.website: INFO
   file:
     name: /var/log/supervisor/application.log
+
+app:
+  upload:
+    dir: ${APP_UPLOAD_DIR:/app/uploads}

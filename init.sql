@@ -104,6 +104,18 @@ CREATE TABLE IF NOT EXISTS themes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========================================
+-- Live2D 模型表
+-- ========================================
+CREATE TABLE IF NOT EXISTS live2d_models (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    directory VARCHAR(255) NOT NULL UNIQUE,
+    model_path VARCHAR(1000) NOT NULL,
+    active BIT DEFAULT 0,
+    created_at DATETIME
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================
 -- 初始化数据
 -- ========================================
 
@@ -114,6 +126,7 @@ TRUNCATE TABLE articles;
 TRUNCATE TABLE projects;
 TRUNCATE TABLE skills;
 TRUNCATE TABLE themes;
+TRUNCATE TABLE live2d_models;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 管理员用户 (密码: admin123)
