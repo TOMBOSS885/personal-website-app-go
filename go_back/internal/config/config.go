@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -43,11 +44,11 @@ func InitConfig() {
 		UploadDir:          getEnv("APP_UPLOAD_DIR", "uploads"),
 		GinMode:            getEnv("GIN_MODE", "debug"),
 		CORSAllowedOrigins: getEnv("CORS_ALLOWED_ORIGINS", "*"),
-		AutoMigrate:        getEnv("AUTO_MIGRATE", "true") == "true",
+		AutoMigrate:        boolEnv("AUTO_MIGRATE", true),
 		AdminUsername:      getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:      getEnv("ADMIN_PASSWORD", "admin123"),
 		AdminEmail:         getEnv("ADMIN_EMAIL", "admin@example.com"),
-		AdminResetPassword: getEnv("ADMIN_RESET_PASSWORD", "false") == "true",
+		AdminResetPassword: boolEnv("ADMIN_RESET_PASSWORD", false),
 	}
 }
 
@@ -72,4 +73,20 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func boolEnv(key string, fallback bool) bool {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		return fallback
+	}
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "true", "yes", "y", "on":
+		return true
+	case "0", "false", "no", "n", "off":
+		return false
+	default:
+		log.Printf("invalid boolean env %s=%q, using default %v", key, value, fallback)
+		return fallback
+	}
 }

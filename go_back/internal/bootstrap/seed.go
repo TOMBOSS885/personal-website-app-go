@@ -1,15 +1,23 @@
 package bootstrap
 
 import (
+	"errors"
 	"log"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 func SeedDefaultData() {
+	log.Printf(
+		"admin seed check: username=%q reset_password=%v",
+		config.AppConfig.AdminUsername,
+		config.AppConfig.AdminResetPassword,
+	)
+
 	existing, err := repository.GetUserByUsername(config.AppConfig.AdminUsername)
 	if err == nil && existing != nil {
 		if !config.AppConfig.AdminResetPassword {
@@ -23,13 +31,16 @@ func SeedDefaultData() {
 			return
 		}
 		existing.Password = string(hash)
-		existing.Email = config.AppConfig.AdminEmail
 		existing.Role = "ADMIN"
 		if err := repository.UpdateUser(existing); err != nil {
 			log.Printf("failed to reset admin password: %v", err)
 			return
 		}
 		log.Printf("reset password for admin user %q because ADMIN_RESET_PASSWORD=true", existing.Username)
+		return
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Printf("failed to query admin user %q: %v", config.AppConfig.AdminUsername, err)
 		return
 	}
 

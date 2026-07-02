@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/repository"
@@ -24,10 +25,12 @@ func Login(c *gin.Context) {
 
 	user, err := repository.GetUserByUsername(req.Username)
 	if err != nil || user == nil {
+		log.Printf("login failed for username=%q: user not found", req.Username)
 		response.Error(c, http.StatusUnauthorized, "用户名或密码错误")
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)) != nil {
+		log.Printf("login failed for username=%q: password mismatch", req.Username)
 		response.Error(c, http.StatusUnauthorized, "用户名或密码错误")
 		return
 	}
