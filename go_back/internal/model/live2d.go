@@ -5,12 +5,12 @@ import "time"
 type Live2DSettings struct {
 	ID                 uint64 `gorm:"primaryKey" json:"-"`
 	Enabled            bool   `gorm:"column:enabled;default:true" json:"enabled"`
-	Position           string `gorm:"column:position;size:50;default:bottom-right" json:"position"`
+	Position           string `gorm:"column:position;size:50" json:"position"`
 	Size               int    `gorm:"column:size;default:280" json:"size"`
-	PrimaryColor       string `gorm:"column:primary_color;size:100;default:rgba(96,165,250,0.92)" json:"primaryColor"`
-	TransitionType     string `gorm:"column:transition_type;size:50;default:slide" json:"transitionType"`
+	PrimaryColor       string `gorm:"column:primary_color;size:100" json:"primaryColor"`
+	TransitionType     string `gorm:"column:transition_type;size:50" json:"transitionType"`
 	TransitionDuration int    `gorm:"column:transition_duration;default:1500" json:"transitionDuration"`
-	MenuAlign          string `gorm:"column:menu_align;size:50;default:right" json:"menuAlign"`
+	MenuAlign          string `gorm:"column:menu_align;size:50" json:"menuAlign"`
 	ShowSleepButton    bool   `gorm:"column:show_sleep_button;default:true" json:"showSleepButton"`
 	ShowAboutButton    bool   `gorm:"column:show_about_button;default:false" json:"showAboutButton"`
 }

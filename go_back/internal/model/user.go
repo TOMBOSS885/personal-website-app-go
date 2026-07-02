@@ -5,7 +5,7 @@ type User struct {
 	Username    string `gorm:"column:username;size:255;not null;uniqueIndex" json:"username"`
 	Password    string `gorm:"column:password;size:255;not null" json:"-"`
 	Email       string `gorm:"column:email;size:255;not null;uniqueIndex" json:"email"`
-	Role        string `gorm:"column:role;size:50;default:ADMIN" json:"role"`
+	Role        string `gorm:"column:role;size:50" json:"role"`
 	Avatar      string `gorm:"column:avatar;size:500" json:"avatar"`
 	Nickname    string `gorm:"column:nickname;size:255" json:"nickname"`
 	Bio         string `gorm:"column:bio;size:500" json:"bio"`

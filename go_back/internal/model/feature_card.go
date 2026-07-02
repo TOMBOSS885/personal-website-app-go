@@ -6,8 +6,8 @@ type FeatureCard struct {
 	TitleEn       string `gorm:"column:title_en;size:255" json:"titleEn"`
 	Description   string `gorm:"column:description;size:500" json:"description"`
 	DescriptionEn string `gorm:"column:description_en;size:500" json:"descriptionEn"`
-	Icon          string `gorm:"column:icon;size:100;default:Code" json:"icon"`
-	Gradient      string `gorm:"column:gradient;size:100;default:from-blue-500 to-cyan-500" json:"gradient"`
+	Icon          string `gorm:"column:icon;size:100" json:"icon"`
+	Gradient      string `gorm:"column:gradient;size:100" json:"gradient"`
 	DisplayOrder  int    `gorm:"column:display_order;default:0" json:"displayOrder"`
 	Enabled       bool   `gorm:"column:enabled;default:true" json:"enabled"`
 }
