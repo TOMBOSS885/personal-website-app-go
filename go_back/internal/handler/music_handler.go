@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 )
 
 const maxMusicSize = 50 * 1024 * 1024
+const maxMusicBatchCount = 50
 
 var musicExts = []string{".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}
 var musicTypes = map[string]bool{
@@ -29,6 +32,16 @@ var musicTypes = map[string]bool{
 	"audio/flac":               true,
 	"application/ogg":          true,
 	"application/octet-stream": true,
+}
+
+type preparedMusicFile struct {
+	file        *multipart.FileHeader
+	ext         string
+	contentType string
+}
+
+type batchDeleteMusicRequest struct {
+	IDs []uint64 `json:"ids"`
 }
 
 func GetMusics(c *gin.Context) {
@@ -45,61 +58,78 @@ func AdminGetMusics(c *gin.Context) {
 }
 
 func AdminUploadMusic(c *gin.Context) {
-	file, err := c.FormFile("file")
-	if err != nil || file == nil {
+	form, err := c.MultipartForm()
+	if err != nil || form == nil {
 		response.Error(c, http.StatusBadRequest, "请选择要上传的音乐文件")
 		return
 	}
-	if file.Size > maxMusicSize {
-		response.Error(c, http.StatusBadRequest, "音乐文件不能超过 50MB")
+
+	files := append([]*multipart.FileHeader{}, form.File["files"]...)
+	files = append(files, form.File["file"]...)
+	if len(files) == 0 {
+		response.Error(c, http.StatusBadRequest, "请选择要上传的音乐文件")
+		return
+	}
+	if len(files) > maxMusicBatchCount {
+		response.Error(c, http.StatusBadRequest, "单次最多上传 50 个音乐文件")
 		return
 	}
 
-	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if !allowedExt(ext, musicExts) {
-		response.Error(c, http.StatusBadRequest, "仅支持 mp3、wav、ogg、m4a、aac、flac 音频")
-		return
-	}
-
-	contentType, err := detectUploadedContentType(file)
-	headerType := strings.ToLower(file.Header.Get("Content-Type"))
-	if err != nil || (!musicTypes[contentType] && !strings.HasPrefix(contentType, "audio/") && !strings.HasPrefix(headerType, "audio/")) {
-		response.Error(c, http.StatusBadRequest, "音乐文件类型不被支持")
-		return
-	}
-	if strings.HasPrefix(headerType, "audio/") {
-		contentType = headerType
+	prepared := make([]preparedMusicFile, 0, len(files))
+	for _, file := range files {
+		item, err := prepareMusicFile(file)
+		if err != nil {
+			response.Error(c, http.StatusBadRequest, err.Error())
+			return
+		}
+		prepared = append(prepared, item)
 	}
 
 	now := time.Now()
 	dir := filepath.Join(config.AppConfig.UploadDir, "music", now.Format("2006"), now.Format("01"))
-	name := uuid.NewString() + ext
-	target := filepath.Join(dir, name)
-	if err := saveUploadedFile(c, file, dir, target); err != nil {
-		response.Error(c, http.StatusInternalServerError, "上传音乐失败")
-		return
+	displayOrder, _ := strconv.Atoi(c.DefaultPostForm("displayOrder", "0"))
+	artist := strings.TrimSpace(c.PostForm("artist"))
+	title := strings.TrimSpace(c.PostForm("title"))
+	singleUpload := len(files) == 1
+
+	uploaded := make([]model.Music, 0, len(prepared))
+	for index, item := range prepared {
+		name := uuid.NewString() + item.ext
+		target := filepath.Join(dir, name)
+		if err := saveUploadedFile(c, item.file, dir, target); err != nil {
+			cleanupUploadedMusic(uploaded)
+			response.Error(c, http.StatusInternalServerError, "上传音乐失败")
+			return
+		}
+
+		musicTitle := strings.TrimSuffix(item.file.Filename, filepath.Ext(item.file.Filename))
+		if singleUpload && title != "" {
+			musicTitle = title
+		}
+
+		music := model.Music{
+			Title:        musicTitle,
+			Artist:       artist,
+			FileURL:      "/uploads/music/" + now.Format("2006") + "/" + now.Format("01") + "/" + name,
+			FileName:     item.file.Filename,
+			ContentType:  item.contentType,
+			Size:         item.file.Size,
+			DisplayOrder: displayOrder + index,
+		}
+		if err := repository.CreateMusic(&music); err != nil {
+			_ = os.Remove(target)
+			cleanupUploadedMusic(uploaded)
+			response.Error(c, http.StatusInternalServerError, "保存音乐信息失败")
+			return
+		}
+		uploaded = append(uploaded, music)
 	}
 
-	title := strings.TrimSpace(c.PostForm("title"))
-	if title == "" {
-		title = strings.TrimSuffix(file.Filename, filepath.Ext(file.Filename))
-	}
-	displayOrder, _ := strconv.Atoi(c.DefaultPostForm("displayOrder", "0"))
-	music := model.Music{
-		Title:        title,
-		Artist:       strings.TrimSpace(c.PostForm("artist")),
-		FileURL:      "/uploads/music/" + now.Format("2006") + "/" + now.Format("01") + "/" + name,
-		FileName:     file.Filename,
-		ContentType:  contentType,
-		Size:         file.Size,
-		DisplayOrder: displayOrder,
-	}
-	if err := repository.CreateMusic(&music); err != nil {
-		_ = os.Remove(target)
-		response.Error(c, http.StatusInternalServerError, "保存音乐信息失败")
+	if singleUpload {
+		response.Success(c, uploaded[0])
 		return
 	}
-	response.Success(c, music)
+	response.Success(c, uploaded)
 }
 
 func AdminDeleteMusic(c *gin.Context) {
@@ -110,6 +140,88 @@ func AdminDeleteMusic(c *gin.Context) {
 		_ = removeUploadedMusic(existing.FileURL)
 	}
 	response.Success(c, nil)
+}
+
+func AdminBatchDeleteMusic(c *gin.Context) {
+	var req batchDeleteMusicRequest
+	if err := c.ShouldBindJSON(&req); err != nil || len(req.IDs) == 0 {
+		response.Error(c, http.StatusBadRequest, "请选择要删除的音乐")
+		return
+	}
+
+	ids := uniqueMusicIDs(req.IDs)
+	if len(ids) == 0 {
+		response.Error(c, http.StatusBadRequest, "请选择要删除的音乐")
+		return
+	}
+
+	existing, err := repository.GetMusicsByIDs(ids)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取音乐信息失败")
+		return
+	}
+	if len(existing) == 0 {
+		response.Success(c, gin.H{"deleted": 0})
+		return
+	}
+
+	if err := repository.DeleteMusics(ids); err != nil {
+		response.Error(c, http.StatusInternalServerError, "删除音乐失败")
+		return
+	}
+	for _, music := range existing {
+		_ = removeUploadedMusic(music.FileURL)
+	}
+	response.Success(c, gin.H{"deleted": len(existing)})
+}
+
+func prepareMusicFile(file *multipart.FileHeader) (preparedMusicFile, error) {
+	if file == nil {
+		return preparedMusicFile{}, errors.New("请选择要上传的音乐文件")
+	}
+	if file.Size > maxMusicSize {
+		return preparedMusicFile{}, errors.New(file.Filename + " 不能超过 50MB")
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if !allowedExt(ext, musicExts) {
+		return preparedMusicFile{}, errors.New(file.Filename + " 的格式不支持，仅支持 mp3、wav、ogg、m4a、aac、flac")
+	}
+
+	contentType, err := detectUploadedContentType(file)
+	headerType := strings.ToLower(file.Header.Get("Content-Type"))
+	if err != nil || (!musicTypes[contentType] && !strings.HasPrefix(contentType, "audio/") && !strings.HasPrefix(headerType, "audio/")) {
+		return preparedMusicFile{}, errors.New(file.Filename + " 的文件类型不被支持")
+	}
+	if strings.HasPrefix(headerType, "audio/") {
+		contentType = headerType
+	}
+
+	return preparedMusicFile{
+		file:        file,
+		ext:         ext,
+		contentType: contentType,
+	}, nil
+}
+
+func cleanupUploadedMusic(musics []model.Music) {
+	for _, music := range musics {
+		_ = repository.DeleteMusic(music.ID)
+		_ = removeUploadedMusic(music.FileURL)
+	}
+}
+
+func uniqueMusicIDs(ids []uint64) []uint64 {
+	seen := make(map[uint64]bool, len(ids))
+	unique := make([]uint64, 0, len(ids))
+	for _, id := range ids {
+		if id == 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		unique = append(unique, id)
+	}
+	return unique
 }
 
 func removeUploadedMusic(fileURL string) error {
