@@ -3,7 +3,8 @@ node_modules/
 frontend/node_modules/
 
 # Build output
-frontend/dist/
+# frontend/dist is kept in git because Baota/static deployments may serve it
+# directly without running a frontend build on the server.
 go_back/personal-website-api
 go_back/*.exe
 
