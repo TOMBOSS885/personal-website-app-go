@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"os"
 	"path/filepath"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
+	"sort"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -14,6 +17,8 @@ import (
 )
 
 const maxThemeBackgroundSize = 10 * 1024 * 1024
+
+var themeBackgroundExts = []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}
 
 type themeSaveRequest struct {
 	Preset string             `json:"preset"`
@@ -61,25 +66,56 @@ func AdminGetThemes(c *gin.Context) {
 	response.Success(c, themes)
 }
 
+func AdminListThemeBackgrounds(c *gin.Context) {
+	root := filepath.Join(config.AppConfig.UploadDir, "theme-backgrounds")
+	if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
+		response.Success(c, []imageDTO{})
+		return
+	}
+
+	var images []imageDTO
+	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !allowedExt(strings.ToLower(filepath.Ext(path)), themeBackgroundExts) {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		name := filepath.Base(path)
+		images = append(images, imageDTO{
+			Name: name,
+			URL:  "/uploads/theme-backgrounds/" + name,
+			Size: info.Size(),
+		})
+		return nil
+	})
+
+	sort.Slice(images, func(i, j int) bool {
+		return images[i].URL > images[j].URL
+	})
+	response.Success(c, images)
+}
+
 func AdminUploadThemeBackground(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil || file == nil {
-		response.Error(c, http.StatusBadRequest, "Please upload an image file.")
+		response.Error(c, http.StatusBadRequest, "请上传图片文件")
 		return
 	}
 	if file.Size > maxThemeBackgroundSize {
-		response.Error(c, http.StatusBadRequest, "Image must not exceed 10MB.")
+		response.Error(c, http.StatusBadRequest, "图片不能超过 10MB")
 		return
 	}
 	contentType, err := detectUploadedContentType(file)
 	if err != nil || !strings.HasPrefix(contentType, "image/") {
-		response.Error(c, http.StatusBadRequest, "Only image files are supported.")
+		response.Error(c, http.StatusBadRequest, "仅支持图片文件")
 		return
 	}
 
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if !allowedExt(ext, []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}) {
-		response.Error(c, http.StatusBadRequest, "Unsupported image type.")
+	if !allowedExt(ext, themeBackgroundExts) {
+		response.Error(c, http.StatusBadRequest, "不支持的图片格式")
 		return
 	}
 
@@ -90,7 +126,11 @@ func AdminUploadThemeBackground(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "上传失败")
 		return
 	}
-	response.Success(c, gin.H{"url": "/uploads/theme-backgrounds/" + name})
+	response.Success(c, imageDTO{
+		Name: name,
+		URL:  "/uploads/theme-backgrounds/" + name,
+		Size: file.Size,
+	})
 }
 
 func writeThemeResponse(c *gin.Context, theme *model.Theme) {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, Loader, Music, Pause, Play, Volume2 } from 'lucide-react'
 
@@ -34,7 +34,8 @@ export default function MusicPlayer() {
   const dragFrameRef = useRef(null)
   const suppressClickRef = useRef(false)
   const [songs, setSongs] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [loaded, setLoaded] = useState(false)
   const [open, setOpen] = useState(false)
   const [currentSong, setCurrentSong] = useState(null)
   const [playing, setPlaying] = useState(false)
@@ -45,13 +46,35 @@ export default function MusicPlayer() {
   const [dragging, setDragging] = useState(false)
   const [dragPoint, setDragPoint] = useState(null)
 
+  const fetchSongs = useCallback(async () => {
+    if (loaded || loading) return
+
+    setLoading(true)
+    try {
+      const res = await fetch('/api/public/music')
+      const data = res.ok ? await res.json() : []
+      setSongs(Array.isArray(data) ? data : [])
+      setLoaded(true)
+    } catch {
+      setSongs([])
+    } finally {
+      setLoading(false)
+    }
+  }, [loaded, loading])
+
   useEffect(() => {
-    fetch('/api/public/music')
-      .then(res => res.json())
-      .then(data => setSongs(Array.isArray(data) ? data : []))
-      .catch(() => setSongs([]))
-      .finally(() => setLoading(false))
-  }, [])
+    const idleId = 'requestIdleCallback' in window
+      ? window.requestIdleCallback(fetchSongs, { timeout: 5000 })
+      : window.setTimeout(fetchSongs, 2500)
+
+    return () => {
+      if ('cancelIdleCallback' in window) {
+        window.cancelIdleCallback(idleId)
+      } else {
+        window.clearTimeout(idleId)
+      }
+    }
+  }, [fetchSongs])
 
   useEffect(() => {
     if (!currentSong || !audioRef.current) return
@@ -193,6 +216,7 @@ export default function MusicPlayer() {
   const togglePlay = async () => {
     if (suppressClickRef.current) return
     if (!currentSong) {
+      fetchSongs()
       setOpen(value => !value)
       return
     }
@@ -212,6 +236,7 @@ export default function MusicPlayer() {
 
   const toggleList = () => {
     if (suppressClickRef.current) return
+    fetchSongs()
     setOpen(value => !value)
   }
 
@@ -239,6 +264,7 @@ export default function MusicPlayer() {
       <audio
         ref={audioRef}
         src={currentSong?.fileUrl || ''}
+        preload="none"
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime || 0)}
         onEnded={() => setPlaying(false)}

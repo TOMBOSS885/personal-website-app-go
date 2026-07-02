@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Check, Eye, Image as ImageIcon, Loader, Palette, RotateCcw, Sparkles, Upload } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Check, Eye, Image as ImageIcon, Loader, Palette, RefreshCw, RotateCcw, Sparkles, Upload } from 'lucide-react'
 import { getThemeBackground, useTheme } from '../../context/ThemeContext'
 import OptimizedImage from '../../components/OptimizedImage'
 
@@ -18,9 +18,32 @@ export default function ThemeManager() {
   const token = localStorage.getItem('token')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [loadingBackgrounds, setLoadingBackgrounds] = useState(false)
+  const [backgroundImages, setBackgroundImages] = useState([])
   const [previewTheme, setPreviewTheme] = useState(null)
 
   const activeTheme = previewTheme || getActiveTheme()
+
+  const fetchBackgroundImages = async () => {
+    setLoadingBackgrounds(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/theme/background-images`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = res.ok ? await res.json() : []
+      setBackgroundImages(Array.isArray(data) ? data : [])
+    } catch {
+      setBackgroundImages([])
+    } finally {
+      setLoadingBackgrounds(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTheme.backgroundStyle === 'image') {
+      fetchBackgroundImages()
+    }
+  }, [activeTheme.backgroundStyle])
 
   const updateCustomTheme = (patch) => {
     const nextTheme = {
@@ -75,6 +98,7 @@ export default function ThemeManager() {
       }
 
       const data = await res.json()
+      setBackgroundImages(current => [data, ...current.filter(image => image.url !== data.url)])
       updateCustomTheme({
         backgroundStyle: 'image',
         backgroundImage: data.url,
@@ -306,6 +330,54 @@ export default function ThemeManager() {
                 placeholder="/uploads/theme-backgrounds/example.jpg 或 https://example.com/image.jpg"
                 className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
+            </div>
+
+            <div className="mt-5">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-800">已上传背景</h3>
+                <button
+                  type="button"
+                  onClick={fetchBackgroundImages}
+                  disabled={loadingBackgrounds}
+                  className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${loadingBackgrounds ? 'animate-spin' : ''}`} />
+                  刷新
+                </button>
+              </div>
+
+              {loadingBackgrounds ? (
+                <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-gray-200 text-sm text-gray-500">
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  加载背景图库...
+                </div>
+              ) : backgroundImages.length === 0 ? (
+                <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-gray-200 text-sm text-gray-400">
+                  暂无已上传背景
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  {backgroundImages.map(image => {
+                    const selected = activeTheme.backgroundImage === image.url
+                    return (
+                      <button
+                        key={image.url}
+                        type="button"
+                        onClick={() => updateCustomTheme({ backgroundImage: image.url, backgroundStyle: 'image' })}
+                        className={`group overflow-hidden rounded-xl border text-left transition-all ${
+                          selected ? 'border-purple-400 ring-2 ring-purple-200' : 'border-gray-100 hover:border-purple-200'
+                        }`}
+                        title={image.name}
+                      >
+                        <div className="aspect-video bg-gray-50">
+                          <OptimizedImage src={image.url} alt={image.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" wrapperClassName="block h-full w-full" />
+                        </div>
+                        <div className="truncate px-2 py-1.5 text-xs text-gray-500">{image.name}</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
             </div>
 
             {activeTheme.backgroundImage ? (

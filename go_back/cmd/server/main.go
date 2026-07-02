@@ -90,6 +90,7 @@ func main() {
 			admin.PUT("/account/password", handler.AdminChangePassword)
 
 			admin.POST("/theme", handler.AdminSaveTheme)
+			admin.GET("/theme/background-images", handler.AdminListThemeBackgrounds)
 			admin.POST("/theme/background-image", handler.AdminUploadThemeBackground)
 			admin.GET("/themes", handler.AdminGetThemes)
 

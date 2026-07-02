@@ -9,6 +9,25 @@ function formatSize(size) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
 
+function sortSongs(items) {
+  return [...items].sort((a, b) => {
+    const orderDiff = Number(a.displayOrder || 0) - Number(b.displayOrder || 0)
+    if (orderDiff !== 0) return orderDiff
+    return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  })
+}
+
+function mergeSongs(current, incoming) {
+  const nextById = new Map()
+  incoming.forEach(song => nextById.set(song.id, song))
+  current.forEach(song => {
+    if (!nextById.has(song.id)) {
+      nextById.set(song.id, song)
+    }
+  })
+  return sortSongs(Array.from(nextById.values()))
+}
+
 export default function MusicManager() {
   const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -25,20 +44,21 @@ export default function MusicManager() {
   const selectedCount = selectedIds.length
   const fileCount = form.files.length
 
-  const fetchSongs = async () => {
-    setLoading(true)
+  const fetchSongs = async ({ showLoading = true } = {}) => {
+    if (showLoading) setLoading(true)
     try {
       const res = await fetch(`${API_BASE}/api/admin/music`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       })
       const data = res.ok ? await res.json() : []
-      setSongs(data)
-      setSelectedIds(ids => ids.filter(id => data.some(song => song.id === id)))
+      const list = Array.isArray(data) ? data : []
+      setSongs(list)
+      setSelectedIds(ids => ids.filter(id => list.some(song => song.id === id)))
     } catch {
       setSongs([])
       setSelectedIds([])
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }
 
@@ -62,14 +82,19 @@ export default function MusicManager() {
         headers: { Authorization: `Bearer ${token}` },
         body
       })
+      const data = await res.json().catch(() => null)
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        alert(data.message || '上传失败')
+        alert(data?.message || '上传失败')
         return
+      }
+
+      const uploadedSongs = Array.isArray(data) ? data : [data].filter(Boolean)
+      if (uploadedSongs.length > 0) {
+        setSongs(current => mergeSongs(current, uploadedSongs))
       }
       setForm({ title: '', artist: '', displayOrder: 0, files: [] })
       e.currentTarget.reset()
-      fetchSongs()
+      await fetchSongs({ showLoading: false })
     } finally {
       setSaving(false)
     }
@@ -84,7 +109,8 @@ export default function MusicManager() {
         headers: { Authorization: `Bearer ${token}` }
       })
       setSelectedIds(ids => ids.filter(item => item !== id))
-      fetchSongs()
+      setSongs(current => current.filter(song => song.id !== id))
+      await fetchSongs({ showLoading: false })
     } finally {
       setDeleting(false)
     }
@@ -109,8 +135,10 @@ export default function MusicManager() {
         alert(data.message || '批量删除失败')
         return
       }
+      const deletedIds = new Set(selectedIds)
       setSelectedIds([])
-      fetchSongs()
+      setSongs(current => current.filter(song => !deletedIds.has(song.id)))
+      await fetchSongs({ showLoading: false })
     } finally {
       setDeleting(false)
     }
@@ -253,7 +281,7 @@ export default function MusicManager() {
                       <div className="text-sm text-gray-500">{song.artist || '未知歌手'}</div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      <audio controls src={song.fileUrl} className="h-9 w-64 max-w-full" />
+                      <audio controls preload="none" src={song.fileUrl} className="h-9 w-64 max-w-full" />
                       <div className="mt-1 truncate">{song.fileName} · {formatSize(song.size)}</div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">{song.displayOrder || 0}</td>
