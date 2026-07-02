@@ -24,6 +24,10 @@ services:
       MYSQL_PASSWORD: "${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}"
       JWT_SECRET: "${JWT_SECRET:?Set JWT_SECRET in .env}"
       JWT_EXPIRATION: "${JWT_EXPIRATION:-86400000}"
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"
+      ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@example.com}"
+      ADMIN_RESET_PASSWORD: "${ADMIN_RESET_PASSWORD:-false}"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

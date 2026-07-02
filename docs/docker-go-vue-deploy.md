@@ -132,6 +132,7 @@ CORS_ALLOWED_ORIGINS=*
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin123
 ADMIN_EMAIL=admin@example.com
+ADMIN_RESET_PASSWORD=false
 ```
 
 说明：
@@ -142,6 +143,7 @@ ADMIN_EMAIL=admin@example.com
 - `JWT_SECRET`：必须修改，至少 32 位。
 - `AUTO_MIGRATE=true`：启动时自动补齐表结构。
 - `ADMIN_*`：仅在 `users` 表为空时用于创建默认管理员。
+- `ADMIN_RESET_PASSWORD=true`：当 `ADMIN_USERNAME` 已存在时，启动时强制把该用户密码重置为 `ADMIN_PASSWORD`。只建议临时使用一次。
 
 生成随机 `JWT_SECRET`：
 
@@ -435,8 +437,41 @@ docker compose logs -f web
 
 - 数据库 `users` 表是否为空。
 - `AUTO_MIGRATE=true` 是否开启。
-- 默认管理员只会在 `users` 表为空时创建。
+- 默认管理员会在 `ADMIN_USERNAME` 不存在时创建。
 - 如果已有旧用户，使用旧用户登录。
+
+如果数据库里已经有 `admin` 用户，但密码不是 `admin123`，可以临时重置一次：
+
+```env
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin123
+ADMIN_RESET_PASSWORD=true
+```
+
+然后执行：
+
+```bash
+docker compose up -d
+docker compose logs -f web
+```
+
+看到类似日志后：
+
+```text
+reset password for admin user "admin" because ADMIN_RESET_PASSWORD=true
+```
+
+登录成功后，立刻把 `.env` 改回：
+
+```env
+ADMIN_RESET_PASSWORD=false
+```
+
+再重启：
+
+```bash
+docker compose up -d
+```
 
 ### 12.6 上传图片或 Live2D 不显示
 

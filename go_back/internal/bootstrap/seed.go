@@ -10,12 +10,26 @@ import (
 )
 
 func SeedDefaultData() {
-	count, err := repository.CountUsers()
-	if err != nil {
-		log.Printf("failed to count users: %v", err)
-		return
-	}
-	if count > 0 {
+	existing, err := repository.GetUserByUsername(config.AppConfig.AdminUsername)
+	if err == nil && existing != nil {
+		if !config.AppConfig.AdminResetPassword {
+			log.Printf("admin user %q already exists; skip default password seeding", existing.Username)
+			return
+		}
+
+		hash, err := bcrypt.GenerateFromPassword([]byte(config.AppConfig.AdminPassword), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("failed to hash configured admin password: %v", err)
+			return
+		}
+		existing.Password = string(hash)
+		existing.Email = config.AppConfig.AdminEmail
+		existing.Role = "ADMIN"
+		if err := repository.UpdateUser(existing); err != nil {
+			log.Printf("failed to reset admin password: %v", err)
+			return
+		}
+		log.Printf("reset password for admin user %q because ADMIN_RESET_PASSWORD=true", existing.Username)
 		return
 	}
 

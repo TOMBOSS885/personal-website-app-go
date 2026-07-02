@@ -21,6 +21,7 @@ type Config struct {
 	AdminUsername      string
 	AdminPassword      string
 	AdminEmail         string
+	AdminResetPassword bool
 }
 
 var AppConfig *Config
@@ -46,6 +47,7 @@ func InitConfig() {
 		AdminUsername:      getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:      getEnv("ADMIN_PASSWORD", "admin123"),
 		AdminEmail:         getEnv("ADMIN_EMAIL", "admin@example.com"),
+		AdminResetPassword: getEnv("ADMIN_RESET_PASSWORD", "false") == "true",
 	}
 }
 
