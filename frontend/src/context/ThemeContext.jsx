@@ -107,12 +107,26 @@ function cssUrl(url) {
   return `url("${String(url).replace(/"/g, '\\"')}")`
 }
 
+function getResponsiveBackgroundImage(url) {
+  if (!url || !url.match(/@desktop\.(webp|jpg)$/) || typeof window === 'undefined') {
+    return url
+  }
+
+  if (window.innerWidth <= 768) {
+    return url.replace(/@desktop\.(webp|jpg)$/, '@mobile.$1')
+  }
+  if (window.innerWidth <= 1200) {
+    return url.replace(/@desktop\.(webp|jpg)$/, '@tablet.$1')
+  }
+  return url
+}
+
 export function getThemeBackground(theme) {
   const normalized = normalizeTheme(theme)
   if (!normalized) return '#ffffff'
 
   if (normalized.backgroundStyle === 'image' && normalized.backgroundImage) {
-    return `${cssUrl(normalized.backgroundImage)} center / cover no-repeat`
+    return `${cssUrl(getResponsiveBackgroundImage(normalized.backgroundImage))} center / cover no-repeat`
   }
 
   if (normalized.backgroundStyle === 'solid') {
@@ -203,9 +217,10 @@ export function ThemeProvider({ children }) {
     document.body.style.background = fallbackBackground
 
     if (theme.backgroundStyle === 'image' && theme.backgroundImage) {
-      preloadImage(theme.backgroundImage, { timeout: 10000 }).then((loaded) => {
+      const backgroundImage = getResponsiveBackgroundImage(theme.backgroundImage)
+      preloadImage(backgroundImage, { timeout: 10000 }).then((loaded) => {
         if (cancelled || !loaded) return
-        root.style.setProperty('--theme-bg-image', cssUrl(theme.backgroundImage))
+        root.style.setProperty('--theme-bg-image', cssUrl(backgroundImage))
         root.style.setProperty('--theme-bg-image-opacity', '1')
       })
     }

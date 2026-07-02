@@ -49,7 +49,7 @@ RUN chmod +x /entrypoint.sh \
 EXPOSE 3718 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/api/public/profile >/dev/null || exit 1
+  CMD wget -qO- http://127.0.0.1:8080/api/health >/dev/null || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

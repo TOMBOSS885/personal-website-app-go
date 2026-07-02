@@ -2,11 +2,13 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"personal-website-go/internal/config"
+	"personal-website-go/internal/media"
 	"personal-website-go/internal/response"
 	"sort"
 	"strings"
@@ -43,6 +45,13 @@ func AdminListArticleImages(c *gin.Context) {
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !allowedExt(strings.ToLower(filepath.Ext(path)), articleImageExts) {
 			return nil
+		}
+		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		if !strings.HasSuffix(base, "@optimized") {
+			optimizedPath := filepath.Join(filepath.Dir(path), base+"@optimized.jpg")
+			if _, err := os.Stat(optimizedPath); err == nil {
+				return nil
+			}
 		}
 		info, err := d.Info()
 		if err != nil {
@@ -89,16 +98,31 @@ func AdminUploadArticleImage(c *gin.Context) {
 
 	now := time.Now()
 	dir := filepath.Join(config.AppConfig.UploadDir, "articles", now.Format("2006"), now.Format("01"))
-	name := uuid.NewString() + ext
+	baseName := uuid.NewString()
+	name := baseName + ext
 	target := filepath.Join(dir, name)
 	if err := saveUploadedFile(c, file, dir, target); err != nil {
 		response.Error(c, http.StatusInternalServerError, "上传失败")
 		return
 	}
+	responseName := name
+	responseSize := file.Size
+	if media.IsStaticOptimizableImage(ext, contentType) {
+		results, err := media.GenerateOptimizedVariants(target, dir, baseName, []media.ImageVariant{
+			{Suffix: "@optimized", MaxWidth: 1920, Quality: 82},
+		})
+		if err != nil {
+			log.Printf("article image optimization failed: %v", err)
+		} else if len(results) > 0 {
+			responseName = results[0].Name
+			responseSize = results[0].Size
+		}
+	}
+
 	response.Success(c, imageDTO{
-		Name: name,
-		URL:  "/uploads/articles/" + now.Format("2006") + "/" + now.Format("01") + "/" + name,
-		Size: file.Size,
+		Name: responseName,
+		URL:  "/uploads/articles/" + now.Format("2006") + "/" + now.Format("01") + "/" + responseName,
+		Size: responseSize,
 	})
 }
 

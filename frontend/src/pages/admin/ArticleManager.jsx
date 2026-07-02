@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw } from 'lucide-react'
-import RichTextEditor from '../../components/RichTextEditor'
 import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
+const RichTextEditor = lazy(() => import('../../components/RichTextEditor'))
 
 export default function ArticleManager() {
   const [articles, setArticles] = useState([])
@@ -482,11 +482,17 @@ export default function ArticleManager() {
               {/* Right: Editor */}
               <div className="flex-1 p-4 overflow-hidden">
                 <div className="h-full">
-                  <RichTextEditor
-                    value={form.content}
-                    onChange={(val) => setForm({ ...form, content: val })}
-                    height={600}
-                  />
+                  <Suspense fallback={
+                    <div className="flex h-full items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
+                      <Loader className="w-5 h-5 animate-spin text-purple-500" />
+                    </div>
+                  }>
+                    <RichTextEditor
+                      value={form.content}
+                      onChange={(val) => setForm({ ...form, content: val })}
+                      height={600}
+                    />
+                  </Suspense>
                 </div>
               </div>
             </div>

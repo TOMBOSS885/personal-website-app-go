@@ -2,10 +2,12 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"personal-website-go/internal/config"
+	"personal-website-go/internal/media"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
@@ -78,6 +80,16 @@ func AdminListThemeBackgrounds(c *gin.Context) {
 		if err != nil || d.IsDir() || !allowedExt(strings.ToLower(filepath.Ext(path)), themeBackgroundExts) {
 			return nil
 		}
+		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		if strings.HasSuffix(base, "@tablet") || strings.HasSuffix(base, "@mobile") {
+			return nil
+		}
+		if !strings.HasSuffix(base, "@desktop") {
+			desktopPath := filepath.Join(filepath.Dir(path), base+"@desktop.jpg")
+			if _, err := os.Stat(desktopPath); err == nil {
+				return nil
+			}
+		}
 		info, err := d.Info()
 		if err != nil {
 			return nil
@@ -120,16 +132,33 @@ func AdminUploadThemeBackground(c *gin.Context) {
 	}
 
 	dir := filepath.Join(config.AppConfig.UploadDir, "theme-backgrounds")
-	name := uuid.NewString() + ext
+	baseName := uuid.NewString()
+	name := baseName + ext
 	target := filepath.Join(dir, name)
 	if err := saveUploadedFile(c, file, dir, target); err != nil {
 		response.Error(c, http.StatusInternalServerError, "上传失败")
 		return
 	}
+	responseName := name
+	responseSize := file.Size
+	if media.IsStaticOptimizableImage(ext, contentType) {
+		results, err := media.GenerateOptimizedVariants(target, dir, baseName, []media.ImageVariant{
+			{Suffix: "@desktop", MaxWidth: 1920, Quality: 82},
+			{Suffix: "@tablet", MaxWidth: 1200, Quality: 80},
+			{Suffix: "@mobile", MaxWidth: 768, Quality: 78},
+		})
+		if err != nil {
+			log.Printf("theme background optimization failed: %v", err)
+		} else if len(results) > 0 {
+			responseName = results[0].Name
+			responseSize = results[0].Size
+		}
+	}
+
 	response.Success(c, imageDTO{
-		Name: name,
-		URL:  "/uploads/theme-backgrounds/" + name,
-		Size: file.Size,
+		Name: responseName,
+		URL:  "/uploads/theme-backgrounds/" + responseName,
+		Size: responseSize,
 	})
 }
 
@@ -153,11 +182,52 @@ func AdminDeleteThemeBackground(c *gin.Context) {
 		return
 	}
 
-	if err := os.Remove(targetAbs); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := deleteThemeBackgroundFiles(dirAbs, name); err != nil {
 		response.Error(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
 	response.Success(c, gin.H{"deleted": true})
+}
+
+func deleteThemeBackgroundFiles(dirAbs, name string) error {
+	deleteNames := []string{name}
+	groupBase := strings.TrimSuffix(name, filepath.Ext(name))
+	if at := strings.Index(groupBase, "@"); at >= 0 {
+		groupBase = groupBase[:at]
+	}
+
+	if groupBase != "" {
+		entries, err := os.ReadDir(dirAbs)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+			entryName := entry.Name()
+			entryBase := strings.TrimSuffix(entryName, filepath.Ext(entryName))
+			if entryBase == groupBase || strings.HasPrefix(entryBase, groupBase+"@") {
+				deleteNames = append(deleteNames, entryName)
+			}
+		}
+	}
+
+	seen := map[string]bool{}
+	for _, item := range deleteNames {
+		if seen[item] {
+			continue
+		}
+		seen[item] = true
+		itemAbs, err := filepath.Abs(filepath.Join(dirAbs, item))
+		if err != nil || !strings.HasPrefix(itemAbs, dirAbs+string(os.PathSeparator)) {
+			continue
+		}
+		if err := os.Remove(itemAbs); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeThemeResponse(c *gin.Context, theme *model.Theme) {

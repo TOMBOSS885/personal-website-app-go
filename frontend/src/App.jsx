@@ -1,29 +1,30 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './contexts/LanguageContext'
-import HomePage from './pages/HomePage'
-import BlogPage from './pages/BlogPage'
-import ArticleDetailPage from './pages/ArticleDetailPage'
-import ProjectsPage from './pages/ProjectsPage'
-import AdminLayout from './pages/admin/AdminLayout'
-import Dashboard from './pages/admin/Dashboard'
-import ArticleManager from './pages/admin/ArticleManager'
-import ProjectManager from './pages/admin/ProjectManager'
-import SkillManager from './pages/admin/SkillManager'
-import FeatureCardManager from './pages/admin/FeatureCardManager'
-import ProfileManager from './pages/admin/ProfileManager'
-import ThemeManager from './pages/admin/ThemeManager'
-import Live2DManager from './pages/admin/Live2DManager'
-import MusicManager from './pages/admin/MusicManager'
-import AccountSettings from './pages/admin/AccountSettings'
-import LoginPage from './pages/admin/LoginPage'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
-import Live2DWidget from './components/Live2DWidget'
 import MusicPlayer from './components/MusicPlayer'
 
 const API_BASE = ''
+
+const HomePage = lazy(() => import('./pages/HomePage'))
+const BlogPage = lazy(() => import('./pages/BlogPage'))
+const ArticleDetailPage = lazy(() => import('./pages/ArticleDetailPage'))
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
+const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
+const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
+const ArticleManager = lazy(() => import('./pages/admin/ArticleManager'))
+const ProjectManager = lazy(() => import('./pages/admin/ProjectManager'))
+const SkillManager = lazy(() => import('./pages/admin/SkillManager'))
+const FeatureCardManager = lazy(() => import('./pages/admin/FeatureCardManager'))
+const ProfileManager = lazy(() => import('./pages/admin/ProfileManager'))
+const ThemeManager = lazy(() => import('./pages/admin/ThemeManager'))
+const Live2DManager = lazy(() => import('./pages/admin/Live2DManager'))
+const MusicManager = lazy(() => import('./pages/admin/MusicManager'))
+const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
+const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
+const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
 
 // 覆盖 window.fetch，统一处理管理后台 API 的 401 响应
 function setupAdminApiInterceptor() {
@@ -45,6 +46,14 @@ function setupAdminApiInterceptor() {
 
     return res
   }
+}
+
+function PageLoading() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+    </div>
+  )
 }
 
 function App() {
@@ -72,41 +81,45 @@ function App() {
         <div className="theme-page-background" aria-hidden="true" />
         <Router>
         <div className="theme-app-shell min-h-screen flex flex-col">
-          <Routes>
-            <Route path="/admin/login" element={<LoginPage />} />
-            <Route path="/admin/*" element={
-              <PrivateRoute>
-                <AdminLayout />
-              </PrivateRoute>
-            }>
-              <Route index element={<Dashboard />} />
-              <Route path="articles" element={<ArticleManager />} />
-              <Route path="projects" element={<ProjectManager />} />
-              <Route path="feature-cards" element={<FeatureCardManager />} />
-              <Route path="skills" element={<SkillManager />} />
-              <Route path="profile" element={<ProfileManager />} />
-              <Route path="account" element={<AccountSettings />} />
-              <Route path="theme" element={<ThemeManager />} />
-              <Route path="live2d" element={<Live2DManager />} />
-              <Route path="music" element={<MusicManager />} />
-            </Route>
-            <Route path="/*" element={
-              <>
-                <Navbar profile={profile} />
-                <main className="flex-1">
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/blog" element={<BlogPage />} />
-                    <Route path="/blog/:id" element={<ArticleDetailPage />} />
-                    <Route path="/projects" element={<ProjectsPage />} />
-                  </Routes>
-                </main>
-                <Footer profile={profile} />
-                <MusicPlayer />
-                <Live2DWidget />
-              </>
-            } />
-          </Routes>
+          <Suspense fallback={<PageLoading />}>
+            <Routes>
+              <Route path="/admin/login" element={<LoginPage />} />
+              <Route path="/admin/*" element={
+                <PrivateRoute>
+                  <AdminLayout />
+                </PrivateRoute>
+              }>
+                <Route index element={<Dashboard />} />
+                <Route path="articles" element={<ArticleManager />} />
+                <Route path="projects" element={<ProjectManager />} />
+                <Route path="feature-cards" element={<FeatureCardManager />} />
+                <Route path="skills" element={<SkillManager />} />
+                <Route path="profile" element={<ProfileManager />} />
+                <Route path="account" element={<AccountSettings />} />
+                <Route path="theme" element={<ThemeManager />} />
+                <Route path="live2d" element={<Live2DManager />} />
+                <Route path="music" element={<MusicManager />} />
+              </Route>
+              <Route path="/*" element={
+                <>
+                  <Navbar profile={profile} />
+                  <main className="flex-1">
+                    <Routes>
+                      <Route path="/" element={<HomePage />} />
+                      <Route path="/blog" element={<BlogPage />} />
+                      <Route path="/blog/:id" element={<ArticleDetailPage />} />
+                      <Route path="/projects" element={<ProjectsPage />} />
+                    </Routes>
+                  </main>
+                  <Footer profile={profile} />
+                  <MusicPlayer />
+                  <Suspense fallback={null}>
+                    <Live2DWidget />
+                  </Suspense>
+                </>
+              } />
+            </Routes>
+          </Suspense>
         </div>
       </Router>
       </LanguageProvider>

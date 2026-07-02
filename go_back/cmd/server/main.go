@@ -41,6 +41,9 @@ func main() {
 
 	api := r.Group("/api")
 	{
+		api.GET("/health", handler.Health)
+		api.GET("/health/full", handler.FullHealth)
+
 		auth := api.Group("/auth")
 		auth.POST("/login", handler.Login)
 

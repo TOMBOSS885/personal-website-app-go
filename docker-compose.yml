@@ -29,7 +29,7 @@ services:
       ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@example.com}"
       ADMIN_RESET_PASSWORD: "${ADMIN_RESET_PASSWORD:-false}"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/public/profile"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
