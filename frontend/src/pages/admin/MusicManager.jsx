@@ -81,7 +81,7 @@ export default function MusicManager() {
             <Music className="h-7 w-7 text-indigo-600" />
             音乐管理
           </h1>
-          <p className="mt-1 text-sm text-gray-500">管理博客页播放器中的歌曲</p>
+          <p className="mt-1 text-sm text-gray-500">管理前台播放器中的歌曲</p>
         </div>
       </div>
 

@@ -26,12 +26,10 @@ export default function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
       <aside className="w-64 bg-white shadow-sm border-r border-gray-100 flex flex-col">
-        {/* Logo */}
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div 
+            <div
               className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
               style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}
             >
@@ -44,8 +42,7 @@ export default function AdminLayout() {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
           {navItems.map(({ path, label, icon: Icon, exact }) => (
             <NavLink
               key={path}
@@ -58,7 +55,7 @@ export default function AdminLayout() {
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`
               }
-              style={({ isActive }) => isActive ? { 
+              style={({ isActive }) => isActive ? {
                 background: 'var(--theme-gradient)',
                 boxShadow: 'var(--theme-shadow)'
               } : {}}
@@ -69,10 +66,9 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        {/* User Info & Logout */}
         <div className="p-4 border-t border-gray-100">
           <div className="flex items-center gap-3 px-4 py-2 mb-2">
-            <div 
+            <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium"
               style={{ background: 'var(--theme-gradient)' }}
             >
@@ -90,7 +86,6 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 p-8 overflow-y-auto">
         <Outlet />
       </main>

@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --theme-primary: #6366f1;
+  --theme-secondary: #8b5cf6;
+  --theme-accent: #f59e0b;
+  --theme-gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
+  --theme-gradient-text: linear-gradient(90deg, #6366f1, #8b5cf6, #f59e0b);
+  --theme-gradient-hover: linear-gradient(135deg, #4f46e5, #7c3aed);
+  --theme-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.35);
+  --theme-shadow-lg: 0 20px 50px -15px rgba(99, 102, 241, 0.45);
+}
+
 /* Markdown Editor Styles */
 .w-md-editor {
   background-color: white !important;

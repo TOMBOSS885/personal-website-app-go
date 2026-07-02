@@ -62,7 +62,7 @@ export default function MusicPlayer() {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className="fixed right-4 top-24 z-40 sm:right-6">
+    <div className="fixed bottom-6 left-4 z-[70] sm:left-6">
       <audio
         ref={audioRef}
         src={currentSong?.fileUrl || ''}
@@ -73,8 +73,8 @@ export default function MusicPlayer() {
 
       <motion.div
         layout
-        className={`overflow-hidden rounded-full border border-white/70 bg-white/85 shadow-xl shadow-indigo-500/15 backdrop-blur-xl ${
-          currentSong ? 'w-[min(23rem,calc(100vw-2rem))]' : 'w-14'
+        className={`overflow-hidden rounded-full border border-white/70 bg-white/90 shadow-xl shadow-indigo-500/15 backdrop-blur-xl ${
+          currentSong ? 'w-[min(23rem,calc(100vw-2rem))]' : 'w-[6.5rem]'
         }`}
       >
         <div className="flex h-14 items-center gap-2 px-2">
@@ -83,7 +83,7 @@ export default function MusicPlayer() {
             onClick={togglePlay}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105"
             style={{ background: 'var(--theme-gradient)' }}
-            title={playing ? '暂停' : '播放'}
+            title={playing ? '暂停' : '音乐'}
           >
             {loading ? (
               <Loader className="h-5 w-5 animate-spin" />
@@ -93,6 +93,17 @@ export default function MusicPlayer() {
               <Music className="h-5 w-5" />
             )}
           </button>
+
+          {!currentSong && (
+            <button
+              type="button"
+              onClick={() => setOpen(value => !value)}
+              className="pr-2 text-sm font-semibold text-gray-800"
+              title="歌曲列表"
+            >
+              音乐
+            </button>
+          )}
 
           {currentSong && (
             <>
@@ -129,10 +140,10 @@ export default function MusicPlayer() {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 8, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            className="absolute right-0 w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl"
+            initial={{ opacity: 0, y: 8, scale: 0.98 }}
+            animate={{ opacity: 1, y: -8, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.98 }}
+            className="absolute bottom-full left-0 mb-2 w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl"
           >
             {songs.length === 0 ? (
               <div className="px-4 py-5 text-center text-sm text-gray-500">
