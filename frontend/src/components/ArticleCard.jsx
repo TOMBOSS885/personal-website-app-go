@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Calendar, Eye, Clock, ArrowRight } from 'lucide-react'
+import OptimizedImage from './OptimizedImage'
 
 export default function ArticleCard({ article, index = 0 }) {
   // 根据分类生成渐变色
@@ -26,9 +27,13 @@ export default function ArticleCard({ article, index = 0 }) {
           {/* 封面图片区域 */}
           <div className="relative h-48 overflow-hidden">
             {article.coverImage ? (
-              <img
+              <OptimizedImage
                 src={article.coverImage}
                 alt={article.title}
+                loading={index === 0 ? 'eager' : 'lazy'}
+                fetchPriority={index === 0 ? 'high' : 'auto'}
+                sizes="(min-width: 768px) 33vw, 100vw"
+                wrapperClassName="block w-full h-full"
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
             ) : (

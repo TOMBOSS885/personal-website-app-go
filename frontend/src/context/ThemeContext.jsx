@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { preloadImage } from '../utils/assets'
 
 const ThemeContext = createContext(null)
 const API_BASE = ''
@@ -111,13 +112,22 @@ export function getThemeBackground(theme) {
   if (!normalized) return '#ffffff'
 
   if (normalized.backgroundStyle === 'image' && normalized.backgroundImage) {
-    return `${cssUrl(normalized.backgroundImage)} center / cover fixed no-repeat`
+    return `${cssUrl(normalized.backgroundImage)} center / cover no-repeat`
   }
 
   if (normalized.backgroundStyle === 'solid') {
     return normalized.background || '#ffffff'
   }
 
+  return normalized.background || `linear-gradient(135deg, ${normalized.primary}, ${normalized.secondary})`
+}
+
+function getThemeFallbackBackground(theme) {
+  const normalized = normalizeTheme(theme)
+  if (!normalized) return '#ffffff'
+  if (normalized.backgroundStyle === 'solid') {
+    return normalized.background || '#ffffff'
+  }
   return normalized.background || `linear-gradient(135deg, ${normalized.primary}, ${normalized.secondary})`
 }
 
@@ -162,8 +172,9 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     const theme = normalizeTheme(customTheme || PRESET_THEMES[currentTheme])
     if (!theme) return
+    let cancelled = false
 
-    const pageBackground = getThemeBackground(theme)
+    const fallbackBackground = getThemeFallbackBackground(theme)
     const root = document.documentElement
 
     root.style.setProperty('--theme-primary', theme.primary)
@@ -171,8 +182,8 @@ export function ThemeProvider({ children }) {
     root.style.setProperty('--theme-accent', theme.accent)
     root.style.setProperty('--theme-text-primary', theme.textPrimary)
     root.style.setProperty('--theme-text-secondary', theme.textSecondary)
-    root.style.setProperty('--theme-bg', pageBackground)
-    root.style.setProperty('--theme-page-bg', pageBackground)
+    root.style.setProperty('--theme-bg', fallbackBackground)
+    root.style.setProperty('--theme-page-bg', fallbackBackground)
     root.style.setProperty('--theme-bg-image', theme.backgroundImage ? cssUrl(theme.backgroundImage) : 'none')
     root.style.setProperty('--theme-card-bg', theme.cardBg)
     root.style.setProperty('--theme-gradient', `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`)
@@ -188,7 +199,21 @@ export function ThemeProvider({ children }) {
       root.removeAttribute('data-custom-theme')
     }
 
-    document.body.style.background = pageBackground
+    document.body.style.background = fallbackBackground
+
+    if (theme.backgroundStyle === 'image' && theme.backgroundImage) {
+      preloadImage(theme.backgroundImage, { timeout: 10000 }).then((loaded) => {
+        if (cancelled || !loaded) return
+        const pageBackground = getThemeBackground(theme)
+        root.style.setProperty('--theme-bg', pageBackground)
+        root.style.setProperty('--theme-page-bg', pageBackground)
+        document.body.style.background = pageBackground
+      })
+    }
+
+    return () => {
+      cancelled = true
+    }
   }, [currentTheme, customTheme])
 
   const setTheme = (themeKey) => {

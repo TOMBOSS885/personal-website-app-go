@@ -13,6 +13,7 @@ import {
   Trash2,
   UploadCloud,
 } from 'lucide-react'
+import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
 
@@ -303,7 +304,7 @@ export default function Live2DManager() {
                       className="w-16 h-16 rounded-lg border border-gray-100 bg-gray-50 overflow-hidden flex items-center justify-center shrink-0"
                     >
                       {model.thumbnailPath ? (
-                        <img src={model.thumbnailPath} alt={model.name} className="w-full h-full object-contain" loading="lazy" />
+                        <OptimizedImage src={model.thumbnailPath} alt={model.name} className="w-full h-full object-contain" wrapperClassName="block w-full h-full" />
                       ) : (
                         <div className="text-center text-gray-400 px-2">
                           <ImageOff className="w-5 h-5 mx-auto mb-1" />

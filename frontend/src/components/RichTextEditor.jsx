@@ -6,6 +6,7 @@ import {
   Image, Table, Minus, Eye, EyeOff, Maximize2, Minimize2,
   UploadCloud, Loader, RefreshCw, X
 } from 'lucide-react'
+import OptimizedImage from './OptimizedImage'
 
 const API_BASE = ''
 
@@ -339,7 +340,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
                       className="group text-left rounded-xl border border-gray-200 overflow-hidden hover:border-purple-300 hover:shadow-lg transition-all bg-white"
                     >
                       <div className="aspect-video bg-gray-100 overflow-hidden">
-                        <img src={image.url} alt={image.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <OptimizedImage src={image.url} alt={image.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" wrapperClassName="block w-full h-full" />
                       </div>
                       <div className="p-2">
                         <div className="text-xs font-medium text-gray-700 truncate">{image.name}</div>

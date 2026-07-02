@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, Eye, Image as ImageIcon, Loader, Palette, RotateCcw, Sparkles, Upload } from 'lucide-react'
 import { getThemeBackground, useTheme } from '../../context/ThemeContext'
+import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
 
@@ -309,7 +310,7 @@ export default function ThemeManager() {
 
             {activeTheme.backgroundImage ? (
               <div className="mt-4 h-40 rounded-xl overflow-hidden border border-gray-100 bg-gray-50">
-                <img src={activeTheme.backgroundImage} alt="背景预览" className="w-full h-full object-cover" />
+                <OptimizedImage src={activeTheme.backgroundImage} alt="背景预览" className="w-full h-full object-cover" wrapperClassName="block w-full h-full" />
               </div>
             ) : (
               <div className="mt-4 h-32 rounded-xl border border-dashed border-gray-200 bg-gray-50 flex items-center justify-center text-gray-400 gap-2">

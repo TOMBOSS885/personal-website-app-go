@@ -62,7 +62,7 @@ func GetArticles(c *gin.Context) {
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
 	tag := c.Query("tag")
 
-	articles, total, err := repository.GetArticles(page, size, tag, true)
+	articles, total, err := repository.GetArticleSummaries(page, size, tag)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取文章失败")
 		return

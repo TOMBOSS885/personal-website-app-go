@@ -28,6 +28,29 @@ func GetArticles(page, size int, tag string, onlyPublished bool) ([]model.Articl
 	return articles, total, err
 }
 
+func GetArticleSummaries(page, size int, tag string) ([]model.Article, int64, error) {
+	var articles []model.Article
+	var total int64
+
+	query := db.DB.Model(&model.Article{}).Where("published = ?", true)
+	if tag != "" {
+		query = query.Where("tags LIKE ?", "%"+tag+"%")
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := page * size
+	err := query.
+		Select("id", "title", "summary", "cover_image", "category", "tags", "views", "published", "created_at", "updated_at").
+		Order("created_at DESC").
+		Offset(offset).
+		Limit(size).
+		Find(&articles).Error
+	return articles, total, err
+}
+
 func GetArticleByID(id uint64) (*model.Article, error) {
 	var article model.Article
 	err := db.DB.First(&article, id).Error

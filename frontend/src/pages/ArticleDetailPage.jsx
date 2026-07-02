@@ -5,6 +5,7 @@ import { ArrowLeft, Check, Share2, Tag } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
+import OptimizedImage from '../components/OptimizedImage'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
@@ -169,7 +170,12 @@ export default function ArticleDetailPage() {
                 </div>
               ),
               img: ({ node, ...props }) => (
-                <img {...props} loading="lazy" />
+                <OptimizedImage
+                  {...props}
+                  loading="lazy"
+                  sizes="(min-width: 768px) 768px, 100vw"
+                  wrapperClassName="block"
+                />
               )
             }}
           >

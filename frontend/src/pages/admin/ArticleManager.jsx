@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw } from 'lucide-react'
 import RichTextEditor from '../../components/RichTextEditor'
+import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
 
@@ -424,14 +425,7 @@ export default function ArticleManager() {
                     </div>
                     {form.coverImage && (
                       <div className="mt-2 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
-                        <img
-                          src={form.coverImage}
-                          alt="封面预览"
-                          className="w-full h-32 object-cover"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none'
-                          }}
-                        />
+                        <OptimizedImage src={form.coverImage} alt="封面预览" className="w-full h-32 object-cover" wrapperClassName="block" />
                       </div>
                     )}
                   </div>
@@ -557,7 +551,7 @@ export default function ArticleManager() {
                       }`}
                     >
                       <div className="aspect-video bg-gray-100 overflow-hidden">
-                        <img src={image.url} alt={image.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <OptimizedImage src={image.url} alt={image.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" wrapperClassName="block w-full h-full" />
                       </div>
                       <div className="p-2">
                         <div className="text-xs font-medium text-gray-700 truncate">{image.name}</div>
