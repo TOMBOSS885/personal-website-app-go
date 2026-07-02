@@ -165,6 +165,22 @@ CREATE TABLE IF NOT EXISTS live2d_settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ========================================
+-- 音乐列表
+-- ========================================
+CREATE TABLE IF NOT EXISTS musics (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    artist VARCHAR(255),
+    file_url VARCHAR(500) NOT NULL,
+    file_name VARCHAR(255),
+    content_type VARCHAR(100),
+    size BIGINT DEFAULT 0,
+    display_order INT DEFAULT 0,
+    created_at DATETIME,
+    updated_at DATETIME
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ========================================
 -- 初始化数据
 -- ========================================
 
@@ -178,6 +194,7 @@ TRUNCATE TABLE feature_cards;
 TRUNCATE TABLE themes;
 TRUNCATE TABLE live2d_models;
 TRUNCATE TABLE live2d_settings;
+TRUNCATE TABLE musics;
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- 管理员用户 (密码: admin123)

@@ -26,6 +26,7 @@ func main() {
 			&model.Theme{},
 			&model.Live2DModel{},
 			&model.Live2DSettings{},
+			&model.Music{},
 		); err != nil {
 			log.Fatalf("database migration failed: %v", err)
 		}
@@ -55,6 +56,7 @@ func main() {
 			public.GET("/feature-cards", handler.GetFeatureCards)
 			public.GET("/theme", handler.GetTheme)
 			public.GET("/live2d-model", handler.GetLive2DModel)
+			public.GET("/music", handler.GetMusics)
 		}
 
 		admin := api.Group("/admin")
@@ -96,6 +98,10 @@ func main() {
 			admin.PUT("/live2d-models/:id/activate", handler.AdminActivateLive2DModel)
 			admin.DELETE("/live2d-models/:id", handler.AdminDeleteLive2DModel)
 			admin.PUT("/live2d-settings", handler.AdminUpdateLive2DSettings)
+
+			admin.GET("/music", handler.AdminGetMusics)
+			admin.POST("/music", handler.AdminUploadMusic)
+			admin.DELETE("/music/:id", handler.AdminDeleteMusic)
 		}
 	}
 
