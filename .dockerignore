@@ -5,6 +5,7 @@
 data/
 logs/
 uploads/
+frontend/dist/
 *.db
 *.log
 

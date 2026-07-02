@@ -69,8 +69,9 @@ function App() {
   return (
     <ThemeProvider>
       <LanguageProvider>
+        <div className="theme-page-background" aria-hidden="true" />
         <Router>
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+        <div className="theme-app-shell min-h-screen flex flex-col">
           <Routes>
             <Route path="/admin/login" element={<LoginPage />} />
             <Route path="/admin/*" element={

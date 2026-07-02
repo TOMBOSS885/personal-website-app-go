@@ -39,14 +39,17 @@ WORKDIR /app
 
 COPY --from=backend-builder /out/personal-website-api /app/personal-website-api
 COPY --from=frontend-builder /app/frontend/dist /var/www/html
+COPY docker/entrypoint.sh /entrypoint.sh
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/supervisord.conf /etc/supervisord.conf
 
-RUN chown -R app:app /app/uploads /var/log/supervisor
+RUN chmod +x /entrypoint.sh \
+    && chown -R app:app /app/uploads /var/log/supervisor
 
 EXPOSE 3718 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget -qO- http://127.0.0.1:8080/api/public/profile >/dev/null || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

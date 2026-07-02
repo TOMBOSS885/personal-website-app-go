@@ -184,7 +184,8 @@ export function ThemeProvider({ children }) {
     root.style.setProperty('--theme-text-secondary', theme.textSecondary)
     root.style.setProperty('--theme-bg', fallbackBackground)
     root.style.setProperty('--theme-page-bg', fallbackBackground)
-    root.style.setProperty('--theme-bg-image', theme.backgroundImage ? cssUrl(theme.backgroundImage) : 'none')
+    root.style.setProperty('--theme-bg-image', 'none')
+    root.style.setProperty('--theme-bg-image-opacity', '0')
     root.style.setProperty('--theme-card-bg', theme.cardBg)
     root.style.setProperty('--theme-gradient', `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`)
     root.style.setProperty('--theme-gradient-text', `linear-gradient(90deg, ${theme.primary}, ${theme.secondary}, ${theme.accent})`)
@@ -204,10 +205,8 @@ export function ThemeProvider({ children }) {
     if (theme.backgroundStyle === 'image' && theme.backgroundImage) {
       preloadImage(theme.backgroundImage, { timeout: 10000 }).then((loaded) => {
         if (cancelled || !loaded) return
-        const pageBackground = getThemeBackground(theme)
-        root.style.setProperty('--theme-bg', pageBackground)
-        root.style.setProperty('--theme-page-bg', pageBackground)
-        document.body.style.background = pageBackground
+        root.style.setProperty('--theme-bg-image', cssUrl(theme.backgroundImage))
+        root.style.setProperty('--theme-bg-image-opacity', '1')
       })
     }
 

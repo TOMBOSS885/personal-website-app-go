@@ -35,6 +35,7 @@ func main() {
 
 	gin.SetMode(config.AppConfig.GinMode)
 	r := gin.New()
+	r.MaxMultipartMemory = 256 << 20
 	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.CORS())
 	r.Static("/uploads", config.AppConfig.UploadDir)
 

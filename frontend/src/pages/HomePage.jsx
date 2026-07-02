@@ -173,7 +173,7 @@ export default function HomePage() {
   const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com')
 
   return (
-    <div className="min-h-screen relative overflow-hidden" style={{ background: 'var(--theme-page-bg)' }}>
+    <div className="min-h-screen relative overflow-hidden">
       {/* 粒子背景 */}
       <ParticleBackground />
       

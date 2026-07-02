@@ -27,8 +27,11 @@ function clamp(value, min, max) {
 
 export default function MusicPlayer() {
   const audioRef = useRef(null)
+  const rootRef = useRef(null)
   const playerRef = useRef(null)
   const dragRef = useRef(null)
+  const dragPointRef = useRef(null)
+  const dragFrameRef = useRef(null)
   const suppressClickRef = useRef(false)
   const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -67,6 +70,13 @@ export default function MusicPlayer() {
     return () => window.removeEventListener('resize', keepInViewport)
   }, [])
 
+  useEffect(() => {
+    return () => {
+      removeDragListeners()
+      cancelDragPaint()
+    }
+  }, [])
+
   const beginDrag = (event) => {
     if (event.button !== undefined && event.button !== 0) return
     const rect = playerRef.current?.getBoundingClientRect()
@@ -89,6 +99,33 @@ export default function MusicPlayer() {
     window.removeEventListener('pointercancel', cancelDrag)
   }
 
+  const paintDragPoint = (point) => {
+    const root = rootRef.current
+    if (!root) return
+    root.style.left = `${point.x}px`
+    root.style.top = `${point.y}px`
+    root.style.right = 'auto'
+  }
+
+  const scheduleDragPaint = (point) => {
+    dragPointRef.current = point
+    if (dragFrameRef.current) return
+
+    dragFrameRef.current = window.requestAnimationFrame(() => {
+      dragFrameRef.current = null
+      if (dragPointRef.current) {
+        paintDragPoint(dragPointRef.current)
+      }
+    })
+  }
+
+  const cancelDragPaint = () => {
+    if (dragFrameRef.current) {
+      window.cancelAnimationFrame(dragFrameRef.current)
+      dragFrameRef.current = null
+    }
+  }
+
   const moveDrag = (event) => {
     const drag = dragRef.current
     if (!drag) return
@@ -107,13 +144,18 @@ export default function MusicPlayer() {
     const gap = edgeGap()
     const x = clamp(event.clientX - COLLAPSED_WIDTH / 2, gap, window.innerWidth - COLLAPSED_WIDTH - gap)
     const y = clamp(event.clientY - PLAYER_HEIGHT / 2, gap, window.innerHeight - PLAYER_HEIGHT - gap)
-    setDragPoint({ x, y })
+    const point = { x, y }
+    if (!dragPointRef.current) {
+      setDragPoint(point)
+    }
+    scheduleDragPaint(point)
   }
 
   const finishDrag = (event, shouldSnap) => {
     const drag = dragRef.current
     dragRef.current = null
     removeDragListeners()
+    cancelDragPaint()
 
     if (!drag?.started) {
       suppressClickRef.current = false
@@ -121,8 +163,9 @@ export default function MusicPlayer() {
     }
 
     const gap = edgeGap()
-    const x = dragPoint?.x ?? event.clientX - COLLAPSED_WIDTH / 2
-    const y = dragPoint?.y ?? event.clientY - PLAYER_HEIGHT / 2
+    const latestPoint = dragPointRef.current
+    const x = latestPoint?.x ?? dragPoint?.x ?? event.clientX - COLLAPSED_WIDTH / 2
+    const y = latestPoint?.y ?? dragPoint?.y ?? event.clientY - PLAYER_HEIGHT / 2
 
     if (shouldSnap) {
       const centerX = x + COLLAPSED_WIDTH / 2
@@ -130,6 +173,7 @@ export default function MusicPlayer() {
       setDockTop(clamp(y, gap, window.innerHeight - PLAYER_HEIGHT - gap))
     }
 
+    dragPointRef.current = null
     setDragging(false)
     setDragPoint(null)
     window.setTimeout(() => {
@@ -188,6 +232,7 @@ export default function MusicPlayer() {
 
   return (
     <div
+      ref={rootRef}
       className="fixed z-[70]"
       style={dockStyle}
     >
