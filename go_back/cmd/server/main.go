@@ -92,6 +92,7 @@ func main() {
 			admin.POST("/theme", handler.AdminSaveTheme)
 			admin.GET("/theme/background-images", handler.AdminListThemeBackgrounds)
 			admin.POST("/theme/background-image", handler.AdminUploadThemeBackground)
+			admin.DELETE("/theme/background-image/:name", handler.AdminDeleteThemeBackground)
 			admin.GET("/themes", handler.AdminGetThemes)
 
 			admin.GET("/live2d-models", handler.AdminGetLive2DModels)

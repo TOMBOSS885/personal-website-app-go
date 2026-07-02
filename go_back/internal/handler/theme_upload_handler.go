@@ -133,6 +133,33 @@ func AdminUploadThemeBackground(c *gin.Context) {
 	})
 }
 
+func AdminDeleteThemeBackground(c *gin.Context) {
+	name := filepath.Base(strings.TrimSpace(c.Param("name")))
+	if name == "" || name == "." || name == ".." || !allowedExt(strings.ToLower(filepath.Ext(name)), themeBackgroundExts) {
+		response.Error(c, http.StatusBadRequest, "无效的背景图片")
+		return
+	}
+
+	dir := filepath.Join(config.AppConfig.UploadDir, "theme-backgrounds")
+	target := filepath.Join(dir, name)
+	dirAbs, err := filepath.Abs(dir)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "删除失败")
+		return
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil || !strings.HasPrefix(targetAbs, dirAbs+string(os.PathSeparator)) {
+		response.Error(c, http.StatusBadRequest, "无效的背景图片")
+		return
+	}
+
+	if err := os.Remove(targetAbs); err != nil && !errors.Is(err, os.ErrNotExist) {
+		response.Error(c, http.StatusInternalServerError, "删除失败")
+		return
+	}
+	response.Success(c, gin.H{"deleted": true})
+}
+
 func writeThemeResponse(c *gin.Context, theme *model.Theme) {
 	if theme.PresetKey != "" {
 		response.Success(c, gin.H{

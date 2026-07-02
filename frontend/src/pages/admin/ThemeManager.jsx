@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, Eye, Image as ImageIcon, Loader, Palette, RefreshCw, RotateCcw, Sparkles, Upload } from 'lucide-react'
+import { Check, Eye, Image as ImageIcon, Loader, Palette, RefreshCw, RotateCcw, Sparkles, Trash2, Upload } from 'lucide-react'
 import { getThemeBackground, useTheme } from '../../context/ThemeContext'
 import OptimizedImage from '../../components/OptimizedImage'
 
@@ -108,6 +108,29 @@ export default function ThemeManager() {
       alert(`上传背景图片失败: ${err.message}`)
     } finally {
       setUploading(false)
+    }
+  }
+
+  const handleDeleteBackgroundImage = async (image, event) => {
+    event.stopPropagation()
+    if (!confirm(`确定删除背景图片 ${image.name} 吗？`)) return
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/theme/background-image/${encodeURIComponent(image.name)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const error = await res.text()
+        throw new Error(error || '删除失败')
+      }
+
+      setBackgroundImages(current => current.filter(item => item.url !== image.url))
+      if (activeTheme.backgroundImage === image.url) {
+        updateCustomTheme({ backgroundImage: '', backgroundStyle: 'image' })
+      }
+    } catch (err) {
+      alert(`删除背景图片失败: ${err.message}`)
     }
   }
 
@@ -364,11 +387,26 @@ export default function ThemeManager() {
                         key={image.url}
                         type="button"
                         onClick={() => updateCustomTheme({ backgroundImage: image.url, backgroundStyle: 'image' })}
-                        className={`group overflow-hidden rounded-xl border text-left transition-all ${
+                        className={`group relative overflow-hidden rounded-xl border text-left transition-all ${
                           selected ? 'border-purple-400 ring-2 ring-purple-200' : 'border-gray-100 hover:border-purple-200'
                         }`}
                         title={image.name}
                       >
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => handleDeleteBackgroundImage(image, event)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              handleDeleteBackgroundImage(image, event)
+                            }
+                          }}
+                          className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-red-500 opacity-0 shadow transition-opacity hover:bg-red-50 group-hover:opacity-100"
+                          title="删除背景"
+                          aria-label={`删除背景 ${image.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </span>
                         <div className="aspect-video bg-gray-50">
                           <OptimizedImage src={image.url} alt={image.name} className="h-full w-full object-cover transition-transform group-hover:scale-105" wrapperClassName="block h-full w-full" />
                         </div>
