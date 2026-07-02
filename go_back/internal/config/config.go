@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	ServerHost         string
 	ServerPort         string
 	MySQLDSN           string
 	JWTSecret          string
@@ -38,6 +39,7 @@ func InitConfig() {
 
 	AppConfig = &Config{
 		ServerPort:         getEnv("SERVER_PORT", "8080"),
+		ServerHost:         getEnv("SERVER_HOST", "0.0.0.0"),
 		MySQLDSN:           buildMySQLDSN(),
 		JWTSecret:          getEnv("JWT_SECRET", "please-change-this-secret-key-at-least-32-chars"),
 		JWTExpireMs:        jwtExpireMs,
@@ -49,6 +51,19 @@ func InitConfig() {
 		AdminPassword:      getEnv("ADMIN_PASSWORD", "admin123"),
 		AdminEmail:         getEnv("ADMIN_EMAIL", "admin@example.com"),
 		AdminResetPassword: boolEnv("ADMIN_RESET_PASSWORD", false),
+	}
+	validateProductionConfig(AppConfig)
+}
+
+func validateProductionConfig(cfg *Config) {
+	if cfg.GinMode != "release" {
+		return
+	}
+	if cfg.JWTSecret == "please-change-this-secret-key-at-least-32-chars" || len(cfg.JWTSecret) < 32 {
+		log.Fatal("JWT_SECRET must be set to a unique value with at least 32 characters in release mode")
+	}
+	if cfg.AdminPassword == "admin123" && cfg.AdminResetPassword {
+		log.Fatal("refusing to reset the admin password to the default admin123 value in release mode")
 	}
 }
 

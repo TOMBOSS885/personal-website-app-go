@@ -81,7 +81,8 @@ func AdminUploadArticleImage(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "仅支持 jpg、png、gif、webp 图片。")
 		return
 	}
-	if !articleImageTypes[strings.ToLower(file.Header.Get("Content-Type"))] {
+	contentType, err := detectUploadedContentType(file)
+	if err != nil || !articleImageTypes[contentType] {
 		response.Error(c, http.StatusBadRequest, "图片类型不被支持。")
 		return
 	}
@@ -126,4 +127,19 @@ func allowedExt(ext string, allowed []string) bool {
 		}
 	}
 	return false
+}
+
+func detectUploadedContentType(file *multipart.FileHeader) (string, error) {
+	src, err := file.Open()
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
+	buffer := make([]byte, 512)
+	n, err := src.Read(buffer)
+	if err != nil && n == 0 {
+		return "", err
+	}
+	return strings.ToLower(http.DetectContentType(buffer[:n])), nil
 }

@@ -193,7 +193,7 @@ JWT_EXPIRATION=86400000
 APP_UPLOAD_DIR=/www/wwwroot/personal-website/uploads
 AUTO_MIGRATE=true
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+ADMIN_PASSWORD=replace_with_strong_password
 ADMIN_EMAIL=admin@example.com
 ```
 
@@ -210,7 +210,7 @@ ADMIN_EMAIL=admin@example.com
 
 ```text
 用户名：admin
-密码：admin123
+密码：你在 ADMIN_PASSWORD 中设置的强密码
 ```
 
 第一次登录后台后，请立即修改密码。
@@ -250,7 +250,7 @@ JWT_EXPIRATION=86400000
 APP_UPLOAD_DIR=/www/wwwroot/personal-website/uploads
 AUTO_MIGRATE=true
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+ADMIN_PASSWORD=replace_with_strong_password
 ADMIN_EMAIL=admin@example.com
 ```
 
@@ -282,7 +282,7 @@ export JWT_EXPIRATION=86400000
 export APP_UPLOAD_DIR=/www/wwwroot/personal-website/uploads
 export AUTO_MIGRATE=true
 export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=admin123
+export ADMIN_PASSWORD=replace_with_strong_password
 export ADMIN_EMAIL=admin@example.com
 
 cd /www/wwwroot/personal-website/api
@@ -424,7 +424,7 @@ https://你的域名/admin/login
 
 ```text
 用户名：admin
-密码：admin123
+密码：你在 ADMIN_PASSWORD 中设置的强密码
 ```
 
 登录后马上修改密码。

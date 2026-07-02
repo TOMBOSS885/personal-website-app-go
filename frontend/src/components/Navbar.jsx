@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import LanguageSwitcher from './LanguageSwitcher'
+import { safeExternalHref } from '../utils/safeUrl'
 
 export default function Navbar({ profile }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -13,6 +14,7 @@ export default function Navbar({ profile }) {
   const location = useLocation()
   const { language } = useLanguage()
   const { t } = useTranslation()
+  const githubHref = safeExternalHref(profile?.github || 'https://github.com')
 
   useEffect(() => {
     const handleScroll = () => {
@@ -117,16 +119,18 @@ export default function Navbar({ profile }) {
               <LanguageSwitcher />
 
               {/* GitHub Link */}
-              <motion.a
-                href={profile?.github || 'https://github.com'}
-                target="_blank"
-                rel="noopener noreferrer"
-                whileHover={{ scale: 1.1, rotate: 5 }}
-                whileTap={{ scale: 0.9 }}
-                className="p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <Github className="w-5 h-5" />
-              </motion.a>
+              {githubHref && (
+                <motion.a
+                  href={githubHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  whileHover={{ scale: 1.1, rotate: 5 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="p-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 transition-colors"
+                >
+                  <Github className="w-5 h-5" />
+                </motion.a>
+              )}
 
               {/* Mobile menu button */}
               <motion.button

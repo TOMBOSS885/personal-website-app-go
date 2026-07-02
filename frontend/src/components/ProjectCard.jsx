@@ -1,9 +1,12 @@
 import { Github, ExternalLink, Star, GitBranch, Code } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { useLanguage } from '../contexts/LanguageContext'
+import { safeExternalHref } from '../utils/safeUrl'
 
 export default function ProjectCard({ project, index = 0 }) {
   const { language } = useLanguage()
+  const githubHref = safeExternalHref(project.githubUrl)
+  const demoHref = safeExternalHref(project.demoUrl)
   // 根据技术栈生成渐变色
   const getGradient = (techStack) => {
     if (!techStack) return 'from-indigo-500 to-purple-500'
@@ -99,9 +102,9 @@ export default function ProjectCard({ project, index = 0 }) {
 
           {/* 底部链接 */}
           <div className="flex items-center space-x-4 pt-4 border-t border-gray-100">
-            {project.githubUrl && (
+            {githubHref && (
               <motion.a
-                href={project.githubUrl}
+                href={githubHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 whileHover={{ scale: 1.05, x: 5 }}
@@ -112,9 +115,9 @@ export default function ProjectCard({ project, index = 0 }) {
                 <span>{language === 'en' ? 'Source' : '源码'}</span>
               </motion.a>
             )}
-            {project.demoUrl && (
+            {demoHref && (
               <motion.a
-                href={project.demoUrl}
+                href={demoHref}
                 target="_blank"
                 rel="noopener noreferrer"
                 whileHover={{ scale: 1.05, x: 5 }}

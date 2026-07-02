@@ -3,11 +3,13 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
+import { safeExternalHref } from '../utils/safeUrl'
 
 export default function Footer({ profile }) {
   const currentYear = new Date().getFullYear()
   const { language } = useLanguage()
   const { t } = useTranslation()
+  const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com')
 
   const footerLinks = [
     {
@@ -21,9 +23,9 @@ export default function Footer({ profile }) {
     {
       title: t('footer.contact'),
       links: [
-        { label: 'GitHub', href: profile?.github || 'https://github.com', external: true },
-        { label: 'LinkedIn', href: profile?.linkedin || 'https://linkedin.com', external: true },
-        { label: 'Email', href: profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com', external: true },
+        { label: 'GitHub', href: safeExternalHref(profile?.github || 'https://github.com'), external: true },
+        { label: 'LinkedIn', href: safeExternalHref(profile?.linkedin || 'https://linkedin.com'), external: true },
+        { label: 'Email', href: emailHref, external: true },
       ]
     }
   ]
@@ -77,11 +79,12 @@ export default function Footer({ profile }) {
               className="flex space-x-3"
             >
               {[
-                { icon: Github, href: profile?.github || 'https://github.com', label: 'GitHub' },
-                { icon: Twitter, href: profile?.twitter || 'https://twitter.com', label: 'Twitter' },
-                { icon: Linkedin, href: profile?.linkedin || 'https://linkedin.com', label: 'LinkedIn' },
-                { icon: Mail, href: profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com', label: 'Email' },
+                { icon: Github, href: safeExternalHref(profile?.github || 'https://github.com'), label: 'GitHub' },
+                { icon: Twitter, href: safeExternalHref(profile?.twitter || 'https://twitter.com'), label: 'Twitter' },
+                { icon: Linkedin, href: safeExternalHref(profile?.linkedin || 'https://linkedin.com'), label: 'LinkedIn' },
+                { icon: Mail, href: emailHref, label: 'Email' },
               ].map((social, index) => (
+                social.href && (
                 <motion.a
                   key={index}
                   href={social.href}
@@ -94,6 +97,7 @@ export default function Footer({ profile }) {
                 >
                   <social.icon className="w-5 h-5" />
                 </motion.a>
+                )
               ))}
             </motion.div>
           </div>
@@ -119,7 +123,7 @@ export default function Footer({ profile }) {
                         <span>{link.label}</span>
                         <span className="ml-1 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
                       </Link>
-                    ) : (
+                    ) : link.href ? (
                       <a
                         href={link.href}
                         target={link.external ? '_blank' : undefined}
@@ -131,7 +135,7 @@ export default function Footer({ profile }) {
                           <ExternalLink className="w-3 h-3 ml-1 opacity-50 group-hover:opacity-100 transition-opacity" />
                         )}
                       </a>
-                    )}
+                    ) : null}
                   </li>
                 ))}
               </ul>

@@ -8,6 +8,7 @@ import ArticleCard from '../components/ArticleCard'
 import ProjectCard from '../components/ProjectCard'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
+import { safeExternalHref } from '../utils/safeUrl'
 
 export default function HomePage() {
   const [articles, setArticles] = useState([])
@@ -169,6 +170,7 @@ export default function HomePage() {
         }
       })
     : defaultFeatures
+  const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com')
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={{ background: 'var(--theme-page-bg)' }}>
@@ -325,10 +327,11 @@ export default function HomePage() {
             className="flex justify-center space-x-6"
           >
             {[
-              { icon: Github, href: profile?.github || 'https://github.com', label: 'GitHub' },
-              { icon: Linkedin, href: profile?.linkedin || 'https://linkedin.com', label: 'LinkedIn' },
-              { icon: Mail, href: profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com', label: 'Email' },
+              { icon: Github, href: safeExternalHref(profile?.github || 'https://github.com'), label: 'GitHub' },
+              { icon: Linkedin, href: safeExternalHref(profile?.linkedin || 'https://linkedin.com'), label: 'LinkedIn' },
+              { icon: Mail, href: emailHref, label: 'Email' },
             ].map((social, index) => (
+              social.href && (
               <motion.a
                 key={index}
                 href={social.href}
@@ -340,6 +343,7 @@ export default function HomePage() {
               >
                 <social.icon className="w-5 h-5" />
               </motion.a>
+              )
             ))}
           </motion.div>
 
@@ -634,7 +638,7 @@ export default function HomePage() {
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <motion.a
-                href={profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com'}
+                href={emailHref}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="inline-flex items-center px-8 py-4 bg-white text-indigo-600 font-semibold rounded-full shadow-lg hover:shadow-xl transition-shadow"

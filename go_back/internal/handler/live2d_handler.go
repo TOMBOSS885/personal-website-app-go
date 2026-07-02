@@ -17,6 +17,11 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	maxLive2DTotalSize = 200 * 1024 * 1024
+	maxLive2DFiles     = 300
+)
+
 func AdminGetLive2DModels(c *gin.Context) {
 	settings := getOrCreateLive2DSettings()
 	models, err := repository.GetLive2DModels(false, false)
@@ -70,13 +75,23 @@ func AdminUploadLive2DModel(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "Please upload a complete Live2D model folder.")
 		return
 	}
+	if len(files) > maxLive2DFiles {
+		response.Error(c, http.StatusBadRequest, "Too many files in the Live2D upload.")
+		return
+	}
 
 	directory := uuid.NewString()
 	modelDir := filepath.Join(config.AppConfig.UploadDir, "live2d", directory)
 	var detectedEntry string
+	var totalSize int64
 	for i, file := range files {
+		totalSize += file.Size
+		if totalSize > maxLive2DTotalSize {
+			response.Error(c, http.StatusBadRequest, "Live2D upload must not exceed 200MB.")
+			return
+		}
 		cleanPath := normalizeRelativePath(paths[i])
-		if cleanPath == "" {
+		if cleanPath == "" || isDisallowedLive2DFile(cleanPath) {
 			response.Error(c, http.StatusBadRequest, "Invalid model file path.")
 			return
 		}
@@ -306,6 +321,14 @@ func isModelJSON(path string) bool {
 func isLive2DImage(path string) bool {
 	ext := strings.ToLower(filepath.Ext(path))
 	return allowedExt(ext, []string{".png", ".jpg", ".jpeg", ".webp", ".gif"})
+}
+
+func isDisallowedLive2DFile(path string) bool {
+	ext := strings.ToLower(filepath.Ext(path))
+	return allowedExt(ext, []string{
+		".html", ".htm", ".js", ".mjs", ".css", ".svg", ".php", ".jsp", ".asp", ".aspx",
+		".exe", ".dll", ".bat", ".cmd", ".sh", ".ps1", ".jar", ".war",
+	})
 }
 
 func imagePriority(path string) int {

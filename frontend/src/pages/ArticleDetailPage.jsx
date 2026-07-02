@@ -161,7 +161,7 @@ export default function ArticleDetailPage() {
             rehypePlugins={[rehypeHighlight]}
             components={{
               a: ({ node, ...props }) => (
-                <a {...props} target="_blank" rel="noreferrer" />
+                <a {...props} target="_blank" rel="noopener noreferrer" />
               ),
               table: ({ node, ...props }) => (
                 <div className="article-table-wrap">

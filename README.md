@@ -48,10 +48,11 @@ cp .env.example .env
 
 ```env
 SERVER_PORT=8080
+SERVER_HOST=127.0.0.1
 GIN_MODE=release
 APP_UPLOAD_DIR=/app/uploads
 AUTO_MIGRATE=true
-CORS_ALLOWED_ORIGINS=*
+CORS_ALLOWED_ORIGINS=
 
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
@@ -63,7 +64,7 @@ JWT_SECRET=replace_with_a_random_secret_at_least_32_chars
 JWT_EXPIRATION=86400000
 
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+ADMIN_PASSWORD=replace_with_initial_admin_password
 ADMIN_EMAIL=admin@example.com
 ADMIN_RESET_PASSWORD=false
 ```
@@ -71,6 +72,8 @@ ADMIN_RESET_PASSWORD=false
 说明：
 
 - `AUTO_MIGRATE=true` 时，Go 后端启动后会用 GORM 自动同步表结构。
+- `SERVER_HOST=127.0.0.1` 适合 Docker 一体部署，避免 host 网络下直接暴露 Go API 的 `8080` 端口。
+- `CORS_ALLOWED_ORIGINS` 为空表示只走同源访问；前后端分离到不同域名时再填写明确域名，多个域名用英文逗号分隔。
 - `ADMIN_USERNAME` 不存在时会自动创建管理员。
 - 如果管理员已存在但忘记密码，可以临时设置 `ADMIN_RESET_PASSWORD=true`，重启后会把该账号密码重置为 `ADMIN_PASSWORD`。重置成功后应改回 `false`。
 - `JWT_SECRET` 只影响登录后的 token 签发和校验，不会影响数据库迁移或密码匹配。

@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const maxThemeBackgroundSize = 10 * 1024 * 1024
+
 type themeSaveRequest struct {
 	Preset string             `json:"preset"`
 	Custom *model.CustomTheme `json:"custom"`
@@ -65,15 +67,18 @@ func AdminUploadThemeBackground(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "Please upload an image file.")
 		return
 	}
-
-	contentType := file.Header.Get("Content-Type")
-	if !strings.HasPrefix(strings.ToLower(contentType), "image/") {
+	if file.Size > maxThemeBackgroundSize {
+		response.Error(c, http.StatusBadRequest, "Image must not exceed 10MB.")
+		return
+	}
+	contentType, err := detectUploadedContentType(file)
+	if err != nil || !strings.HasPrefix(contentType, "image/") {
 		response.Error(c, http.StatusBadRequest, "Only image files are supported.")
 		return
 	}
 
 	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if !allowedExt(ext, []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".svg"}) {
+	if !allowedExt(ext, []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}) {
 		response.Error(c, http.StatusBadRequest, "Unsupported image type.")
 		return
 	}

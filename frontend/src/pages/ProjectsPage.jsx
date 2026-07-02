@@ -4,6 +4,7 @@ import ProjectCard from '../components/ProjectCard'
 import { Briefcase, Filter, Search, Rocket, Code, Sparkles, Zap } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
+import { safeExternalHref } from '../utils/safeUrl'
 
 export default function ProjectsPage() {
   const [projects, setProjects] = useState([])
@@ -87,6 +88,7 @@ export default function ProjectsPage() {
     { icon: Rocket, value: projects.filter(p => p.featured).length, label: t('projects.stats.featured'), color: 'from-amber-500 to-orange-500' },
     { icon: Code, value: techStacks.length - 1, label: t('projects.stats.techStack'), color: 'from-emerald-500 to-teal-500' },
   ]
+  const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com')
 
   return (
     <div className="min-h-screen relative">
@@ -261,7 +263,7 @@ export default function ProjectsPage() {
               {t('projects.cta.desc')}
             </p>
             <motion.a
-              href={profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com'}
+              href={emailHref}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="inline-flex items-center space-x-2 px-8 py-3 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-full shadow-lg hover:shadow-xl transition-shadow"

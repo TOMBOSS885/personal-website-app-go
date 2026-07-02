@@ -22,13 +22,13 @@ If you use a dedicated user, replace `MYSQL_USERNAME` and `MYSQL_PASSWORD` in `.
 Use phpMyAdmin or Baota's database import tool to import `init.sql` into
 `personal_website`.
 
-The default admin account after import is:
+The default admin account after importing `init.sql` is:
 
 - Username: `admin`
 - Password: `admin123`
 
 Warning: `init.sql` truncates existing tables. Use it only for first deployment
-or intentional reset.
+or intentional reset. Change this password immediately after first login.
 
 ## 3. Create `.env`
 
@@ -42,10 +42,11 @@ Fill in:
 
 ```env
 SERVER_PORT=8080
+SERVER_HOST=127.0.0.1
 GIN_MODE=release
 APP_UPLOAD_DIR=/app/uploads
 AUTO_MIGRATE=true
-CORS_ALLOWED_ORIGINS=*
+CORS_ALLOWED_ORIGINS=
 
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
@@ -57,7 +58,7 @@ JWT_SECRET=change_to_a_random_secret_at_least_32_chars
 JWT_EXPIRATION=86400000
 
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+ADMIN_PASSWORD=replace_with_initial_admin_password
 ADMIN_EMAIL=admin@example.com
 ADMIN_RESET_PASSWORD=false
 ```

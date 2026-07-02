@@ -99,12 +99,17 @@ func main() {
 		}
 	}
 
+	host := config.AppConfig.ServerHost
 	port := config.AppConfig.ServerPort
+	if host == "" {
+		host = "0.0.0.0"
+	}
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("starting server on port %s", port)
-	if err := r.Run(":" + port); err != nil {
+	addr := host + ":" + port
+	log.Printf("starting server on %s", addr)
+	if err := r.Run(addr); err != nil {
 		log.Fatalf("server failed to start: %v", err)
 	}
 }

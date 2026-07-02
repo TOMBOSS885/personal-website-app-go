@@ -127,10 +127,10 @@ JWT_SECRET=请改成至少32位的随机字符串
 JWT_EXPIRATION=86400000
 
 AUTO_MIGRATE=true
-CORS_ALLOWED_ORIGINS=*
+CORS_ALLOWED_ORIGINS=
 
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+ADMIN_PASSWORD=replace_with_strong_password
 ADMIN_EMAIL=admin@example.com
 ADMIN_RESET_PASSWORD=false
 ```
@@ -444,7 +444,7 @@ docker compose logs -f web
 
 ```env
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
+ADMIN_PASSWORD=replace_with_strong_password
 ADMIN_RESET_PASSWORD=true
 ```
 

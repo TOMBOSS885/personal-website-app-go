@@ -28,7 +28,10 @@ func CORS() gin.HandlerFunc {
 
 func isAllowedOrigin(origin string) bool {
 	allowed := config.AppConfig.CORSAllowedOrigins
-	if allowed == "" || allowed == "*" {
+	if strings.TrimSpace(allowed) == "" {
+		return false
+	}
+	if allowed == "*" {
 		return true
 	}
 	for _, item := range strings.Split(allowed, ",") {
