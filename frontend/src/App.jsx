@@ -21,6 +21,7 @@ import LoginPage from './pages/admin/LoginPage'
 import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import Live2DWidget from './components/Live2DWidget'
+import MusicPlayer from './components/MusicPlayer'
 
 const API_BASE = ''
 
@@ -100,6 +101,7 @@ function App() {
                   </Routes>
                 </main>
                 <Footer profile={profile} />
+                <MusicPlayer />
                 <Live2DWidget />
               </>
             } />

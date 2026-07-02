@@ -62,7 +62,7 @@ export default function MusicPlayer() {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
   return (
-    <div className="absolute right-4 top-24 z-30 sm:right-6">
+    <div className="fixed right-4 top-24 z-40 sm:right-6">
       <audio
         ref={audioRef}
         src={currentSong?.fileUrl || ''}
