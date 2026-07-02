@@ -2,14 +2,14 @@ package model
 
 type FeatureCard struct {
 	ID            uint64 `gorm:"primaryKey" json:"id"`
-	Title         string `gorm:"column:title" json:"title"`
-	TitleEn       string `gorm:"column:title_en" json:"titleEn"`
-	Description   string `gorm:"column:description" json:"description"`
-	DescriptionEn string `gorm:"column:description_en" json:"descriptionEn"`
-	Icon          string `gorm:"column:icon" json:"icon"`
-	Gradient      string `gorm:"column:gradient" json:"gradient"`
-	DisplayOrder  int    `gorm:"column:display_order" json:"displayOrder"`
-	Enabled       bool   `gorm:"column:enabled" json:"enabled"`
+	Title         string `gorm:"column:title;size:255;not null" json:"title"`
+	TitleEn       string `gorm:"column:title_en;size:255" json:"titleEn"`
+	Description   string `gorm:"column:description;size:500" json:"description"`
+	DescriptionEn string `gorm:"column:description_en;size:500" json:"descriptionEn"`
+	Icon          string `gorm:"column:icon;size:100;default:Code" json:"icon"`
+	Gradient      string `gorm:"column:gradient;size:100;default:from-blue-500 to-cyan-500" json:"gradient"`
+	DisplayOrder  int    `gorm:"column:display_order;default:0" json:"displayOrder"`
+	Enabled       bool   `gorm:"column:enabled;default:true" json:"enabled"`
 }
 
 func (FeatureCard) TableName() string {

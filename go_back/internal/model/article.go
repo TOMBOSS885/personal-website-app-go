@@ -4,14 +4,14 @@ import "time"
 
 type Article struct {
 	ID         uint64    `gorm:"primaryKey" json:"id"`
-	Title      string    `gorm:"column:title" json:"title"`
-	Summary    string    `gorm:"column:summary" json:"summary"`
-	Content    string    `gorm:"column:content" json:"content"`
-	CoverImage string    `gorm:"column:cover_image" json:"coverImage"`
-	Category   string    `gorm:"column:category" json:"category"`
-	Tags       string    `gorm:"column:tags" json:"tags"`
-	Views      int       `gorm:"column:views" json:"views"`
-	Published  bool      `gorm:"column:published" json:"published"`
+	Title      string    `gorm:"column:title;size:255;not null" json:"title"`
+	Summary    string    `gorm:"column:summary;size:500" json:"summary"`
+	Content    string    `gorm:"column:content;type:text" json:"content"`
+	CoverImage string    `gorm:"column:cover_image;size:500" json:"coverImage"`
+	Category   string    `gorm:"column:category;size:100" json:"category"`
+	Tags       string    `gorm:"column:tags;size:500" json:"tags"`
+	Views      int       `gorm:"column:views;default:0" json:"views"`
+	Published  bool      `gorm:"column:published;default:false" json:"published"`
 	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt  time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
