@@ -6,8 +6,7 @@ services:
     image: personal-website-go:latest
     container_name: personal-website-go
     restart: unless-stopped
-    ports:
-      - "${WEB_PORT:-3718}:3718"
+    network_mode: host
     volumes:
       - ./uploads:/app/uploads
       - ./logs:/var/log/supervisor
@@ -17,7 +16,7 @@ services:
       APP_UPLOAD_DIR: /app/uploads
       AUTO_MIGRATE: "${AUTO_MIGRATE:-true}"
       CORS_ALLOWED_ORIGINS: "${CORS_ALLOWED_ORIGINS:-*}"
-      MYSQL_HOST: "${MYSQL_HOST:-host.docker.internal}"
+      MYSQL_HOST: "${MYSQL_HOST:-127.0.0.1}"
       MYSQL_PORT: "${MYSQL_PORT:-3306}"
       MYSQL_DATABASE: "${MYSQL_DATABASE:-personal_website}"
       MYSQL_USERNAME: "${MYSQL_USERNAME:-root}"
@@ -28,8 +27,6 @@ services:
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"
       ADMIN_EMAIL: "${ADMIN_EMAIL:-admin@example.com}"
       ADMIN_RESET_PASSWORD: "${ADMIN_RESET_PASSWORD:-false}"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/public/profile"]
       interval: 30s
