@@ -1,12 +1,16 @@
 @echo off
 chcp 65001 >nul
-echo ========================================
-echo    个人网站启动脚本（前端模式）
-echo ========================================
-echo.
-echo [提示] 此模式仅运行前端，使用模拟数据
-echo 如需完整功能，请安装 Maven 和 Java 21
-echo.
-echo 正在启动前端服务...
-cd frontend
-call npm run dev
+setlocal
+
+where node >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ERROR] Node.js is not installed or not in PATH.
+    pause
+    exit /b 1
+)
+
+cd /d "%~dp0frontend"
+if not exist node_modules (
+    npm install
+)
+npm run dev -- --host 0.0.0.0

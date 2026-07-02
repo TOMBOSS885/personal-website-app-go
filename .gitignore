@@ -1,11 +1,11 @@
-# 依赖目录
+# Dependencies
 node_modules/
 frontend/node_modules/
-backend/target/
 
-# 构建输出
+# Build output
 frontend/dist/
-backend/build/
+go_back/personal-website-api
+go_back/*.exe
 
 # IDE
 .idea/
@@ -16,22 +16,20 @@ backend/build/
 .DS_Store
 Thumbs.db
 
-# 日志
+# Logs
 *.log
 npm-debug.log*
+logs/
 
-# 环境变量
+# Environment
 .env
 .env.local
 
-# H2 数据库
+# Local data
 *.db
 *.db.lock
 *.db.trace.db
 
-# Maven
-backend/.mvn/wrapper/maven-wrapper.jar
-
-# 临时文件
+# Temporary files
 *.tmp
 *.temp

@@ -1,201 +1,94 @@
 # 个人网站
 
-一个现代化个人主页与内容管理系统，使用 **React + Spring Boot + Java 21 + MySQL** 构建。
-
-本项目已经整合两个项目能力：
-
-- `personal-website`：个人主页、博客、项目展示、技能展示、主题与后台管理。
-- `l2d-widget`：Live2D 网页形象挂件，用于在前台展示可交互 Live2D 角色，并支持后台上传、切换和高级配置。
+这是一个前后端分离的个人网站项目，当前分支已经完成 Go 后端重构。项目由 React/Vite 前端、Go/Gin API、MySQL 数据库和本地集成的 Live2D 组件组成，支持普通部署和 Docker 部署。
 
 ## 技术栈
 
-### 前端
+- 前端：React 18、Vite、TailwindCSS、Framer Motion、React Router
+- 后端：Go、Gin、GORM、JWT、MySQL
+- Live2D：`l2d-widget` 本地依赖，支持模型上传、启用、切换和显示参数配置
+- 部署：Nginx、Docker、Docker Compose、Supervisor
 
-- React 18
-- Vite
-- TailwindCSS
-- Framer Motion
-- React Router
-- l2d-widget
+## 主要功能
 
-### 后端
+- 公开页面：个人简介、统计数据、技能、项目、文章、主题、Live2D 展示
+- 管理后台：文章、项目、技能、功能卡片、个人信息、主题、Live2D 模型、账号密码管理
+- 文件上传：文章图片、主题背景图、Live2D 模型文件
+- 数据初始化：首次启动时可自动创建管理员账号
 
-- Java 21
-- Spring Boot 3.2
-- Spring Security
-- JWT Authentication
-- Spring Data JPA
-- MySQL 8.x
-
-### 部署
-
-- Docker
-- Docker Compose
-- Nginx
-- Supervisor
-
-## 功能特性
-
-### 用户端
-
-- 首页展示：个人简介、技能、精选项目、最新文章
-- 博客文章：支持 Markdown
-- 项目展示
-- 响应式布局
-- 主题色动态应用
-- Live2D 形象展示
-- Live2D 多模型菜单切换
-- Live2D 气泡提示、打字动画、嘴型同步
-
-### 管理后台
-
-- 数据概览
-- 文章管理
-- 项目管理
-- 技能管理
-- 主题管理
-- 个人信息管理
-- Live2D 管理
-
-## Live2D 整合说明
-
-项目内置并整合了 `l2d-widget`，目录位于：
+## 目录结构
 
 ```text
-l2d-widget/
+personal-website/
+├── frontend/              # React/Vite 前端
+├── go_back/               # Go 后端
+│   ├── cmd/server/         # 服务入口
+│   └── internal/           # 配置、数据库、模型、仓储、接口、中间件
+├── l2d-widget/             # Live2D 组件源码，本项目通过本地 file 依赖引用
+├── docker/                 # Docker 运行时配置
+│   ├── nginx.conf
+│   └── supervisord.conf
+├── docs/                   # 部署文档和截图
+├── uploads/                # 上传文件目录，生产环境需要持久化
+├── Dockerfile              # Go 后端 + 前端一体镜像
+├── docker-compose.yml      # Docker Compose 配置
+├── .env.example            # 环境变量模板
+└── init.sql                # 可选数据库初始化脚本
 ```
 
-前端通过本地依赖引用：
+## 环境变量
 
-```json
-"l2d-widget": "file:../l2d-widget"
+复制环境变量模板：
+
+```bash
+cp .env.example .env
 ```
 
-Docker 构建时会先构建 `l2d-widget`，再构建前端项目。因此服务器部署时必须保留根目录下的 `l2d-widget/` 文件夹。
+常用配置：
 
-### Live2D 后台能力
+```env
+SERVER_PORT=8080
+GIN_MODE=release
+APP_UPLOAD_DIR=/app/uploads
+AUTO_MIGRATE=true
+CORS_ALLOWED_ORIGINS=*
 
-后台入口：
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DATABASE=personal_website
+MYSQL_USERNAME=root
+MYSQL_PASSWORD=replace_with_mysql_password
 
-```text
-/admin/live2d
+JWT_SECRET=replace_with_a_random_secret_at_least_32_chars
+JWT_EXPIRATION=86400000
+
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin123
+ADMIN_EMAIL=admin@example.com
+ADMIN_RESET_PASSWORD=false
 ```
 
-支持：
+说明：
 
-- 上传完整 Live2D 模型文件夹
-- 自动识别 `model.json` 或 `.model3.json`
-- 从上传文件中自动查找缩略图
-- 设置默认模型
-- 设置模型是否加入前台多模型切换
-- 设置模型排序
-- 调整模型缩放、X/Y 偏移、音量
-- 设置欢迎语和循环气泡文字
-- 设置气泡显示时长、循环间隔、气泡偏移
-- 启用打字动画
-- 设置嘴型同步参数，例如 `PARAM_MOUTH_OPEN_Y`
-- 设置嘴型最小值、最大值、打字速度
-- 全局启用/关闭 Live2D
-- 设置前台位置：左下角 / 右下角
-- 设置画布尺寸
-- 设置主题颜色
-- 设置入场/退场动画：滑入 / 淡入
-- 控制菜单方向
-- 控制休眠按钮和关于按钮是否显示
+- `AUTO_MIGRATE=true` 时，Go 后端启动后会用 GORM 自动同步表结构。
+- `ADMIN_USERNAME` 不存在时会自动创建管理员。
+- 如果管理员已存在但忘记密码，可以临时设置 `ADMIN_RESET_PASSWORD=true`，重启后会把该账号密码重置为 `ADMIN_PASSWORD`。重置成功后应改回 `false`。
+- `JWT_SECRET` 只影响登录后的 token 签发和校验，不会影响数据库迁移或密码匹配。
 
-### 上传模型要求
+## 本地开发
 
-请上传完整 Live2D 模型文件夹，不要只上传单个文件。
+前置要求：
 
-支持入口文件：
-
-```text
-model.json
-.model3.json
-```
-
-常见 Cubism 3 模型结构：
-
-```text
-xiaoyue/
-  xiaoyue.model3.json
-  xiaoyue.moc3
-  xiaoyue.physics3.json
-  xiaoyue.cdi3.json
-  xiaoyue.8192/
-    texture_00.png
-```
-
-入口 JSON 中引用到的贴图、动作、物理文件等必须一起上传，并保持相对路径不变。
-
-### 上传文件保存位置
-
-上传后的 Live2D 文件保存在服务器项目目录：
-
-```text
-uploads/live2d/
-```
-
-Docker 容器内对应路径：
-
-```text
-/app/uploads/live2d/
-```
-
-`docker-compose.yml` 中已挂载：
-
-```yaml
-volumes:
-  - ./uploads:/app/uploads
-```
-
-因此容器重建不会删除已上传模型。
-
-### 上传大小限制
-
-Live2D 模型贴图通常较大，本项目已在 Docker 内 Nginx 配置：
-
-```nginx
-client_max_body_size 200m;
-```
-
-如果服务器外层还有宝塔 Nginx 或其他反向代理，也需要在外层站点配置的 `server {}` 中加入：
-
-```nginx
-client_max_body_size 200m;
-```
-
-否则大模型可能在到达 Docker 容器前就被拦截。
-
-## 快速开始
-
-### 前置要求
-
-- Java 21+
+- Go 1.22+
 - Node.js 18+
-- Maven 3.8+
-- MySQL 8.0+
-
-### Windows 一键启动
-
-```bash
-start.bat
-```
-
-### Linux / macOS 一键启动
-
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-### 手动启动
+- MySQL 8.x
 
 启动后端：
 
 ```bash
-cd backend
-mvn spring-boot:run
+cd go_back
+go mod download
+go run ./cmd/server
 ```
 
 启动前端：
@@ -203,83 +96,47 @@ mvn spring-boot:run
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
 
-如需本地开发 `l2d-widget`：
+访问地址：
 
-```bash
-cd l2d-widget
-npm install --legacy-peer-deps
-npm run build
-```
-
-## 访问地址
-
-- 前端展示页：http://localhost:3000
+- 前端：http://localhost:3000
 - 管理后台：http://localhost:3000/admin
 - 后端 API：http://localhost:8080
 
-## 默认账号
+Windows 可以直接运行：
 
-- 用户名：`admin`
-- 密码：`admin123`
-
-## 项目结构
-
-```text
-personal-website/
-├── backend/                # Spring Boot 后端
-├── frontend/               # React 前端
-├── l2d-widget/             # 已整合的 Live2D widget 项目
-├── docs/                   # 文档与截图
-│   └── screenshots/        # 页面截图预览
-├── docker/                 # Docker 配置
-│   ├── nginx.conf          # Nginx 配置
-│   └── supervisord.conf    # Supervisor 配置
-├── uploads/                # 上传文件目录，部署后自动生成
-│   └── live2d/             # Live2D 模型文件
-├── Dockerfile              # Docker 镜像构建文件
-├── docker-compose.yml      # Docker Compose 配置
-├── init.sql                # MySQL 初始化脚本
-├── start.bat               # Windows 启动脚本
-├── start-full.bat          # Windows 完整启动脚本
-├── start.sh                # Linux/macOS 启动脚本
-└── README.md
+```bat
+start.bat
 ```
 
-## 数据库
+Linux/macOS 可以运行：
 
-使用 MySQL 作为持久化数据库。
-
-主要业务表包括：
-
-- `users`
-- `articles`
-- `projects`
-- `skills`
-- `themes`
-- `live2d_models`
-- `live2d_settings`
-
-后端默认使用 JPA 自动更新表结构：
-
-```yaml
-spring:
-  jpa:
-    hibernate:
-      ddl-auto: update
+```bash
+chmod +x start.sh
+./start.sh
 ```
 
 ## Docker 部署
 
-### 首次部署
+Docker 镜像会依次构建：
+
+1. `l2d-widget`
+2. `frontend`
+3. `go_back`
+4. 运行时镜像中的 Nginx + Go API
+
+首次部署：
 
 ```bash
-docker compose up -d --build
+cp .env.example .env
+vim .env
+docker compose build --no-cache
+docker compose up -d
 ```
 
-### 更新部署
+更新部署：
 
 ```bash
 git pull
@@ -288,69 +145,193 @@ docker compose build --no-cache
 docker compose up -d
 ```
 
-硬盘空间有限时，可以在更新后清理旧镜像和构建缓存：
+查看状态和日志：
 
 ```bash
-docker image prune -f
-docker builder prune -f
-```
-
-不要使用：
-
-```bash
-docker compose down -v
-```
-
-避免误删持久化数据。
-
-### 查看日志
-
-```bash
+docker compose ps
 docker compose logs -f
+docker exec personal-website-go tail -n 100 /var/log/supervisor/api.log
 ```
 
-### 数据持久化
+默认访问：
 
-Docker 部署时：
+- 网站：http://服务器IP:3718
+- API：http://服务器IP:3718/api
 
-- `./logs` 保存日志
-- `./uploads` 保存上传文件
-- MySQL 数据保存在外部 MySQL 服务中
-
-## 环境变量
-
-常用环境变量：
+当前 Compose 使用 `network_mode: host`，适合连接宝塔面板本机 MySQL。此时 `.env` 中的 `MYSQL_HOST` 使用：
 
 ```env
-SPRING_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3306/personal_website?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=your_password
-JWT_SECRET=please-change-this-secret-key-at-least-32-chars
-JWT_EXPIRATION=86400000
-APP_UPLOAD_DIR=/app/uploads
+MYSQL_HOST=127.0.0.1
 ```
 
-本地开发默认上传目录为：
+不要使用 `docker compose down -v`，否则可能删除挂载卷数据。上传文件通过以下挂载持久化：
+
+```yaml
+volumes:
+  - ./uploads:/app/uploads
+  - ./logs:/var/log/supervisor
+```
+
+## 宝塔面板部署要点
+
+推荐两种方式：
+
+- Docker 一体部署：Docker 容器内运行前端 Nginx 和 Go API，宝塔只负责放行端口或做外层反向代理。
+- 前后端分离部署：宝塔网站目录放 `frontend/dist`，Go 后端用进程守护运行，宝塔 Nginx 把 `/api/` 和 `/uploads/` 反向代理到 Go 后端。
+
+Docker 方式更简单：
+
+1. 在宝塔创建 MySQL 数据库，记录数据库名、用户名、密码。
+2. 服务器进入项目目录，切换到 Go 后端分支。
+3. 根据 `.env.example` 创建 `.env`。
+4. 设置 `MYSQL_HOST=127.0.0.1`。
+5. 执行 `docker compose build --no-cache && docker compose up -d`。
+6. 放行 `3718` 端口，访问 `http://服务器IP:3718`。
+
+如果使用域名访问，在宝塔网站的 Nginx 配置中反向代理到：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3718;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Live2D 模型通常较大，外层 Nginx 也需要增加：
+
+```nginx
+client_max_body_size 200m;
+```
+
+更完整的部署步骤见：
+
+- `docs/baota-go-vue-deploy.md`
+- `docs/docker-go-vue-deploy.md`
+- `docs/baota-docker-deploy.md`
+
+## 数据库
+
+主要表：
+
+- `users`
+- `articles`
+- `projects`
+- `skills`
+- `feature_cards`
+- `themes`
+- `live2d_models`
+- `live2d_settings`
+
+管理员用户名、邮箱和 BCrypt 密码哈希保存在 `users` 表中。密码不会明文保存。
+
+## API 约定
+
+接口返回 JSON。为了兼容原前端，成功响应通常直接返回业务数据，不额外包一层 `success/data`。
+
+登录成功：
+
+```json
+{
+  "token": "jwt-token"
+}
+```
+
+错误响应：
+
+```json
+{
+  "message": "错误信息"
+}
+```
+
+分页响应：
+
+```json
+{
+  "content": [],
+  "totalElements": 0,
+  "totalPages": 0,
+  "size": 10,
+  "number": 0,
+  "first": true,
+  "last": true,
+  "empty": true
+}
+```
+
+认证接口：
+
+- `POST /api/auth/login`
+
+公开接口：
+
+- `GET /api/public/profile`
+- `GET /api/public/stats`
+- `GET /api/public/articles`
+- `GET /api/public/articles/:id`
+- `GET /api/public/projects`
+- `GET /api/public/projects/featured`
+- `GET /api/public/skills`
+- `GET /api/public/feature-cards`
+- `GET /api/public/theme`
+- `GET /api/public/live2d-model`
+
+后台接口需要 `Authorization: Bearer <token>`：
+
+- `/api/admin/articles`
+- `/api/admin/projects`
+- `/api/admin/skills`
+- `/api/admin/feature-cards`
+- `/api/admin/profile`
+- `/api/admin/theme`
+- `/api/admin/live2d-models`
+- `/api/admin/live2d-settings`
+- `/api/admin/account/password`
+
+## Live2D 上传要求
+
+上传 Live2D 时应上传完整模型文件夹，至少包含入口文件：
 
 ```text
-uploads/
+model.json
+或
+*.model3.json
 ```
 
-生产 Docker 默认上传目录为：
+常见结构：
 
 ```text
-/app/uploads
+model/
+  model.model3.json
+  model.moc3
+  model.physics3.json
+  textures/
+    texture_00.png
 ```
 
-## 截图预览
+入口 JSON 引用到的贴图、动作、物理文件必须一起上传，并保持相对路径不变。
 
-截图位于：
+## 常用排查
 
-```text
-docs/screenshots/
-```
+数据库连接超时：
 
-包括首页、博客、项目页、后台登录、文章管理、项目管理、技能管理、主题管理和个人信息管理等页面。
+- Docker 连接宝塔本机 MySQL 时，确认 `network_mode: host` 已启用。
+- `.env` 中使用 `MYSQL_HOST=127.0.0.1`。
+- 宝塔安全组和服务器防火墙不要拦截本机 3306。
+
+首次无法登录：
+
+- 确认日志中没有数据库迁移错误。
+- 确认 `users` 表存在管理员账号。
+- 忘记密码时临时设置 `ADMIN_RESET_PASSWORD=true` 后重启。
+
+主题或 Live2D 日志出现 `record not found`：
+
+- 这通常表示数据库里还没有对应配置。
+- 后台保存一次主题或 Live2D 设置后即可生成记录。
 
 ## 许可证
 

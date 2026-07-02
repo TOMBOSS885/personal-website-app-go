@@ -1,8 +1,8 @@
 # Baota Docker Deployment
 
-This project is adapted for Baota Panel's built-in MySQL 5.7.x service.
-Docker runs only the website container. The Spring Boot backend connects to
-Baota MySQL on the host machine.
+This project is adapted for Baota Panel's built-in MySQL service.
+Docker runs the website container with Nginx, the built frontend, and the Go API.
+The Go backend connects to Baota MySQL on the host machine.
 
 ## 1. Create the database in Baota
 
@@ -15,7 +15,7 @@ Recommended values:
 - Password: use the password shown in Baota
 - Character set: `utf8mb4`
 
-If you use a dedicated user, replace `SPRING_DATASOURCE_USERNAME` in `.env`.
+If you use a dedicated user, replace `MYSQL_USERNAME` and `MYSQL_PASSWORD` in `.env`.
 
 ## 2. Import initial data
 
@@ -41,12 +41,25 @@ cp .env.example .env
 Fill in:
 
 ```env
-SPRING_DATASOURCE_URL=jdbc:mysql://127.0.0.1:3306/personal_website?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=your_baota_mysql_password
+SERVER_PORT=8080
+GIN_MODE=release
+APP_UPLOAD_DIR=/app/uploads
+AUTO_MIGRATE=true
+CORS_ALLOWED_ORIGINS=*
+
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_DATABASE=personal_website
+MYSQL_USERNAME=root
+MYSQL_PASSWORD=your_baota_mysql_password
+
 JWT_SECRET=change_to_a_random_secret_at_least_32_chars
 JWT_EXPIRATION=86400000
-JAVA_OPTS=-Xms256m -Xmx512m
+
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=admin123
+ADMIN_EMAIL=admin@example.com
+ADMIN_RESET_PASSWORD=false
 ```
 
 ## 4. Start with Docker Compose

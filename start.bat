@@ -1,61 +1,51 @@
 @echo off
 chcp 65001 >nul
+setlocal
+
 echo ========================================
-echo    个人网站启动脚本
+echo    Personal Website - Go + Frontend
 echo ========================================
 echo.
 
-:: 检查 Java
-where java >nul 2>&1
+where go >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [错误] 未找到 Java，请先安装 Java 21
+    echo [ERROR] Go is not installed or not in PATH.
     pause
     exit /b 1
 )
 
-:: 检查 Node.js
 where node >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [错误] 未找到 Node.js，请先安装 Node.js
+    echo [ERROR] Node.js is not installed or not in PATH.
     pause
     exit /b 1
 )
 
-echo [1/4] 安装前端依赖...
-cd frontend
+echo [1/3] Installing frontend dependencies...
+cd /d "%~dp0frontend"
 call npm install
 if %errorlevel% neq 0 (
-    echo [错误] 前端依赖安装失败
+    echo [ERROR] Frontend dependency installation failed.
     pause
     exit /b 1
 )
 
 echo.
-echo [2/4] 启动后端服务...
-cd ..\backend
-start "后端服务" cmd /c "mvn spring-boot:run"
+echo [2/3] Starting Go backend on http://localhost:8080 ...
+cd /d "%~dp0go_back"
+start "Go API" cmd /c "go run ./cmd/server"
 
-echo 等待后端启动...
-timeout /t 15 /nobreak >nul
-
-echo.
-echo [3/4] 启动前端开发服务器...
-cd ..\frontend
-start "前端服务" cmd /c "npm run dev"
+echo Waiting for backend to start...
+timeout /t 5 /nobreak >nul
 
 echo.
-echo ========================================
-echo    启动完成！
-echo ========================================
+echo [3/3] Starting frontend dev server...
+cd /d "%~dp0frontend"
+start "Frontend" cmd /c "npm run dev -- --host 0.0.0.0"
+
 echo.
-echo 前端地址: http://localhost:3000
-echo 后端地址: http://localhost:8080
-echo 管理后台: http://localhost:3000/admin
+echo Frontend: http://localhost:3000
+echo API:      http://localhost:8080
+echo Admin:    http://localhost:3000/admin
 echo.
-echo 默认管理员账号:
-echo   用户名: admin
-echo   密码: admin123
-echo.
-echo 按任意键打开浏览器...
-pause >nul
-start http://localhost:3000
+pause

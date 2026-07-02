@@ -1,17 +1,14 @@
-# 依赖目录
+# Dependencies
 **/node_modules/
-**/target/
 
-# 构建产物
-backend/target/
-
-# 数据和日志
+# Runtime data and logs
 data/
 logs/
+uploads/
 *.db
 *.log
 
-# IDE 配置
+# IDE
 .idea/
 .vscode/
 *.iml
@@ -20,16 +17,7 @@ logs/
 .git/
 .gitignore
 
-# Docker 文件 (避免递归)
-Dockerfile
-docker-compose.yml
-.dockerignore
-
-# 文档
-*.md
-!README.md
-
-# 测试文件
+# Tests
 **/test/
 **/__tests__/
 *.test.js
@@ -37,18 +25,18 @@ docker-compose.yml
 *.spec.js
 *.spec.ts
 
-# 环境配置
+# Environment
 .env
 .env.*
 *.local
 
-# 临时文件
+# Temporary files
 *.tmp
 *.temp
 *.swp
 *.swo
 *~
 
-# 系统文件
+# System files
 .DS_Store
 Thumbs.db

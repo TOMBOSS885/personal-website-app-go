@@ -1,16 +1,15 @@
 @echo off
-set JAVA_HOME=C:\Program Files\Java\jdk-21.0.3+9
-set PATH=%JAVA_HOME%\bin;%PATH%
-set MAVEN_HOME=C:\Program Files\apache-maven-3.9.6
-set PATH=%MAVEN_HOME%\bin;%PATH%
+chcp 65001 >nul
+setlocal
 
-echo Starting backend server...
-echo Java: %JAVA_HOME%
-echo Maven: %MAVEN_HOME%
+where go >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [ERROR] Go is not installed or not in PATH.
+    pause
+    exit /b 1
+)
 
-cd /d "%~dp0backend"
-
-echo Running: mvn spring-boot:run
-call "%MAVEN_HOME%\bin\mvn.cmd" spring-boot:run
-
+cd /d "%~dp0go_back"
+echo Starting Go backend on http://localhost:8080 ...
+go run ./cmd/server
 pause

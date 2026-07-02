@@ -127,7 +127,7 @@ export default function LoginPage() {
         </form>
 
         <p className="mt-6 text-center text-xs text-gray-500">
-          Powered by Spring Boot + React
+          Powered by Go + React
         </p>
       </div>
     </div>

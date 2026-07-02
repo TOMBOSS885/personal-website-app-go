@@ -190,21 +190,21 @@ VALUES ('admin', '$2a$10$YBtpUW1X1eOmTD6moDilke6uR7i5/gSHY1Ti36fKmeJUSiXVeCkY6',
 INSERT INTO articles (title, summary, content, category, tags, published, views, created_at, updated_at)
 VALUES
 ('欢迎使用个人网站',
- '这是一个基于 React + Spring Boot 构建的个人网站',
- '# 欢迎来到我的个人网站\n\n这是一个使用 React 和 Spring Boot 构建的现代化个人网站。\n\n## 特性\n\n- 🎨 精美的用户界面\n- 📝 文章管理系统\n- 💼 项目展示\n- 🛠️ 技能展示\n- 🔐 安全的管理后台',
+ '这是一个基于 React + Go/Gin 构建的个人网站',
+ '# 欢迎来到我的个人网站\n\n这是一个使用 React 和 Go/Gin 构建的现代化个人网站。\n\n## 特性\n\n- 🎨 精美的用户界面\n- 📝 文章管理系统\n- 💼 项目展示\n- 🛠️ 技能展示\n- 🔐 安全的管理后台',
  '公告', '欢迎,网站', 1, 100, NOW(), NOW()),
 
 ('技术栈介绍',
  '介绍本网站使用的技术栈',
- '# 技术栈介绍\n\n## 前端\n\n- React 18\n- Vite\n- TailwindCSS\n- Framer Motion\n\n## 后端\n\n- Java 21\n- Spring Boot 3.2\n- Spring Security\n- JWT Authentication\n- MySQL Database',
- '技术', 'React,Spring Boot,Java', 1, 0, NOW(), NOW());
+ '# 技术栈介绍\n\n## 前端\n\n- React 18\n- Vite\n- TailwindCSS\n- Framer Motion\n\n## 后端\n\n- Go\n- Gin\n- GORM\n- JWT Authentication\n- MySQL Database',
+ '技术', 'React,Go,Gin', 1, 0, NOW(), NOW());
 
 -- 项目
 INSERT INTO projects (name, description, tech_stack, github_url, featured, display_order, created_at, updated_at)
 VALUES
 ('个人网站',
  '一个现代化的个人网站，展示个人项目、文章和技能',
- 'React,Spring Boot,Java 21,TailwindCSS',
+ 'React,Go,Gin,TailwindCSS',
  'https://github.com/username/personal-website',
  1, 1, NOW(), NOW()),
 
@@ -216,11 +216,11 @@ VALUES
 
 -- 技能
 INSERT INTO skills (name, category, proficiency, display_order) VALUES
-('Java',        '后端',   90, 1),
-('Spring Boot', '后端',   88, 2),
+('Go',          '后端',   90, 1),
+('Gin',         '后端',   88, 2),
 ('React',       '前端',   85, 3),
 ('TypeScript',  '前端',   82, 4),
-('Go',          '后端',   75, 5),
+('GORM',        '后端',   75, 5),
 ('Docker',      'DevOps', 80, 6),
 ('Kubernetes',  'DevOps', 70, 7),
 ('MySQL',       '数据库', 85, 8),

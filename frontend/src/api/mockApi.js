@@ -17,11 +17,11 @@ const mockArticles = [
   },
   {
     id: 2,
-    title: 'Spring Boot 3.2 新特性详解',
-    summary: '全面解析 Spring Boot 3.2 版本的新特性，包括虚拟线程支持、Native Image 改进、Observability 增强。',
-    content: '# Spring Boot 3.2 新特性详解\n\nSpring Boot 3.2 带来了...',
+    title: 'Go 后端轻量化重构实践',
+    summary: '记录从传统后端迁移到 Go/Gin 的关键步骤，包括接口适配、数据库迁移、Docker 部署和性能优化。',
+    content: '# Go 后端轻量化重构实践\n\nGo 后端重构重点包括接口对齐、数据模型约束和部署链路简化...',
     category: '后端开发',
-    tags: 'Spring Boot,Java,微服务',
+    tags: 'Go,Gin,Docker',
     coverImage: 'https://images.unsplash.com/photo-1618477247427-5e0a8f7b5b8e?w=800',
     published: true,
     views: 892,
@@ -103,7 +103,7 @@ const mockProjects = [
     id: 3,
     name: '任务调度平台',
     description: '分布式任务调度平台，支持 DAG 工作流、任务依赖、失败重试和可视化监控',
-    techStack: 'Java,Spring Boot,Quartz,Vue.js,PostgreSQL',
+    techStack: 'Go,Gin,Vue.js,PostgreSQL',
     githubUrl: 'https://github.com/username/task-scheduler',
     featured: true,
     stars: 89
@@ -149,9 +149,9 @@ const mockSkills = [
   { id: 5, name: 'Next.js', category: '前端开发', proficiency: 88, displayOrder: 5 },
   
   // 后端
-  { id: 6, name: 'Java', category: '后端开发', proficiency: 92, displayOrder: 1 },
-  { id: 7, name: 'Spring Boot', category: '后端开发', proficiency: 90, displayOrder: 2 },
-  { id: 8, name: 'Go', category: '后端开发', proficiency: 82, displayOrder: 3 },
+  { id: 6, name: 'Go', category: '后端开发', proficiency: 92, displayOrder: 1 },
+  { id: 7, name: 'Gin', category: '后端开发', proficiency: 90, displayOrder: 2 },
+  { id: 8, name: 'GORM', category: '后端开发', proficiency: 82, displayOrder: 3 },
   { id: 9, name: 'Node.js', category: '后端开发', proficiency: 85, displayOrder: 4 },
   { id: 10, name: 'Python', category: '后端开发', proficiency: 80, displayOrder: 5 },
   

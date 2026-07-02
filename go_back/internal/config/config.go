@@ -28,7 +28,7 @@ type Config struct {
 var AppConfig *Config
 
 func InitConfig() {
-	_ = godotenv.Load()
+	_ = godotenv.Load(".env", "../.env")
 
 	jwtExpireMs, err := strconv.ParseInt(getEnv("JWT_EXPIRATION", "86400000"), 10, 64)
 	if err != nil {
