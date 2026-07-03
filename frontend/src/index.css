@@ -13,68 +13,55 @@
   --theme-shadow-lg: 0 20px 50px -15px rgba(99, 102, 241, 0.45);
 }
 
-/* Markdown Editor Styles */
-.w-md-editor {
-  background-color: white !important;
-  border: none !important;
-  box-shadow: none !important;
+/* Markdown Editor Preview */
+.article-editor-preview {
+  font-family: 'Inter', system-ui, sans-serif;
 }
 
-.w-md-editor-text-input,
-.w-md-editor-text {
-  font-family: 'Inter', system-ui, sans-serif !important;
-  font-size: 15px !important;
-  line-height: 1.7 !important;
-}
-
-.w-md-editor-preview {
-  font-family: 'Inter', system-ui, sans-serif !important;
-}
-
-.w-md-editor-preview h1 {
+.article-editor-preview h1 {
   font-size: 2rem;
   font-weight: 700;
   margin-bottom: 1rem;
   margin-top: 1.5rem;
 }
 
-.w-md-editor-preview h2 {
+.article-editor-preview h2 {
   font-size: 1.5rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
   margin-top: 1.25rem;
 }
 
-.w-md-editor-preview h3 {
+.article-editor-preview h3 {
   font-size: 1.25rem;
   font-weight: 600;
   margin-bottom: 0.5rem;
   margin-top: 1rem;
 }
 
-.w-md-editor-preview p {
+.article-editor-preview p {
   margin-bottom: 1rem;
   line-height: 1.7;
 }
 
-.w-md-editor-preview ul,
-.w-md-editor-preview ol {
+.article-editor-preview ul,
+.article-editor-preview ol {
   margin-bottom: 1rem;
   padding-left: 1.5rem;
 }
 
-.w-md-editor-preview li {
+.article-editor-preview li {
   margin-bottom: 0.25rem;
 }
 
-.w-md-editor-preview code {
+.article-editor-preview code {
   background-color: #f3f4f6;
   padding: 0.2rem 0.4rem;
   border-radius: 0.25rem;
   font-size: 0.875rem;
 }
 
-.w-md-editor-preview pre {
+.article-editor-preview pre {
   background-color: #1e293b;
   color: #e2e8f0;
   padding: 1rem;
@@ -83,12 +70,12 @@
   margin-bottom: 1rem;
 }
 
-.w-md-editor-preview pre code {
+.article-editor-preview pre code {
   background-color: transparent;
   padding: 0;
 }
 
-.w-md-editor-preview blockquote {
+.article-editor-preview blockquote {
   border-left: 4px solid #8b5cf6;
   padding-left: 1rem;
   margin-left: 0;
@@ -96,31 +83,31 @@
   font-style: italic;
 }
 
-.w-md-editor-preview a {
+.article-editor-preview a {
   color: #8b5cf6;
   text-decoration: underline;
 }
 
-.w-md-editor-preview img {
+.article-editor-preview img {
   max-width: 100%;
   border-radius: 0.5rem;
   margin: 1rem 0;
 }
 
-.w-md-editor-preview table {
+.article-editor-preview table {
   width: 100%;
   border-collapse: collapse;
   margin-bottom: 1rem;
 }
 
-.w-md-editor-preview th,
-.w-md-editor-preview td {
+.article-editor-preview th,
+.article-editor-preview td {
   border: 1px solid #e5e7eb;
   padding: 0.5rem 0.75rem;
   text-align: left;
 }
 
-.w-md-editor-preview th {
+.article-editor-preview th {
   background-color: #f9fafb;
   font-weight: 600;
 }

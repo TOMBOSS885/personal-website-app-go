@@ -54,6 +54,28 @@ func GenerateOptimizedVariants(srcPath, destDir, baseName string, variants []Ima
 	return results, nil
 }
 
+func GenerateSquarePNG(srcPath, destPath string, size int) (ImageResult, error) {
+	if size <= 0 {
+		size = 512
+	}
+	img, err := openImage(srcPath)
+	if err != nil {
+		return ImageResult{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return ImageResult{}, err
+	}
+	out := imaging.Fill(img, size, size, imaging.Center, imaging.Lanczos)
+	if err := imaging.Save(out, destPath); err != nil {
+		return ImageResult{}, err
+	}
+	info, err := os.Stat(destPath)
+	if err != nil {
+		return ImageResult{}, err
+	}
+	return ImageResult{Name: filepath.Base(destPath), Path: destPath, Size: info.Size()}, nil
+}
+
 func IsStaticOptimizableImage(ext, contentType string) bool {
 	ext = strings.ToLower(ext)
 	contentType = strings.ToLower(contentType)

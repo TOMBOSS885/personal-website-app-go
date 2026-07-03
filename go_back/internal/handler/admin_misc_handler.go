@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"personal-website-go/internal/config"
+	"personal-website-go/internal/media"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
@@ -275,18 +276,27 @@ func AdminUploadAvatar(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "unsupported avatar image type")
 		return
 	}
-	if _, _, err := decodeUploadedImageConfig(file); err != nil {
+	if err := validateUploadedImageDimensions(file, minAvatarImageDimension, maxAvatarImageDimension, maxAvatarImagePixels); err != nil {
 		response.Error(c, http.StatusBadRequest, "invalid avatar image")
 		return
 	}
 
 	dir := filepath.Join(config.AppConfig.UploadDir, "avatars")
-	name := time.Now().Format("20060102") + "-" + uuid.NewString() + ext
-	target := filepath.Join(dir, name)
-	if err := saveUploadedFile(c, file, dir, target); err != nil {
+	baseName := time.Now().Format("20060102") + "-" + uuid.NewString()
+	rawName := baseName + "-raw" + ext
+	rawTarget := filepath.Join(dir, rawName)
+	if err := saveUploadedFile(c, file, dir, rawTarget); err != nil {
 		response.Error(c, http.StatusInternalServerError, "avatar upload failed")
 		return
 	}
+	name := baseName + ".png"
+	target := filepath.Join(dir, name)
+	if _, err := media.GenerateSquarePNG(rawTarget, target, 512); err != nil {
+		_ = os.Remove(rawTarget)
+		response.Error(c, http.StatusInternalServerError, "avatar processing failed")
+		return
+	}
+	_ = os.Remove(rawTarget)
 
 	oldAvatar := existing.Avatar
 	existing.Avatar = "/uploads/avatars/" + name

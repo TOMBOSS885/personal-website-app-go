@@ -76,6 +76,7 @@ export default function ProfileManager() {
         alert('保存成功')
         const data = await res.json()
         setProfile(data)
+        window.dispatchEvent(new Event('profile:updated'))
       } else {
         alert('保存失败')
       }
@@ -121,6 +122,7 @@ export default function ProfileManager() {
       const data = await res.json()
       setForm(current => ({ ...current, avatar: data.avatar || '' }))
       setProfile(current => ({ ...(current || {}), avatar: data.avatar || '' }))
+      window.dispatchEvent(new Event('profile:updated'))
       setAvatarFile(null)
     } catch (err) {
       console.error('Upload avatar failed:', err)

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import MDEditor from '@uiw/react-md-editor'
+import ReactMarkdown from 'react-markdown'
+import rehypeHighlight from 'rehype-highlight'
+import remarkGfm from 'remark-gfm'
 import {
   Bold, Italic, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Link2,
@@ -199,6 +201,11 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   ]
 
   const editorHeight = fullscreen ? 'calc(100vh - 112px)' : height
+  const previewContent = (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+      {value || ' '}
+    </ReactMarkdown>
+  )
 
   return (
     <div className={`rich-text-editor ${fullscreen ? 'fixed inset-0 z-50 bg-white p-4' : ''}`}>
@@ -250,7 +257,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
       <div className="border border-gray-200 rounded-b-xl overflow-hidden bg-white" style={{ height: editorHeight }}>
         {preview === 'preview' ? (
           <div className="h-full overflow-auto p-5 article-content article-editor-preview">
-            <MDEditor.Markdown source={value || ' '} />
+            {previewContent}
           </div>
         ) : (
           <div className={`h-full ${preview === 'live' ? 'grid md:grid-cols-2' : ''}`}>
@@ -264,7 +271,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
             />
             {preview === 'live' && (
               <div className="hidden md:block h-full overflow-auto p-5 border-l border-gray-200 article-content article-editor-preview">
-                <MDEditor.Markdown source={value || ' '} />
+                {previewContent}
               </div>
             )}
           </div>

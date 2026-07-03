@@ -96,6 +96,11 @@ func AdminUploadArticleImage(c *gin.Context) {
 		return
 	}
 
+	if err := validateUploadedImageDimensions(file, 0, maxGeneralImageDimension, maxGeneralImagePixels); err != nil {
+		response.Error(c, http.StatusBadRequest, "invalid or oversized image dimensions")
+		return
+	}
+
 	now := time.Now()
 	dir := filepath.Join(config.AppConfig.UploadDir, "articles", now.Format("2006"), now.Format("01"))
 	baseName := uuid.NewString()

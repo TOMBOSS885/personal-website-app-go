@@ -67,20 +67,6 @@ export default function MusicPlayer() {
   }, [loaded, loading])
 
   useEffect(() => {
-    const idleId = 'requestIdleCallback' in window
-      ? window.requestIdleCallback(fetchSongs, { timeout: 5000 })
-      : window.setTimeout(fetchSongs, 2500)
-
-    return () => {
-      if ('cancelIdleCallback' in window) {
-        window.cancelIdleCallback(idleId)
-      } else {
-        window.clearTimeout(idleId)
-      }
-    }
-  }, [fetchSongs])
-
-  useEffect(() => {
     if (!currentSong || !audioRef.current) return
     audioRef.current.play()
       .then(() => setPlaying(true))

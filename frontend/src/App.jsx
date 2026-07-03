@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense, useState, useEffect } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './contexts/LanguageContext'
 import Navbar from './components/Navbar'
@@ -27,13 +27,11 @@ const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
 
-// 覆盖 window.fetch，统一处理管理后台 API 的 401 响应
 function setupAdminApiInterceptor() {
   const originalFetch = window.fetch
   window.fetch = async (url, options = {}) => {
     const res = await originalFetch(url, options)
 
-    // 如果是管理后台 API 且返回 401，清除 token 并跳转登录页
     if (
       typeof url === 'string'
       && url.includes('/api/admin/')
@@ -58,17 +56,21 @@ function PageLoading() {
 }
 
 function App() {
-  const [profile, setProfile] = useState(null)
+  const [profile, setProfile] = useState(() => {
+    try {
+      const cached = localStorage.getItem('website-profile')
+      return cached ? JSON.parse(cached) : null
+    } catch {
+      return null
+    }
+  })
 
-  useEffect(() => {
-    // 全局注入管理后台 401 拦截器（只执行一次）
-    setupAdminApiInterceptor()
-
+  const loadProfile = useCallback(() => {
     fetch(`${API_BASE}/api/public/profile`)
       .then(res => res.json())
       .then(data => {
         setProfile(data)
-        // 动态设置页面标题
+        localStorage.setItem('website-profile', JSON.stringify(data))
         if (data.nickname) {
           document.title = `${data.nickname} - 个人网站`
         }
@@ -76,54 +78,61 @@ function App() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    setupAdminApiInterceptor()
+    loadProfile()
+    window.addEventListener('profile:updated', loadProfile)
+    return () => window.removeEventListener('profile:updated', loadProfile)
+  }, [loadProfile])
+
   return (
     <ThemeProvider>
       <LanguageProvider>
         <div className="theme-page-background" aria-hidden="true" />
         <Router>
-        <div className="theme-app-shell min-h-screen flex flex-col">
-          <Suspense fallback={<PageLoading />}>
-            <Routes>
-              <Route path="/admin/login" element={<LoginPage />} />
-              <Route path="/admin/*" element={
-                <PrivateRoute>
-                  <AdminLayout />
-                </PrivateRoute>
-              }>
-                <Route index element={<Dashboard />} />
-                <Route path="articles" element={<ArticleManager />} />
-                <Route path="projects" element={<ProjectManager />} />
-                <Route path="feature-cards" element={<FeatureCardManager />} />
-                <Route path="skills" element={<SkillManager />} />
-                <Route path="profile" element={<ProfileManager />} />
-                <Route path="account" element={<AccountSettings />} />
-                <Route path="theme" element={<ThemeManager />} />
-                <Route path="live2d" element={<Live2DManager />} />
-                <Route path="music" element={<MusicManager />} />
-              </Route>
-              <Route path="/*" element={
-                <>
-                  <Navbar profile={profile} />
-                  <main className="flex-1">
-                    <Routes>
-                      <Route path="/" element={<HomePage />} />
-                      <Route path="/blog" element={<BlogPage />} />
-                      <Route path="/blog/:id" element={<ArticleDetailPage />} />
-                      <Route path="/projects" element={<ProjectsPage />} />
-                    </Routes>
-                  </main>
-                  <Footer profile={profile} />
-                  <MusicPlayer />
-                  <HomeBackgroundCustomizer />
-                  <Suspense fallback={null}>
-                    <Live2DWidget />
-                  </Suspense>
-                </>
-              } />
-            </Routes>
-          </Suspense>
-        </div>
-      </Router>
+          <div className="theme-app-shell min-h-screen flex flex-col">
+            <Suspense fallback={<PageLoading />}>
+              <Routes>
+                <Route path="/admin/login" element={<LoginPage />} />
+                <Route path="/admin/*" element={
+                  <PrivateRoute>
+                    <AdminLayout />
+                  </PrivateRoute>
+                }>
+                  <Route index element={<Dashboard />} />
+                  <Route path="articles" element={<ArticleManager />} />
+                  <Route path="projects" element={<ProjectManager />} />
+                  <Route path="feature-cards" element={<FeatureCardManager />} />
+                  <Route path="skills" element={<SkillManager />} />
+                  <Route path="profile" element={<ProfileManager />} />
+                  <Route path="account" element={<AccountSettings />} />
+                  <Route path="theme" element={<ThemeManager />} />
+                  <Route path="live2d" element={<Live2DManager />} />
+                  <Route path="music" element={<MusicManager />} />
+                </Route>
+                <Route path="/*" element={
+                  <>
+                    <Navbar profile={profile} />
+                    <main className="flex-1">
+                      <Routes>
+                        <Route path="/" element={<HomePage />} />
+                        <Route path="/blog" element={<BlogPage />} />
+                        <Route path="/blog/:id" element={<ArticleDetailPage />} />
+                        <Route path="/projects" element={<ProjectsPage />} />
+                      </Routes>
+                    </main>
+                    <Footer profile={profile} />
+                    <MusicPlayer />
+                    <HomeBackgroundCustomizer />
+                    <Suspense fallback={null}>
+                      <Live2DWidget />
+                    </Suspense>
+                  </>
+                } />
+              </Routes>
+            </Suspense>
+          </div>
+        </Router>
       </LanguageProvider>
     </ThemeProvider>
   )
