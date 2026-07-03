@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Lock, User } from 'lucide-react'
+import { Lock, User, Sun, Moon } from 'lucide-react'
+import { useTheme } from '../../context/ThemeContext'
 
 const API_BASE = ''
 
@@ -10,6 +11,7 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const { colorMode, toggleColorMode } = useTheme()
 
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -44,7 +46,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="admin-login min-h-screen bg-gradient-to-br from-slate-100 via-indigo-100 to-purple-100 flex items-center justify-center px-4 relative overflow-hidden transition-colors dark:from-slate-950 dark:via-purple-950 dark:to-slate-950">
+      <button
+        type="button"
+        onClick={toggleColorMode}
+        className="absolute right-5 top-5 z-20 flex h-11 w-11 items-center justify-center rounded-xl border border-white/70 bg-white/80 text-gray-700 shadow-lg backdrop-blur-md transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:bg-slate-800"
+        title={colorMode === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
+      >
+        {colorMode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+      </button>
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
