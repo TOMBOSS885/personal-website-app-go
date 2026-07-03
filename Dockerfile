@@ -1,26 +1,40 @@
+# syntax=docker/dockerfile:1.7
 # Full-stack image for the Go backend version.
 # It builds l2d-widget, the React/Vite frontend, and the Go API, then runs
 # Nginx plus the Go API in one small runtime container.
 
 FROM node:20-alpine AS frontend-builder
 
+ARG NPM_REGISTRY=https://registry.npmmirror.com
+RUN npm config set registry "$NPM_REGISTRY" \
+    && npm config set fetch-retries 5 \
+    && npm config set fetch-retry-factor 2 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000
+
 WORKDIR /app/l2d-widget
 COPY l2d-widget/package*.json ./
-RUN npm install --legacy-peer-deps
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --no-audit --no-fund
 COPY l2d-widget/ ./
 RUN npm run build
 
 WORKDIR /app/frontend
 COPY frontend/package*.json ./
-RUN npm install --legacy-peer-deps --no-audit --no-fund
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
 
 FROM golang:1.25-alpine AS backend-builder
 
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=$GOPROXY
+
 WORKDIR /app/go_back
 COPY go_back/go.mod go_back/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 COPY go_back/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/personal-website-api ./cmd/server
 
