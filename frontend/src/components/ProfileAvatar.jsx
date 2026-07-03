@@ -7,15 +7,18 @@ export default function ProfileAvatar({
   fallbackClassName = '',
 }) {
   const initial = profile?.nickname?.trim()?.charAt(0)?.toUpperCase() || 'W'
+  const avatarSrc = typeof profile?.avatar === 'string' && profile.avatar.startsWith('/uploads/avatars/')
+    ? profile.avatar
+    : ''
 
   return (
     <div
       className={`relative ${sizeClass} shrink-0 overflow-hidden rounded-full ${className}`}
       aria-label={profile?.nickname ? `${profile.nickname} avatar` : 'avatar'}
     >
-      {profile?.avatar ? (
+      {avatarSrc ? (
         <img
-          src={profile.avatar}
+          src={avatarSrc}
           alt={profile?.nickname || 'avatar'}
           loading="lazy"
           decoding="async"

@@ -4,6 +4,7 @@ import AvatarCropper from '../../components/AvatarCropper'
 import ProfileAvatar from '../../components/ProfileAvatar'
 
 const API_BASE = ''
+const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024
 
 export default function ProfileManager() {
   const [profile, setProfile] = useState(null)
@@ -92,6 +93,10 @@ export default function ProfileManager() {
     if (!file) return
     if (!file.type.startsWith('image/')) {
       alert('请选择图片文件')
+      return
+    }
+    if (file.size > MAX_AVATAR_FILE_SIZE) {
+      alert('头像图片不能超过 5MB')
       return
     }
     setAvatarFile(file)

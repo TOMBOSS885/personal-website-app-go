@@ -221,7 +221,6 @@ func AdminUpdateProfile(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "参数错误")
 		return
 	}
-	existing.Avatar = payload.Avatar
 	existing.Nickname = payload.Nickname
 	existing.Bio = payload.Bio
 	existing.Location = payload.Location
@@ -274,6 +273,10 @@ func AdminUploadAvatar(c *gin.Context) {
 	contentType, err := detectUploadedContentType(file)
 	if err != nil || !avatarImageTypes[contentType] {
 		response.Error(c, http.StatusBadRequest, "unsupported avatar image type")
+		return
+	}
+	if _, _, err := decodeUploadedImageConfig(file); err != nil {
+		response.Error(c, http.StatusBadRequest, "invalid avatar image")
 		return
 	}
 
