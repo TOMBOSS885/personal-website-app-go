@@ -122,9 +122,9 @@ export default function BlogPage() {
   return (
     <div className="min-h-screen relative">
       {/* 背景装饰 */}
-      <div className="absolute inset-0 bg-gradient-to-b from-indigo-50/50 via-white to-white pointer-events-none" />
-      <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl" />
-      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-200/30 rounded-full blur-3xl" />
+      <div className="absolute inset-0 bg-gradient-to-b from-indigo-50/50 via-white to-white pointer-events-none dark:from-slate-950/70 dark:via-slate-950/60 dark:to-slate-950/75" />
+      <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl dark:bg-indigo-500/10" />
+      <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-200/30 rounded-full blur-3xl dark:bg-purple-500/10" />
 
       <div className="relative max-w-6xl mx-auto px-4 py-24">
         {/* 页面头部 */}

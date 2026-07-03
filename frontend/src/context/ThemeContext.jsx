@@ -17,6 +17,20 @@ function adjustBrightness(hex, percent) {
   return `#${nextR.toString(16).padStart(2, '0')}${nextG.toString(16).padStart(2, '0')}${nextB.toString(16).padStart(2, '0')}`
 }
 
+function getHexLuminance(hex) {
+  const normalizedHex = String(hex || '').replace('#', '')
+  if (!/^[0-9a-fA-F]{6}$/.test(normalizedHex)) return 1
+  const values = [0, 2, 4].map(index => {
+    const channel = parseInt(normalizedHex.substring(index, index + 2), 16) / 255
+    return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * values[0] + 0.7152 * values[1] + 0.0722 * values[2]
+}
+
+function isDarkSolid(background) {
+  return String(background || '').startsWith('#') && getHexLuminance(background) < 0.45
+}
+
 const PRESET_THEMES = {
   'purple-pink': {
     name: '紫粉渐变',
@@ -145,9 +159,53 @@ function getThemeFallbackBackground(theme) {
   return normalized.background || `linear-gradient(135deg, ${normalized.primary}, ${normalized.secondary})`
 }
 
+function getModeTokens(theme, colorMode) {
+  const normalized = normalizeTheme(theme)
+  const isDark = colorMode === 'dark'
+  const fallbackBackground = getThemeFallbackBackground(normalized)
+
+  if (!isDark) {
+    return {
+      fallbackBackground,
+      imageOverlay: normalized.backgroundStyle === 'image'
+        ? 'linear-gradient(rgba(255,255,255,0.08), rgba(255,255,255,0.14))'
+        : 'transparent',
+      textPrimary: normalized.textPrimary || '#1F2937',
+      textSecondary: normalized.textSecondary || '#6B7280',
+      cardBg: normalized.cardBg || 'rgba(255, 255, 255, 0.1)',
+      surface: 'rgba(255,255,255,0.88)',
+      surfaceSoft: 'rgba(249,250,251,0.82)',
+      border: 'rgba(255,255,255,0.58)',
+    }
+  }
+
+  const darkFallback = normalized.backgroundStyle === 'solid'
+    ? (isDarkSolid(normalized.background) ? normalized.background : '#0f172a')
+    : fallbackBackground
+
+  return {
+    fallbackBackground: darkFallback,
+    imageOverlay: normalized.backgroundStyle === 'image'
+      ? 'linear-gradient(rgba(2,6,23,0.46), rgba(2,6,23,0.72))'
+      : normalized.backgroundStyle === 'gradient'
+        ? 'linear-gradient(rgba(2,6,23,0.18), rgba(2,6,23,0.34))'
+        : 'transparent',
+    textPrimary: '#F8FAFC',
+    textSecondary: '#CBD5E1',
+    cardBg: 'rgba(15, 23, 42, 0.74)',
+    surface: 'rgba(15,23,42,0.86)',
+    surfaceSoft: 'rgba(30,41,59,0.76)',
+    border: 'rgba(148,163,184,0.24)',
+  }
+}
+
 export function ThemeProvider({ children }) {
   const [currentTheme, setCurrentTheme] = useState('purple-pink')
   const [customTheme, setCustomTheme] = useState(null)
+  const [colorMode, setColorModeState] = useState(() => {
+    if (typeof window === 'undefined') return 'light'
+    return localStorage.getItem('website-color-mode') || 'light'
+  })
 
   useEffect(() => {
     const loadTheme = async () => {
@@ -188,25 +246,33 @@ export function ThemeProvider({ children }) {
     if (!theme) return
     let cancelled = false
 
-    const fallbackBackground = getThemeFallbackBackground(theme)
+    const modeTokens = getModeTokens(theme, colorMode)
+    const fallbackBackground = modeTokens.fallbackBackground
     const root = document.documentElement
 
     root.style.setProperty('--theme-primary', theme.primary)
     root.style.setProperty('--theme-secondary', theme.secondary)
     root.style.setProperty('--theme-accent', theme.accent)
-    root.style.setProperty('--theme-text-primary', theme.textPrimary)
-    root.style.setProperty('--theme-text-secondary', theme.textSecondary)
+    root.style.setProperty('--theme-text-primary', modeTokens.textPrimary)
+    root.style.setProperty('--theme-text-secondary', modeTokens.textSecondary)
     root.style.setProperty('--theme-bg', fallbackBackground)
     root.style.setProperty('--theme-page-bg', fallbackBackground)
     root.style.setProperty('--theme-bg-image', 'none')
     root.style.setProperty('--theme-bg-image-opacity', '0')
-    root.style.setProperty('--theme-card-bg', theme.cardBg)
+    root.style.setProperty('--theme-bg-overlay', modeTokens.imageOverlay)
+    root.style.setProperty('--theme-card-bg', modeTokens.cardBg)
+    root.style.setProperty('--theme-surface', modeTokens.surface)
+    root.style.setProperty('--theme-surface-soft', modeTokens.surfaceSoft)
+    root.style.setProperty('--theme-border', modeTokens.border)
     root.style.setProperty('--theme-gradient', `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`)
     root.style.setProperty('--theme-gradient-text', `linear-gradient(90deg, ${theme.primary}, ${theme.secondary}, ${theme.accent})`)
     root.style.setProperty('--theme-gradient-hover', `linear-gradient(135deg, ${adjustBrightness(theme.primary, -15)}, ${adjustBrightness(theme.secondary, -15)})`)
     root.style.setProperty('--theme-shadow', `0 10px 30px -10px ${theme.primary}40`)
     root.style.setProperty('--theme-shadow-lg', `0 20px 50px -15px ${theme.primary}50`)
     root.setAttribute('data-theme', currentTheme)
+    root.setAttribute('data-color-mode', colorMode)
+    root.classList.toggle('dark', colorMode === 'dark')
+    root.classList.toggle('theme-dark', colorMode === 'dark')
 
     if (customTheme) {
       root.setAttribute('data-custom-theme', 'true')
@@ -228,7 +294,7 @@ export function ThemeProvider({ children }) {
     return () => {
       cancelled = true
     }
-  }, [currentTheme, customTheme])
+  }, [currentTheme, customTheme, colorMode])
 
   const setTheme = (themeKey) => {
     setCurrentTheme(themeKey)
@@ -242,6 +308,16 @@ export function ThemeProvider({ children }) {
     localStorage.setItem('website-theme', JSON.stringify({ custom: normalized }))
   }
 
+  const setColorMode = (mode) => {
+    const nextMode = mode === 'dark' ? 'dark' : 'light'
+    setColorModeState(nextMode)
+    localStorage.setItem('website-color-mode', nextMode)
+  }
+
+  const toggleColorMode = () => {
+    setColorMode(colorMode === 'dark' ? 'light' : 'dark')
+  }
+
   const getActiveTheme = () => normalizeTheme(customTheme || PRESET_THEMES[currentTheme])
 
   return (
@@ -252,6 +328,9 @@ export function ThemeProvider({ children }) {
         presetThemes: PRESET_THEMES,
         setTheme,
         setCustomTheme: setCustomThemeConfig,
+        colorMode,
+        setColorMode,
+        toggleColorMode,
         getActiveTheme,
       }}
     >

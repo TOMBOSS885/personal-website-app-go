@@ -6,14 +6,15 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import LanguageSwitcher from './LanguageSwitcher'
 import { safeExternalHref } from '../utils/safeUrl'
+import { useTheme } from '../context/ThemeContext'
 
 export default function Navbar({ profile }) {
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-  const [isDark, setIsDark] = useState(false)
   const location = useLocation()
   const { language } = useLanguage()
   const { t } = useTranslation()
+  const { colorMode, toggleColorMode } = useTheme()
   const githubHref = safeExternalHref(profile?.github || 'https://github.com')
 
   useEffect(() => {
@@ -117,6 +118,39 @@ export default function Navbar({ profile }) {
             <div className="flex items-center space-x-3">
               {/* Language Switcher */}
               <LanguageSwitcher />
+
+              <motion.button
+                type="button"
+                onClick={toggleColorMode}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/70 bg-white/90 text-gray-700 shadow-sm shadow-indigo-500/10 backdrop-blur-md transition-colors hover:bg-white hover:text-gray-950 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700"
+                title={colorMode === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {colorMode === 'dark' ? (
+                    <motion.span
+                      key="sun"
+                      initial={{ rotate: -90, opacity: 0 }}
+                      animate={{ rotate: 0, opacity: 1 }}
+                      exit={{ rotate: 90, opacity: 0 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      <Sun className="h-5 w-5" />
+                    </motion.span>
+                  ) : (
+                    <motion.span
+                      key="moon"
+                      initial={{ rotate: 90, opacity: 0 }}
+                      animate={{ rotate: 0, opacity: 1 }}
+                      exit={{ rotate: -90, opacity: 0 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      <Moon className="h-5 w-5" />
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </motion.button>
 
               {/* GitHub Link */}
               {githubHref && (

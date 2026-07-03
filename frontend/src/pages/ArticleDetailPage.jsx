@@ -101,7 +101,7 @@ export default function ArticleDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white dark:bg-slate-950/80">
       {/* Notion风格 - 顶部区域 */}
       <div className="max-w-4xl mx-auto px-4 pt-28 pb-8">
         {/* 第一行：返回按钮 */}
