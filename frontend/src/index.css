@@ -522,9 +522,9 @@ body {
   inset: 0;
   z-index: 0;
   background-image: var(--theme-bg-image, none);
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
+  background-position: var(--theme-bg-position, center);
+  background-size: var(--theme-bg-size, cover);
+  background-repeat: var(--theme-bg-repeat, no-repeat);
   opacity: var(--theme-bg-image-opacity, 0);
   transition: opacity 320ms ease;
 }

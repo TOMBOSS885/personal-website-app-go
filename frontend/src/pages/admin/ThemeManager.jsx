@@ -5,6 +5,22 @@ import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
 
+const IMAGE_LAYOUT_OPTIONS = [
+  { value: 'cover', repeat: 'no-repeat', label: '填充' },
+  { value: 'contain', repeat: 'no-repeat', label: '完整' },
+  { value: '100% 100%', repeat: 'no-repeat', label: '拉伸' },
+  { value: 'auto', repeat: 'no-repeat', label: '原始' },
+  { value: 'auto', repeat: 'repeat', label: '平铺' },
+]
+
+const IMAGE_POSITION_OPTIONS = [
+  { value: 'center', label: '居中' },
+  { value: 'top', label: '顶部' },
+  { value: 'bottom', label: '底部' },
+  { value: 'left', label: '左侧' },
+  { value: 'right', label: '右侧' },
+]
+
 export default function ThemeManager() {
   const {
     currentTheme,
@@ -71,6 +87,13 @@ export default function ThemeManager() {
     updateCustomTheme({
       backgroundStyle: style,
       background: nextBackground,
+      ...(style === 'image'
+        ? {
+            backgroundSize: activeTheme.backgroundSize || 'cover',
+            backgroundPosition: activeTheme.backgroundPosition || 'center',
+            backgroundRepeat: activeTheme.backgroundRepeat || 'no-repeat',
+          }
+        : {}),
     })
   }
 
@@ -102,6 +125,9 @@ export default function ThemeManager() {
       updateCustomTheme({
         backgroundStyle: 'image',
         backgroundImage: data.url,
+        backgroundSize: activeTheme.backgroundSize || 'cover',
+        backgroundPosition: activeTheme.backgroundPosition || 'center',
+        backgroundRepeat: activeTheme.backgroundRepeat || 'no-repeat',
       })
     } catch (err) {
       console.error('上传背景图片失败:', err)
@@ -349,10 +375,72 @@ export default function ThemeManager() {
               <input
                 type="text"
                 value={activeTheme.backgroundImage || ''}
-                onChange={(event) => updateCustomTheme({ backgroundImage: event.target.value, backgroundStyle: 'image' })}
+                onChange={(event) => updateCustomTheme({
+                  backgroundImage: event.target.value,
+                  backgroundStyle: 'image',
+                  backgroundSize: activeTheme.backgroundSize || 'cover',
+                  backgroundPosition: activeTheme.backgroundPosition || 'center',
+                  backgroundRepeat: activeTheme.backgroundRepeat || 'no-repeat',
+                })}
                 placeholder="/uploads/theme-backgrounds/example.jpg 或 https://example.com/image.jpg"
                 className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               />
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">背景布局</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {IMAGE_LAYOUT_OPTIONS.map(option => {
+                    const selected = activeTheme.backgroundSize === option.value
+                      && activeTheme.backgroundRepeat === option.repeat
+                    return (
+                      <button
+                        key={`${option.value}-${option.repeat}`}
+                        type="button"
+                        onClick={() => updateCustomTheme({
+                          backgroundStyle: 'image',
+                          backgroundSize: option.value,
+                          backgroundRepeat: option.repeat,
+                        })}
+                        className={`rounded-lg border px-2 py-2 text-xs font-medium transition-all ${
+                          selected
+                            ? 'border-purple-400 bg-purple-50 text-purple-700 ring-2 ring-purple-100'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-purple-200 hover:text-gray-900'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">背景位置</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {IMAGE_POSITION_OPTIONS.map(option => {
+                    const selected = activeTheme.backgroundPosition === option.value
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => updateCustomTheme({
+                          backgroundStyle: 'image',
+                          backgroundPosition: option.value,
+                        })}
+                        className={`rounded-lg border px-2 py-2 text-xs font-medium transition-all ${
+                          selected
+                            ? 'border-purple-400 bg-purple-50 text-purple-700 ring-2 ring-purple-100'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-purple-200 hover:text-gray-900'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
 
             <div className="mt-5">
@@ -386,7 +474,13 @@ export default function ThemeManager() {
                       <button
                         key={image.url}
                         type="button"
-                        onClick={() => updateCustomTheme({ backgroundImage: image.url, backgroundStyle: 'image' })}
+                        onClick={() => updateCustomTheme({
+                          backgroundImage: image.url,
+                          backgroundStyle: 'image',
+                          backgroundSize: activeTheme.backgroundSize || 'cover',
+                          backgroundPosition: activeTheme.backgroundPosition || 'center',
+                          backgroundRepeat: activeTheme.backgroundRepeat || 'no-repeat',
+                        })}
                         className={`group relative overflow-hidden rounded-xl border text-left transition-all ${
                           selected ? 'border-purple-400 ring-2 ring-purple-200' : 'border-gray-100 hover:border-purple-200'
                         }`}

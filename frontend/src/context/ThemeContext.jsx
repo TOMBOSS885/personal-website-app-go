@@ -112,6 +112,9 @@ function normalizeTheme(theme) {
     ...theme,
     backgroundStyle: theme.backgroundStyle || (theme.backgroundImage ? 'image' : 'gradient'),
     backgroundImage: theme.backgroundImage || '',
+    backgroundSize: theme.backgroundSize || 'cover',
+    backgroundPosition: theme.backgroundPosition || 'center',
+    backgroundRepeat: theme.backgroundRepeat || 'no-repeat',
     background: theme.background || `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`,
     cardBg: theme.cardBg || 'rgba(255, 255, 255, 0.1)',
   }
@@ -140,7 +143,7 @@ export function getThemeBackground(theme) {
   if (!normalized) return '#ffffff'
 
   if (normalized.backgroundStyle === 'image' && normalized.backgroundImage) {
-    return `${cssUrl(getResponsiveBackgroundImage(normalized.backgroundImage))} center / cover no-repeat`
+    return `${cssUrl(getResponsiveBackgroundImage(normalized.backgroundImage))} ${normalized.backgroundPosition} / ${normalized.backgroundSize} ${normalized.backgroundRepeat}`
   }
 
   if (normalized.backgroundStyle === 'solid') {
@@ -259,6 +262,9 @@ export function ThemeProvider({ children }) {
     root.style.setProperty('--theme-page-bg', fallbackBackground)
     root.style.setProperty('--theme-bg-image', 'none')
     root.style.setProperty('--theme-bg-image-opacity', '0')
+    root.style.setProperty('--theme-bg-position', theme.backgroundPosition)
+    root.style.setProperty('--theme-bg-size', theme.backgroundSize)
+    root.style.setProperty('--theme-bg-repeat', theme.backgroundRepeat)
     root.style.setProperty('--theme-bg-overlay', modeTokens.imageOverlay)
     root.style.setProperty('--theme-card-bg', modeTokens.cardBg)
     root.style.setProperty('--theme-surface', modeTokens.surface)

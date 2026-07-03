@@ -6,7 +6,6 @@ import ParticleBackground from '../components/ParticleBackground'
 import TypewriterText from '../components/TypewriterText'
 import ArticleCard from '../components/ArticleCard'
 import ProjectCard from '../components/ProjectCard'
-import HomeBackgroundCustomizer from '../components/HomeBackgroundCustomizer'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import { safeExternalHref } from '../utils/safeUrl'
@@ -177,7 +176,6 @@ export default function HomePage() {
     <div className="min-h-screen relative overflow-hidden">
       {/* 粒子背景 */}
       <ParticleBackground />
-      <HomeBackgroundCustomizer />
       
       {/* Hero Section */}
       <section 

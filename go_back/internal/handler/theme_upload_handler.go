@@ -48,6 +48,9 @@ func AdminSaveTheme(c *gin.Context) {
 		theme.Background = req.Custom.Background
 		theme.BackgroundStyle = req.Custom.BackgroundStyle
 		theme.BackgroundImage = req.Custom.BackgroundImage
+		theme.BackgroundSize = req.Custom.BackgroundSize
+		theme.BackgroundPosition = req.Custom.BackgroundPosition
+		theme.BackgroundRepeat = req.Custom.BackgroundRepeat
 		theme.CardBg = req.Custom.CardBg
 		theme.TextPrimary = req.Custom.TextPrimary
 		theme.TextSecondary = req.Custom.TextSecondary
@@ -243,15 +246,18 @@ func writeThemeResponse(c *gin.Context, theme *model.Theme) {
 		"id":   theme.ID,
 		"name": theme.Name,
 		"custom": gin.H{
-			"primary":         theme.PrimaryColor,
-			"secondary":       theme.SecondaryColor,
-			"accent":          theme.AccentColor,
-			"background":      theme.Background,
-			"backgroundStyle": theme.BackgroundStyle,
-			"backgroundImage": theme.BackgroundImage,
-			"cardBg":          theme.CardBg,
-			"textPrimary":     theme.TextPrimary,
-			"textSecondary":   theme.TextSecondary,
+			"primary":            theme.PrimaryColor,
+			"secondary":          theme.SecondaryColor,
+			"accent":             theme.AccentColor,
+			"background":         theme.Background,
+			"backgroundStyle":    theme.BackgroundStyle,
+			"backgroundImage":    theme.BackgroundImage,
+			"backgroundSize":     theme.BackgroundSize,
+			"backgroundPosition": theme.BackgroundPosition,
+			"backgroundRepeat":   theme.BackgroundRepeat,
+			"cardBg":             theme.CardBg,
+			"textPrimary":        theme.TextPrimary,
+			"textSecondary":      theme.TextSecondary,
 		},
 	})
 }
