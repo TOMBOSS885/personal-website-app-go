@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
-import { User, Mail, Tag, MessageSquare, Target, Coffee, Star, Loader, ChevronDown, ChevronUp, Globe } from 'lucide-react'
+import { User, Mail, Tag, MessageSquare, Target, Coffee, Star, Loader, ChevronDown, ChevronUp, Globe, Upload } from 'lucide-react'
+import AvatarCropper from '../../components/AvatarCropper'
+import ProfileAvatar from '../../components/ProfileAvatar'
 
 const API_BASE = ''
 
@@ -10,6 +12,8 @@ export default function ProfileManager() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [activeLangTab, setActiveLangTab] = useState('zh') // 当前编辑的语言版本
   const [form, setForm] = useState({})
+  const [avatarFile, setAvatarFile] = useState(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const token = localStorage.getItem('token')
 
   useEffect(() => {
@@ -28,6 +32,7 @@ export default function ProfileManager() {
         setProfile(data)
         setForm({
           // 基础信息（不分语言）
+          avatar: data.avatar || '',
           nickname: data.nickname || '',
           location: data.location || '',
           website: data.website || '',
@@ -81,6 +86,45 @@ export default function ProfileManager() {
     }
   }
 
+  const handleAvatarFileChange = (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件')
+      return
+    }
+    setAvatarFile(file)
+  }
+
+  const handleAvatarUpload = async (blob) => {
+    setUploadingAvatar(true)
+    try {
+      const uploadForm = new FormData()
+      uploadForm.append('file', blob, 'avatar.png')
+      const res = await fetch(`${API_BASE}/api/admin/profile/avatar`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: uploadForm,
+      })
+
+      if (!res.ok) {
+        const error = await res.text()
+        throw new Error(error || '上传失败')
+      }
+
+      const data = await res.json()
+      setForm(current => ({ ...current, avatar: data.avatar || '' }))
+      setProfile(current => ({ ...(current || {}), avatar: data.avatar || '' }))
+      setAvatarFile(null)
+    } catch (err) {
+      console.error('Upload avatar failed:', err)
+      alert(`头像上传失败: ${err.message}`)
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -100,6 +144,13 @@ export default function ProfileManager() {
         <p className="mt-1 text-sm text-gray-500">管理您的公开个人信息</p>
       </div>
 
+      <AvatarCropper
+        file={avatarFile}
+        processing={uploadingAvatar}
+        onCancel={() => setAvatarFile(null)}
+        onConfirm={handleAvatarUpload}
+      />
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* 基础信息 */}
         <div className="bg-white rounded-xl shadow-sm p-6">
@@ -108,6 +159,29 @@ export default function ProfileManager() {
             基本信息
           </h2>
           
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:flex-row sm:items-center">
+            <ProfileAvatar
+              profile={{ ...profile, ...form }}
+              sizeClass="h-24 w-24"
+              textClass="text-4xl"
+              className="ring-4 ring-white shadow-lg"
+            />
+            <div className="flex-1">
+              <div className="font-medium text-gray-900">头像</div>
+              <p className="mt-1 text-sm text-gray-500">上传后会先选择圆形区域，导航栏、首页和底部栏会同步使用。</p>
+              <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 px-4 py-2 text-sm font-medium text-white hover:from-purple-600 hover:to-indigo-600">
+                <Upload className="h-4 w-4" />
+                选择头像
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  onChange={handleAvatarFileChange}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">昵称</label>

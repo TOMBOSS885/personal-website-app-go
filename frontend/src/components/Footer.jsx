@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import { safeExternalHref } from '../utils/safeUrl'
+import ProfileAvatar from './ProfileAvatar'
 
 export default function Footer({ profile }) {
   const currentYear = new Date().getFullYear()
@@ -50,10 +51,14 @@ export default function Footer({ profile }) {
               className="flex items-center space-x-3 mb-6"
             >
               <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                  <span className="text-white font-bold text-xl">{profile?.nickname?.charAt(0) || 'W'}</span>
-                </div>
-                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-xl blur opacity-30" />
+                <ProfileAvatar
+                  profile={profile}
+                  sizeClass="h-12 w-12"
+                  textClass="text-xl"
+                  className="shadow-lg shadow-indigo-500/30"
+                  fallbackClassName="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"
+                />
+                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full blur opacity-30" />
               </div>
               <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
                 {profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')}

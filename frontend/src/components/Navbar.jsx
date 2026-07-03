@@ -7,6 +7,7 @@ import { useTranslation } from '../i18n/translations'
 import LanguageSwitcher from './LanguageSwitcher'
 import { safeExternalHref } from '../utils/safeUrl'
 import { useTheme } from '../context/ThemeContext'
+import ProfileAvatar from './ProfileAvatar'
 
 export default function Navbar({ profile }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -55,14 +56,14 @@ export default function Navbar({ profile }) {
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 whileTap={{ scale: 0.95 }}
               >
+                <ProfileAvatar
+                  profile={profile}
+                  sizeClass="h-12 w-12"
+                  textClass="text-xl"
+                  className="shadow-lg transition-shadow group-hover:shadow-xl"
+                />
                 <div 
-                className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow"
-                style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}
-              >
-                  <span className="text-white font-bold text-xl">{profile?.nickname?.charAt(0) || 'W'}</span>
-                </div>
-                <div 
-                className="absolute -inset-1 rounded-xl blur opacity-30 group-hover:opacity-50 transition-opacity"
+                className="absolute -inset-1 rounded-full blur opacity-30 group-hover:opacity-50 transition-opacity"
                 style={{ background: 'var(--theme-gradient)' }}
               />
               </motion.div>

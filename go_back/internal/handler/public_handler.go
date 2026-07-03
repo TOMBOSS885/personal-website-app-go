@@ -18,6 +18,7 @@ func GetProfile(c *gin.Context) {
 	}
 	isEn := strings.EqualFold(c.DefaultQuery("lang", "zh"), "en")
 	response.Success(c, gin.H{
+		"avatar":         user.Avatar,
 		"nickname":       user.Nickname,
 		"location":       user.Location,
 		"website":        user.Website,

@@ -6,6 +6,7 @@ import ParticleBackground from '../components/ParticleBackground'
 import TypewriterText from '../components/TypewriterText'
 import ArticleCard from '../components/ArticleCard'
 import ProjectCard from '../components/ProjectCard'
+import ProfileAvatar from '../components/ProfileAvatar'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import { safeExternalHref } from '../utils/safeUrl'
@@ -228,10 +229,15 @@ export default function HomePage() {
               {/* 头像容器 */}
               <div className="w-32 h-32 relative">
                 <div className="absolute inset-0 hero-avatar-gradient rounded-full animate-gradient" />
-                <div className="absolute inset-1 hero-avatar-gradient rounded-full flex items-center justify-center hero-avatar-glow" style={{ opacity: 0.9 }}>
-                  <span className="text-white font-bold text-5xl drop-shadow-lg">
-                    {profile?.nickname?.charAt(0) || 'W'}
-                  </span>
+                <div className="absolute inset-1">
+                  <ProfileAvatar
+                    profile={profile}
+                    sizeClass="h-full w-full"
+                    textClass="text-5xl"
+                    className="hero-avatar-glow"
+                    imageClassName="ring-4 ring-white/40"
+                    fallbackClassName="hero-avatar-gradient"
+                  />
                 </div>
                 {/* 状态指示器 */}
                 <motion.div 

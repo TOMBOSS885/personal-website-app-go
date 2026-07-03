@@ -91,6 +91,7 @@ func main() {
 
 			admin.GET("/profile", handler.AdminGetProfile)
 			admin.PUT("/profile", handler.AdminUpdateProfile)
+			admin.POST("/profile/avatar", handler.AdminUploadAvatar)
 			admin.PUT("/account/password", handler.AdminChangePassword)
 
 			admin.POST("/theme", handler.AdminSaveTheme)

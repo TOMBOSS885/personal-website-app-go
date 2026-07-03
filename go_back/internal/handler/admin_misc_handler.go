@@ -2,14 +2,29 @@ package handler
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
+	"personal-website-go/internal/config"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
+
+const maxAvatarImageSize = 5 * 1024 * 1024
+
+var avatarImageExts = []string{".jpg", ".jpeg", ".png", ".webp"}
+var avatarImageTypes = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+}
 
 func AdminGetProjects(c *gin.Context) {
 	projects, err := repository.GetProjects(false)
@@ -206,6 +221,7 @@ func AdminUpdateProfile(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "参数错误")
 		return
 	}
+	existing.Avatar = payload.Avatar
 	existing.Nickname = payload.Nickname
 	existing.Bio = payload.Bio
 	existing.Location = payload.Location
@@ -231,6 +247,75 @@ func AdminUpdateProfile(c *gin.Context) {
 		return
 	}
 	response.Success(c, existing)
+}
+
+func AdminUploadAvatar(c *gin.Context) {
+	existing, err := repository.GetFirstUser()
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "profile not found")
+		return
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil || file == nil {
+		response.Error(c, http.StatusBadRequest, "please upload an avatar image")
+		return
+	}
+	if file.Size > maxAvatarImageSize {
+		response.Error(c, http.StatusBadRequest, "avatar must be smaller than 5MB")
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if !allowedExt(ext, avatarImageExts) {
+		response.Error(c, http.StatusBadRequest, "avatar only supports jpg, png and webp")
+		return
+	}
+	contentType, err := detectUploadedContentType(file)
+	if err != nil || !avatarImageTypes[contentType] {
+		response.Error(c, http.StatusBadRequest, "unsupported avatar image type")
+		return
+	}
+
+	dir := filepath.Join(config.AppConfig.UploadDir, "avatars")
+	name := time.Now().Format("20060102") + "-" + uuid.NewString() + ext
+	target := filepath.Join(dir, name)
+	if err := saveUploadedFile(c, file, dir, target); err != nil {
+		response.Error(c, http.StatusInternalServerError, "avatar upload failed")
+		return
+	}
+
+	oldAvatar := existing.Avatar
+	existing.Avatar = "/uploads/avatars/" + name
+	if err := repository.UpdateUser(existing); err != nil {
+		_ = os.Remove(target)
+		response.Error(c, http.StatusInternalServerError, "avatar save failed")
+		return
+	}
+	removeOldAvatar(oldAvatar)
+
+	response.Success(c, gin.H{"avatar": existing.Avatar})
+}
+
+func removeOldAvatar(avatar string) {
+	if avatar == "" || !strings.HasPrefix(avatar, "/uploads/avatars/") {
+		return
+	}
+	name := filepath.Base(avatar)
+	if name == "" || name == "." || name == ".." {
+		return
+	}
+	dir := filepath.Join(config.AppConfig.UploadDir, "avatars")
+	target := filepath.Join(dir, name)
+	dirAbs, err := filepath.Abs(dir)
+	if err != nil {
+		return
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil || !strings.HasPrefix(targetAbs, dirAbs+string(os.PathSeparator)) {
+		return
+	}
+	_ = os.Remove(targetAbs)
 }
 
 type changePasswordRequest struct {
