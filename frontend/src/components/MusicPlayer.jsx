@@ -8,6 +8,7 @@ const COLLAPSED_WIDTH = 56
 const EDGE_GAP_MOBILE = 16
 const EDGE_GAP_DESKTOP = 24
 const DRAG_THRESHOLD = 6
+const COLLAPSE_DELAY = 3000
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
@@ -32,6 +33,7 @@ export default function MusicPlayer() {
   const dragRef = useRef(null)
   const dragPointRef = useRef(null)
   const dragFrameRef = useRef(null)
+  const collapseTimerRef = useRef(null)
   const suppressClickRef = useRef(false)
   const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(false)
@@ -45,6 +47,7 @@ export default function MusicPlayer() {
   const [dockTop, setDockTop] = useState(DEFAULT_TOP)
   const [dragging, setDragging] = useState(false)
   const [dragPoint, setDragPoint] = useState(null)
+  const [idleCollapsed, setIdleCollapsed] = useState(false)
 
   const fetchSongs = useCallback(async () => {
     if (loaded || loading) return
@@ -97,11 +100,52 @@ export default function MusicPlayer() {
     return () => {
       removeDragListeners()
       cancelDragPaint()
+      clearCollapseTimer()
     }
   }, [])
 
+  const clearCollapseTimer = () => {
+    if (collapseTimerRef.current) {
+      window.clearTimeout(collapseTimerRef.current)
+      collapseTimerRef.current = null
+    }
+  }
+
+  const scheduleCollapse = useCallback(() => {
+    clearCollapseTimer()
+    if (!currentSong || dragging) return
+
+    collapseTimerRef.current = window.setTimeout(() => {
+      setOpen(false)
+      setIdleCollapsed(true)
+    }, COLLAPSE_DELAY)
+  }, [currentSong, dragging])
+
+  const wakePlayer = useCallback(() => {
+    clearCollapseTimer()
+    if (currentSong) {
+      setIdleCollapsed(false)
+    }
+  }, [currentSong])
+
+  const markPlayerActivity = useCallback(() => {
+    wakePlayer()
+    window.setTimeout(scheduleCollapse, 0)
+  }, [scheduleCollapse, wakePlayer])
+
+  useEffect(() => {
+    if (!currentSong || dragging) {
+      clearCollapseTimer()
+      setIdleCollapsed(false)
+      return
+    }
+    setIdleCollapsed(false)
+    scheduleCollapse()
+  }, [currentSong, playing, dragging, scheduleCollapse])
+
   const beginDrag = (event) => {
     if (event.button !== undefined && event.button !== 0) return
+    wakePlayer()
     const rect = playerRef.current?.getBoundingClientRect()
     if (!rect) return
 
@@ -207,7 +251,26 @@ export default function MusicPlayer() {
   const endDrag = (event) => finishDrag(event, true)
   const cancelDrag = (event) => finishDrag(event, false)
 
+  const playNextSong = useCallback(() => {
+    if (songs.length === 0) {
+      setPlaying(false)
+      return
+    }
+
+    const currentIndex = songs.findIndex(song => song.id === currentSong?.id)
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % songs.length : 0
+    if (currentSong?.id === songs[nextIndex]?.id && audioRef.current) {
+      audioRef.current.currentTime = 0
+      audioRef.current.play()
+        .then(() => setPlaying(true))
+        .catch(() => setPlaying(false))
+    }
+    setCurrentSong(songs[nextIndex])
+    setCurrentTime(0)
+  }, [currentSong, songs])
+
   const selectSong = (song) => {
+    markPlayerActivity()
     setCurrentSong(song)
     setOpen(false)
     setCurrentTime(0)
@@ -215,6 +278,7 @@ export default function MusicPlayer() {
 
   const togglePlay = async () => {
     if (suppressClickRef.current) return
+    markPlayerActivity()
     if (!currentSong) {
       fetchSongs()
       setOpen(value => !value)
@@ -236,12 +300,20 @@ export default function MusicPlayer() {
 
   const toggleList = () => {
     if (suppressClickRef.current) return
+    markPlayerActivity()
     fetchSongs()
     setOpen(value => !value)
   }
 
+  const seekTo = (value) => {
+    if (!audioRef.current || !duration) return
+    const nextTime = clamp(Number(value), 0, duration)
+    audioRef.current.currentTime = nextTime
+    setCurrentTime(nextTime)
+  }
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
-  const collapsed = dragging || !currentSong
+  const collapsed = dragging || !currentSong || idleCollapsed
   const showText = !dragging && !currentSong
   const panelDropsUp = typeof window !== 'undefined' && dockTop > window.innerHeight / 2
   const dockStyle = dragging && dragPoint
@@ -260,6 +332,8 @@ export default function MusicPlayer() {
       ref={rootRef}
       className="fixed z-[70]"
       style={dockStyle}
+      onMouseEnter={wakePlayer}
+      onMouseLeave={scheduleCollapse}
     >
       <audio
         ref={audioRef}
@@ -267,7 +341,7 @@ export default function MusicPlayer() {
         preload="none"
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime || 0)}
-        onEnded={() => setPlaying(false)}
+        onEnded={playNextSong}
       />
 
       <motion.div
@@ -319,7 +393,7 @@ export default function MusicPlayer() {
             )}
           </AnimatePresence>
 
-          {!dragging && currentSong && (
+          {!dragging && currentSong && !idleCollapsed && (
             <>
               <button
                 type="button"
@@ -332,10 +406,32 @@ export default function MusicPlayer() {
                   {currentSong.artist || '未知歌手'} · {formatTime(currentTime)} / {formatTime(duration)}
                 </div>
               </button>
-              <div className="h-1.5 w-24 overflow-hidden rounded-full bg-gray-200">
+              <div
+                className="relative h-2 w-24 overflow-hidden rounded-full bg-gray-200"
+                onPointerDown={(event) => {
+                  event.stopPropagation()
+                  wakePlayer()
+                }}
+                onPointerUp={(event) => {
+                  event.stopPropagation()
+                  scheduleCollapse()
+                }}
+                onClick={(event) => event.stopPropagation()}
+              >
                 <div
                   className="h-full rounded-full transition-[width]"
                   style={{ width: `${progress}%`, background: 'var(--theme-gradient)' }}
+                />
+                <input
+                  type="range"
+                  min="0"
+                  max={duration || 0}
+                  step="0.1"
+                  value={duration > 0 ? currentTime : 0}
+                  onChange={(event) => seekTo(event.target.value)}
+                  onInput={(event) => seekTo(event.currentTarget.value)}
+                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  aria-label="播放进度"
                 />
               </div>
               <button
