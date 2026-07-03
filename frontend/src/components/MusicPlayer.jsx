@@ -48,6 +48,7 @@ export default function MusicPlayer() {
   const [dragging, setDragging] = useState(false)
   const [dragPoint, setDragPoint] = useState(null)
   const [idleCollapsed, setIdleCollapsed] = useState(false)
+  const [seeking, setSeeking] = useState(false)
 
   const fetchSongs = useCallback(async () => {
     if (loaded || loading) return
@@ -312,6 +313,18 @@ export default function MusicPlayer() {
     setCurrentTime(nextTime)
   }
 
+  const beginSeek = (event) => {
+    event.stopPropagation()
+    setSeeking(true)
+    wakePlayer()
+  }
+
+  const endSeek = (event) => {
+    event.stopPropagation()
+    setSeeking(false)
+    scheduleCollapse()
+  }
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
   const collapsed = dragging || !currentSong || idleCollapsed
   const showText = !dragging && !currentSong
@@ -422,21 +435,18 @@ export default function MusicPlayer() {
                 </div>
               </button>
               <div
-                className="relative h-2 w-24 overflow-hidden rounded-full bg-gray-200"
-                onPointerDown={(event) => {
-                  event.stopPropagation()
-                  wakePlayer()
-                }}
-                onPointerUp={(event) => {
-                  event.stopPropagation()
-                  scheduleCollapse()
-                }}
+                className={`relative h-5 w-28 rounded-full ${seeking ? 'music-progress-seeking' : ''}`}
+                onPointerDown={beginSeek}
+                onPointerUp={endSeek}
+                onPointerCancel={endSeek}
                 onClick={(event) => event.stopPropagation()}
               >
-                <div
-                  className="h-full rounded-full transition-[width]"
-                  style={{ width: `${progress}%`, background: 'var(--theme-gradient)' }}
-                />
+                <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className="h-full rounded-full transition-[width]"
+                    style={{ width: `${progress}%`, background: 'var(--theme-gradient)' }}
+                  />
+                </div>
                 <input
                   type="range"
                   min="0"
@@ -445,7 +455,7 @@ export default function MusicPlayer() {
                   value={duration > 0 ? currentTime : 0}
                   onChange={(event) => seekTo(event.target.value)}
                   onInput={(event) => seekTo(event.currentTarget.value)}
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                  className="music-progress-range absolute inset-0 h-full w-full cursor-pointer"
                   aria-label="播放进度"
                 />
               </div>

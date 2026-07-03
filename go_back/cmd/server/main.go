@@ -59,6 +59,7 @@ func main() {
 			public.GET("/skills", handler.GetSkills)
 			public.GET("/feature-cards", handler.GetFeatureCards)
 			public.GET("/theme", handler.GetTheme)
+			public.GET("/theme/background-images", handler.AdminListThemeBackgrounds)
 			public.GET("/live2d-model", handler.GetLive2DModel)
 			public.GET("/music", handler.GetMusics)
 		}

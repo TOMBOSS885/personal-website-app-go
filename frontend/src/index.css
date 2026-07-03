@@ -1002,6 +1002,58 @@ img {
   transition: opacity 240ms ease;
 }
 
+.music-progress-range {
+  appearance: none;
+  background: transparent;
+  outline: none;
+}
+
+.music-progress-range::-webkit-slider-runnable-track {
+  height: 1.25rem;
+  background: transparent;
+}
+
+.music-progress-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: 0.1875rem;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--theme-primary);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.28);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.music-progress-range:hover::-webkit-slider-thumb,
+.music-progress-range:active::-webkit-slider-thumb,
+.music-progress-seeking .music-progress-range::-webkit-slider-thumb {
+  transform: scale(1.28);
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.4);
+}
+
+.music-progress-range::-moz-range-track {
+  height: 1.25rem;
+  background: transparent;
+}
+
+.music-progress-range::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 2px solid #fff;
+  border-radius: 9999px;
+  background: var(--theme-primary);
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.28);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.music-progress-range:hover::-moz-range-thumb,
+.music-progress-range:active::-moz-range-thumb,
+.music-progress-seeking .music-progress-range::-moz-range-thumb {
+  transform: scale(1.28);
+  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.4);
+}
+
 @media (max-width: 768px), (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
