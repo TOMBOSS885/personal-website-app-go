@@ -315,6 +315,11 @@ export default function MusicPlayer() {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
   const collapsed = dragging || !currentSong || idleCollapsed
   const showText = !dragging && !currentSong
+  const showSongInfo = !dragging && currentSong && !idleCollapsed
+  const expandedWidth = typeof window !== 'undefined'
+    ? Math.min(368, window.innerWidth - edgeGap() * 2)
+    : 368
+  const playerWidth = collapsed ? (showText ? 104 : COLLAPSED_WIDTH) : expandedWidth
   const panelDropsUp = typeof window !== 'undefined' && dockTop > window.innerHeight / 2
   const dockStyle = dragging && dragPoint
     ? { left: dragPoint.x, top: dragPoint.y, touchAction: 'none' }
@@ -349,15 +354,16 @@ export default function MusicPlayer() {
         layout
         onPointerDown={beginDrag}
         animate={{
+          width: playerWidth,
           scale: dragging ? 1.06 : 1,
           boxShadow: dragging
             ? '0 22px 50px rgba(79, 70, 229, 0.28)'
             : '0 18px 35px rgba(79, 70, 229, 0.14)',
         }}
-        transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 34 }}
         className={`select-none overflow-hidden rounded-full border border-white/70 bg-white/90 backdrop-blur-xl ${
           dragging ? 'cursor-grabbing ring-4 ring-indigo-300/30' : 'cursor-grab'
-        } ${collapsed ? (showText ? 'w-[6.5rem]' : 'w-14') : 'w-[min(23rem,calc(100vw-2rem))]'}`}
+        }`}
       >
         <div className="flex h-14 items-center gap-2 px-2">
           <button
@@ -381,11 +387,12 @@ export default function MusicPlayer() {
               <motion.button
                 key="compact-label"
                 type="button"
-                initial={{ opacity: 0, x: -8 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -8 }}
+                initial={{ width: 0, opacity: 0, x: -6 }}
+                animate={{ width: 40, opacity: 1, x: 0 }}
+                exit={{ width: 0, opacity: 0, x: -6 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                 onClick={toggleList}
-                className="pr-2 text-sm font-semibold text-gray-800"
+                className="overflow-hidden whitespace-nowrap pr-2 text-sm font-semibold text-gray-800"
                 title="歌曲列表"
               >
                 音乐
@@ -393,8 +400,16 @@ export default function MusicPlayer() {
             )}
           </AnimatePresence>
 
-          {!dragging && currentSong && !idleCollapsed && (
-            <>
+          <AnimatePresence initial={false}>
+            {showSongInfo && (
+              <motion.div
+                key="song-info"
+                initial={{ width: 0, opacity: 0, x: -6 }}
+                animate={{ width: 'auto', opacity: 1, x: 0 }}
+                exit={{ width: 0, opacity: 0, x: -6 }}
+                transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
+              >
               <button
                 type="button"
                 onClick={toggleList}
@@ -442,8 +457,9 @@ export default function MusicPlayer() {
               >
                 <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
               </button>
-            </>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </motion.div>
 
