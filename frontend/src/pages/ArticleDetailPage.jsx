@@ -101,9 +101,10 @@ export default function ArticleDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950/80">
+    <div className="min-h-screen bg-transparent">
       {/* Notion风格 - 顶部区域 */}
       <div className="max-w-4xl mx-auto px-4 pt-28 pb-8">
+        <div className="rounded-3xl border border-white/50 bg-white/60 px-5 py-6 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/50 md:px-8">
         {/* 第一行：返回按钮 */}
         <a 
           href="/blog"
@@ -141,6 +142,7 @@ export default function ArticleDetailPage() {
           <span>·</span>
           <span>{article.views || 0} 阅读</span>
         </div>
+        </div>
       </div>
 
       {/* 文章内容 - Notion风格简洁区域 */}
@@ -151,6 +153,7 @@ export default function ArticleDetailPage() {
         className="max-w-4xl mx-auto px-4 pt-8 pb-12"
       >
         {/* 文章内容 - 优化Markdown渲染样式 */}
+        <div className="rounded-3xl border border-white/60 bg-white/75 px-5 py-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:px-8 md:py-8">
         <motion.article
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -182,6 +185,7 @@ export default function ArticleDetailPage() {
             {article.content}
           </ReactMarkdown>
         </motion.article>
+        </div>
 
         {/* 标签区域 */}
         {article.tags && (
