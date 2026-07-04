@@ -535,7 +535,7 @@ export default function HomePage() {
                           >
                             <div
                               className="skill-bar-fill"
-                              style={{ '--skill-progress': proficiency / 100 }}
+                              style={{ '--skill-progress': `${proficiency / 100}` }}
                             />
                           </div>
                         </motion.div>

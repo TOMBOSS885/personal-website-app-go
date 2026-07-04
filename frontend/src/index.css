@@ -1244,8 +1244,10 @@ html.theme-dark .admin-shell ::-webkit-scrollbar-track {
 
   .skill-bar-fill {
     position: absolute;
-    inset-y: 0;
+    top: 0;
+    bottom: 0;
     left: 0;
+    height: 100%;
     width: 100%;
     background: var(--theme-gradient, linear-gradient(135deg, #10b981, #6366f1));
     border-radius: 9999px;
