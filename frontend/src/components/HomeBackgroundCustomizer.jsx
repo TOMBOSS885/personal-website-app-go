@@ -98,10 +98,17 @@ export default function HomeBackgroundCustomizer() {
         onClick={() => setOpen(value => !value)}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
-        className="flex h-12 w-12 items-center justify-center rounded-full border border-white/70 bg-white/90 text-gray-700 shadow-xl shadow-indigo-500/15 backdrop-blur-xl transition-colors hover:bg-white hover:text-gray-950"
+        className="group relative flex h-12 min-w-12 items-center justify-center gap-2 rounded-full border border-white/80 px-3 text-white shadow-2xl shadow-indigo-500/30 ring-4 ring-white/25 backdrop-blur-xl transition-all hover:-translate-y-0.5 hover:shadow-indigo-500/45 sm:px-4"
+        style={{ background: 'var(--theme-gradient)' }}
         title="背景设置"
       >
-        {open ? <X className="h-5 w-5" /> : <Settings2 className="h-5 w-5" />}
+        {open ? <X className="h-5 w-5 shrink-0" /> : <Settings2 className="h-5 w-5 shrink-0" />}
+        <span className="hidden whitespace-nowrap text-sm font-semibold tracking-normal sm:inline">
+          {open ? '关闭' : '背景'}
+        </span>
+        {!open && (
+          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-400 shadow-lg shadow-emerald-400/50" />
+        )}
       </motion.button>
 
       <AnimatePresence>
