@@ -525,10 +525,17 @@ export default function HomePage() {
                             <span className="text-gray-700 font-medium">{skill.name}</span>
                             <span className="text-indigo-600 font-semibold">{proficiency}%</span>
                           </div>
-                          <div className="skill-bar">
+                          <div
+                            className="skill-bar"
+                            role="progressbar"
+                            aria-valuenow={proficiency}
+                            aria-valuemin="0"
+                            aria-valuemax="100"
+                            aria-label={`${skill.name} ${proficiency}%`}
+                          >
                             <div
                               className="skill-bar-fill"
-                              style={{ width: `${proficiency}%` }}
+                              style={{ '--skill-progress': proficiency / 100 }}
                             />
                           </div>
                         </motion.div>

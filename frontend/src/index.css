@@ -1237,7 +1237,7 @@ html.theme-dark .admin-shell ::-webkit-scrollbar-track {
   .skill-bar {
     position: relative;
     height: 0.75rem;
-    background: #e5e7eb;
+    background: rgba(226, 232, 240, 0.92);
     border-radius: 9999px;
     overflow: hidden;
   }
@@ -1246,11 +1246,15 @@ html.theme-dark .admin-shell ::-webkit-scrollbar-track {
     position: absolute;
     inset-y: 0;
     left: 0;
+    width: 100%;
     background: var(--theme-gradient, linear-gradient(135deg, #10b981, #6366f1));
     border-radius: 9999px;
-    transition: width 1s ease-out;
+    transform: scaleX(var(--skill-progress, 0));
+    transform-origin: left center;
+    transition: transform 1s ease-out;
     animation: shimmer 2s infinite;
     background-size: 200% 100%;
+    box-shadow: 0 0 14px color-mix(in srgb, var(--theme-primary) 45%, transparent);
   }
 
   /* 标签样式 */
