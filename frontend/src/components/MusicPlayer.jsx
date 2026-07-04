@@ -36,6 +36,10 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
 
+function isInteractiveTarget(target) {
+  return Boolean(target?.closest?.('button, input, select, textarea, a, label, [data-drag-ignore="true"]'))
+}
+
 export default function MusicPlayer() {
   const audioRef = useRef(null)
   const rootRef = useRef(null)
@@ -725,7 +729,9 @@ function LyricsModule({
 
   const startDrag = (event) => {
     if (event.button !== undefined && event.button !== 0) return
+    if (isInteractiveTarget(event.target)) return
     event.preventDefault()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
     const rect = moduleRef.current?.getBoundingClientRect()
     dragRef.current = {
       offsetX: event.clientX - (rect?.left || position.x),
@@ -741,18 +747,19 @@ function LyricsModule({
       ref={moduleRef}
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="lyrics-module-shell fixed z-[65] overflow-hidden rounded-2xl border border-white/70 shadow-2xl shadow-indigo-500/10 backdrop-blur-xl dark:border-slate-700/70"
+      onPointerDown={startDrag}
+      className="lyrics-module-shell fixed z-[65] touch-none select-none overflow-hidden rounded-2xl border border-white/70 shadow-2xl shadow-indigo-500/10 backdrop-blur-xl dark:border-slate-700/70"
       style={{
         left: position.x,
         top: position.y,
         width: moduleWidth,
         height: shellHeight,
+        touchAction: 'none',
         '--lyrics-bg-opacity': settings.opacity / 100,
       }}
     >
       <div
-        className="flex cursor-grab items-center justify-between gap-2 border-b border-white/60 px-3 py-2 active:cursor-grabbing dark:border-slate-800/80"
-        onPointerDown={startDrag}
+        className="flex cursor-grab items-center justify-between gap-2 border-b border-white/60 px-4 py-3 active:cursor-grabbing dark:border-slate-800/80 sm:px-3 sm:py-2"
       >
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-slate-400">
