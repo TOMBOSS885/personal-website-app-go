@@ -18,8 +18,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const maxArticleImageSize = 10 * 1024 * 1024
-
 var articleImageExts = []string{".jpg", ".jpeg", ".png", ".gif", ".webp"}
 var articleImageTypes = map[string]bool{
 	"image/jpeg": true,
@@ -76,13 +74,14 @@ func AdminListArticleImages(c *gin.Context) {
 }
 
 func AdminUploadArticleImage(c *gin.Context) {
+	settings := getOrCreateUploadSettings()
 	file, err := c.FormFile("file")
 	if err != nil || file == nil {
 		response.Error(c, http.StatusBadRequest, "请选择要上传的图片。")
 		return
 	}
-	if file.Size > maxArticleImageSize {
-		response.Error(c, http.StatusBadRequest, "图片不能超过 10MB。")
+	if file.Size > bytesFromMB(settings.ArticleImageMaxMB) {
+		response.Error(c, http.StatusBadRequest, "image exceeds configured upload size limit")
 		return
 	}
 	ext := strings.ToLower(filepath.Ext(file.Filename))
@@ -96,7 +95,7 @@ func AdminUploadArticleImage(c *gin.Context) {
 		return
 	}
 
-	if err := validateUploadedImageDimensions(file, 0, maxGeneralImageDimension, maxGeneralImagePixels); err != nil {
+	if err := validateUploadedImageDimensions(file, 0, settings.ImageMaxDimension, settings.ImageMaxPixels); err != nil {
 		response.Error(c, http.StatusBadRequest, "invalid or oversized image dimensions")
 		return
 	}

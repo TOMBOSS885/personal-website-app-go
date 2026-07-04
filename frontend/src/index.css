@@ -828,6 +828,11 @@ html.theme-dark .admin-shell .bg-yellow-100 {
   background-color: rgba(234, 179, 8, 0.16);
 }
 
+html.theme-dark .admin-shell .bg-amber-50,
+html.theme-dark .admin-shell .bg-amber-100 {
+  background-color: rgba(245, 158, 11, 0.16);
+}
+
 html.theme-dark .admin-shell .bg-purple-100,
 html.theme-dark .admin-shell .bg-purple-50 {
   background-color: rgba(168, 85, 247, 0.16);
@@ -852,6 +857,11 @@ html.theme-dark .admin-shell .text-blue-700 {
 
 html.theme-dark .admin-shell .text-yellow-700 {
   color: #fde68a;
+}
+
+html.theme-dark .admin-shell .text-amber-800,
+html.theme-dark .admin-shell .text-amber-700 {
+  color: #fcd34d;
 }
 
 html.theme-dark .admin-shell .text-purple-700,

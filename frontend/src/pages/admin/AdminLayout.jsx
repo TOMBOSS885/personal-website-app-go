@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FileText, Folder, Award, User, LogOut, Palette, Sparkles, Bot, LayoutGrid, ShieldCheck, Music, Sun, Moon } from 'lucide-react'
+import { LayoutDashboard, FileText, Folder, Award, User, LogOut, Palette, Sparkles, Bot, LayoutGrid, ShieldCheck, Music, Sun, Moon, UploadCloud } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
 export default function AdminLayout() {
@@ -23,6 +23,7 @@ export default function AdminLayout() {
     { path: '/admin/live2d', label: 'Live2D 管理', icon: Bot },
     { path: '/admin/music', label: '音乐管理', icon: Music },
     { path: '/admin/profile', label: '个人信息', icon: User },
+    { path: '/admin/upload-settings', label: '上传限制', icon: UploadCloud },
     { path: '/admin/account', label: '账号安全', icon: ShieldCheck },
   ]
 

@@ -23,6 +23,7 @@ const ProfileManager = lazy(() => import('./pages/admin/ProfileManager'))
 const ThemeManager = lazy(() => import('./pages/admin/ThemeManager'))
 const Live2DManager = lazy(() => import('./pages/admin/Live2DManager'))
 const MusicManager = lazy(() => import('./pages/admin/MusicManager'))
+const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsManager'))
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
@@ -109,6 +110,7 @@ function App() {
                   <Route path="theme" element={<ThemeManager />} />
                   <Route path="live2d" element={<Live2DManager />} />
                   <Route path="music" element={<MusicManager />} />
+                  <Route path="upload-settings" element={<UploadSettingsManager />} />
                 </Route>
                 <Route path="/*" element={
                   <>

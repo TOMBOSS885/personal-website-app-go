@@ -18,8 +18,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const maxThemeBackgroundSize = 10 * 1024 * 1024
-
 var themeBackgroundExts = []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif"}
 
 type themeSaveRequest struct {
@@ -113,13 +111,14 @@ func AdminListThemeBackgrounds(c *gin.Context) {
 }
 
 func AdminUploadThemeBackground(c *gin.Context) {
+	settings := getOrCreateUploadSettings()
 	file, err := c.FormFile("file")
 	if err != nil || file == nil {
 		response.Error(c, http.StatusBadRequest, "请上传图片文件")
 		return
 	}
-	if file.Size > maxThemeBackgroundSize {
-		response.Error(c, http.StatusBadRequest, "图片不能超过 10MB")
+	if file.Size > bytesFromMB(settings.ThemeBackgroundMaxMB) {
+		response.Error(c, http.StatusBadRequest, "image exceeds configured upload size limit")
 		return
 	}
 	contentType, err := detectUploadedContentType(file)
@@ -135,7 +134,7 @@ func AdminUploadThemeBackground(c *gin.Context) {
 	}
 
 	if ext != ".avif" {
-		if err := validateUploadedImageDimensions(file, 0, maxGeneralImageDimension, maxGeneralImagePixels); err != nil {
+		if err := validateUploadedImageDimensions(file, 0, settings.ImageMaxDimension, settings.ImageMaxPixels); err != nil {
 			response.Error(c, http.StatusBadRequest, "invalid or oversized image dimensions")
 			return
 		}

@@ -18,9 +18,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const maxMusicSize = 50 * 1024 * 1024
-const maxMusicBatchCount = 50
-
 var musicExts = []string{".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}
 var musicTypes = map[string]bool{
 	"audio/mpeg":               true,
@@ -58,6 +55,7 @@ func AdminGetMusics(c *gin.Context) {
 }
 
 func AdminUploadMusic(c *gin.Context) {
+	settings := getOrCreateUploadSettings()
 	form, err := c.MultipartForm()
 	if err != nil || form == nil {
 		response.Error(c, http.StatusBadRequest, "请选择要上传的音乐文件")
@@ -70,14 +68,14 @@ func AdminUploadMusic(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "请选择要上传的音乐文件")
 		return
 	}
-	if len(files) > maxMusicBatchCount {
-		response.Error(c, http.StatusBadRequest, "单次最多上传 50 个音乐文件")
+	if len(files) > settings.MusicBatchMaxCount {
+		response.Error(c, http.StatusBadRequest, "too many music files in one upload")
 		return
 	}
 
 	prepared := make([]preparedMusicFile, 0, len(files))
 	for _, file := range files {
-		item, err := prepareMusicFile(file)
+		item, err := prepareMusicFile(file, settings)
 		if err != nil {
 			response.Error(c, http.StatusBadRequest, err.Error())
 			return
@@ -175,12 +173,12 @@ func AdminBatchDeleteMusic(c *gin.Context) {
 	response.Success(c, gin.H{"deleted": len(existing)})
 }
 
-func prepareMusicFile(file *multipart.FileHeader) (preparedMusicFile, error) {
+func prepareMusicFile(file *multipart.FileHeader, settings *model.UploadSettings) (preparedMusicFile, error) {
 	if file == nil {
 		return preparedMusicFile{}, errors.New("请选择要上传的音乐文件")
 	}
-	if file.Size > maxMusicSize {
-		return preparedMusicFile{}, errors.New(file.Filename + " 不能超过 50MB")
+	if file.Size > bytesFromMB(settings.MusicFileMaxMB) {
+		return preparedMusicFile{}, errors.New(file.Filename + " exceeds configured upload size limit")
 	}
 
 	ext := strings.ToLower(filepath.Ext(file.Filename))

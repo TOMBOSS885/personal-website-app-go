@@ -17,11 +17,6 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	maxLive2DTotalSize = 200 * 1024 * 1024
-	maxLive2DFiles     = 300
-)
-
 func AdminGetLive2DModels(c *gin.Context) {
 	settings := getOrCreateLive2DSettings()
 	models, err := repository.GetLive2DModels(false, false)
@@ -62,6 +57,7 @@ func AdminUpdateLive2DSettings(c *gin.Context) {
 }
 
 func AdminUploadLive2DModel(c *gin.Context) {
+	settings := getOrCreateUploadSettings()
 	form, err := c.MultipartForm()
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, "Please upload a complete Live2D model folder.")
@@ -75,7 +71,7 @@ func AdminUploadLive2DModel(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "Please upload a complete Live2D model folder.")
 		return
 	}
-	if len(files) > maxLive2DFiles {
+	if len(files) > settings.Live2DFileMaxCount {
 		response.Error(c, http.StatusBadRequest, "Too many files in the Live2D upload.")
 		return
 	}
@@ -86,8 +82,8 @@ func AdminUploadLive2DModel(c *gin.Context) {
 	var totalSize int64
 	for i, file := range files {
 		totalSize += file.Size
-		if totalSize > maxLive2DTotalSize {
-			response.Error(c, http.StatusBadRequest, "Live2D upload must not exceed 200MB.")
+		if totalSize > bytesFromMB(settings.Live2DTotalMaxMB) {
+			response.Error(c, http.StatusBadRequest, "Live2D upload exceeds configured total size limit.")
 			return
 		}
 		cleanPath := normalizeRelativePath(paths[i])

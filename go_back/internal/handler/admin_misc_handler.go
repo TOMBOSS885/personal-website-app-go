@@ -18,8 +18,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const maxAvatarImageSize = 5 * 1024 * 1024
-
 var avatarImageExts = []string{".jpg", ".jpeg", ".png", ".webp"}
 var avatarImageTypes = map[string]bool{
 	"image/jpeg": true,
@@ -250,6 +248,7 @@ func AdminUpdateProfile(c *gin.Context) {
 }
 
 func AdminUploadAvatar(c *gin.Context) {
+	settings := getOrCreateUploadSettings()
 	existing, err := repository.GetFirstUser()
 	if err != nil {
 		response.Error(c, http.StatusNotFound, "profile not found")
@@ -261,8 +260,8 @@ func AdminUploadAvatar(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "please upload an avatar image")
 		return
 	}
-	if file.Size > maxAvatarImageSize {
-		response.Error(c, http.StatusBadRequest, "avatar must be smaller than 5MB")
+	if file.Size > bytesFromMB(settings.AvatarImageMaxMB) {
+		response.Error(c, http.StatusBadRequest, "avatar exceeds configured upload size limit")
 		return
 	}
 
@@ -276,7 +275,7 @@ func AdminUploadAvatar(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "unsupported avatar image type")
 		return
 	}
-	if err := validateUploadedImageDimensions(file, minAvatarImageDimension, maxAvatarImageDimension, maxAvatarImagePixels); err != nil {
+	if err := validateUploadedImageDimensions(file, settings.AvatarMinDimension, settings.AvatarMaxDimension, settings.AvatarMaxPixels); err != nil {
 		response.Error(c, http.StatusBadRequest, "invalid avatar image")
 		return
 	}

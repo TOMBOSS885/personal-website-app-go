@@ -27,6 +27,7 @@ func main() {
 			&model.Live2DModel{},
 			&model.Live2DSettings{},
 			&model.Music{},
+			&model.UploadSettings{},
 		); err != nil {
 			log.Fatalf("database migration failed: %v", err)
 		}
@@ -93,6 +94,8 @@ func main() {
 			admin.PUT("/profile", handler.AdminUpdateProfile)
 			admin.POST("/profile/avatar", handler.AdminUploadAvatar)
 			admin.PUT("/account/password", handler.AdminChangePassword)
+			admin.GET("/upload-settings", handler.AdminGetUploadSettings)
+			admin.PUT("/upload-settings", handler.AdminUpdateUploadSettings)
 
 			admin.POST("/theme", handler.AdminSaveTheme)
 			admin.GET("/theme/background-images", handler.AdminListThemeBackgrounds)
