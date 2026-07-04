@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { preloadImage } from '../utils/assets'
+import { fetchWithTimeout } from '../utils/network'
 
 const ThemeContext = createContext(null)
 const API_BASE = ''
@@ -224,7 +225,7 @@ export function ThemeProvider({ children }) {
           }
         }
 
-        const res = await fetch(`${API_BASE}/api/public/theme`)
+        const res = await fetchWithTimeout(`${API_BASE}/api/public/theme`, {}, 7000)
         if (res.ok) {
           const data = await res.json()
           if (data.preset) {

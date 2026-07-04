@@ -5,6 +5,7 @@ import { LanguageProvider } from './contexts/LanguageContext'
 import Navbar from './components/Navbar'
 import CursorEffects from './components/CursorEffects'
 import DeferredMount from './components/DeferredMount'
+import { fetchWithTimeout } from './utils/network'
 
 const API_BASE = ''
 
@@ -74,7 +75,7 @@ function App() {
   })
 
   const loadProfile = useCallback(() => {
-    fetch(`${API_BASE}/api/public/profile`)
+    fetchWithTimeout(`${API_BASE}/api/public/profile`, {}, 7000)
       .then(res => res.json())
       .then(data => {
         setProfile(data)

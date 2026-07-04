@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, FileText, Loader, Move, Music, Pause, Play, Settings, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
+import { fetchWithTimeout } from '../utils/network'
 
 const DEFAULT_TOP = 96
 const PLAYER_HEIGHT = 56
@@ -9,6 +10,7 @@ const EDGE_GAP_MOBILE = 16
 const EDGE_GAP_DESKTOP = 24
 const DRAG_THRESHOLD = 6
 const COLLAPSE_DELAY = 3000
+const PLAYLIST_REFRESH_INTERVAL = 45000
 const LYRICS_SETTINGS_KEY = 'music-lyrics-module-settings'
 const DEFAULT_LYRICS_SETTINGS = {
   enabled: true,
@@ -55,6 +57,9 @@ export default function MusicPlayer() {
   const dragFrameRef = useRef(null)
   const collapseTimerRef = useRef(null)
   const suppressClickRef = useRef(false)
+  const songsRef = useRef([])
+  const playlistFetchedAtRef = useRef(0)
+  const playlistRefreshPromiseRef = useRef(null)
   const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
@@ -73,17 +78,61 @@ export default function MusicPlayer() {
   const [lyricsStatus, setLyricsStatus] = useState('none')
   const [lyricsSettings, setLyricsSettings] = useState(() => readLyricsSettings())
 
-  const loadPublicSongs = useCallback(async () => {
-    const res = await fetch('/api/public/music')
-    const data = res.ok ? await res.json() : []
-    const list = Array.isArray(data) ? data.filter(isPlayableSong) : []
+  const setPublicSongs = useCallback((list) => {
+    songsRef.current = list
     setSongs(list)
     setLoaded(true)
-    return list
+    playlistFetchedAtRef.current = Date.now()
   }, [])
 
+  const getCachedPublicSongs = useCallback(() => songsRef.current.filter(isPlayableSong), [])
+
+  const isPlaylistFresh = useCallback(() => (
+    Date.now() - playlistFetchedAtRef.current < PLAYLIST_REFRESH_INTERVAL
+  ), [])
+
+  const loadPublicSongs = useCallback(async ({ force = false } = {}) => {
+    const cached = getCachedPublicSongs()
+    if (!force && playlistFetchedAtRef.current > 0 && isPlaylistFresh()) {
+      return cached
+    }
+    if (playlistRefreshPromiseRef.current) {
+      return playlistRefreshPromiseRef.current
+    }
+
+    playlistRefreshPromiseRef.current = fetchWithTimeout('/api/public/music', {}, 6000)
+      .then(async res => {
+        const data = res.ok ? await res.json() : []
+        const list = Array.isArray(data) ? data.filter(isPlayableSong) : []
+        setPublicSongs(list)
+        return list
+      })
+      .finally(() => {
+        playlistRefreshPromiseRef.current = null
+      })
+
+    return playlistRefreshPromiseRef.current
+  }, [getCachedPublicSongs, isPlaylistFresh, setPublicSongs])
+
+  useEffect(() => {
+    songsRef.current = songs
+  }, [songs])
+
+  useEffect(() => {
+    if (!currentSong) return
+    const stillPublic = isPlayableSong(currentSong)
+      && (!loaded || songs.some(song => song.id === currentSong.id))
+    if (stillPublic) return
+    setCurrentSong(null)
+    setPlaying(false)
+    setCurrentTime(0)
+    if (audioRef.current) {
+      audioRef.current.pause()
+    }
+  }, [currentSong, loaded, songs])
+
   const fetchSongs = useCallback(async () => {
-    if (loaded || loading) return songs.filter(isPlayableSong)
+    if ((loaded || loading) && isPlaylistFresh()) return getCachedPublicSongs()
     setLoading(true)
     try {
       return await loadPublicSongs()
@@ -93,7 +142,7 @@ export default function MusicPlayer() {
     } finally {
       setLoading(false)
     }
-  }, [loadPublicSongs, loaded, loading, songs])
+  }, [getCachedPublicSongs, isPlaylistFresh, loadPublicSongs, loaded, loading])
 
   useEffect(() => {
     if (!currentSong || !audioRef.current) return

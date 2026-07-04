@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { preloadImage, resolveAssetUrl } from '../utils/assets'
-import { cancelIdle, isConstrainedConnection, isLowEndDevice, requestIdle } from '../utils/network'
+import { cancelIdle, fetchWithTimeout, isConstrainedConnection, isLowEndDevice, requestIdle } from '../utils/network'
 
 const API_BASE = ''
 
@@ -15,7 +15,7 @@ export default function Live2DWidget() {
 
     async function loadModel() {
       try {
-        const res = await fetch(`${API_BASE}/api/public/live2d-model`)
+        const res = await fetchWithTimeout(`${API_BASE}/api/public/live2d-model`, {}, 7000)
         if (!res.ok) {
           return
         }
