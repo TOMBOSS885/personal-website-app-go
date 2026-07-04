@@ -29,6 +29,10 @@ func CreateMusic(music *model.Music) error {
 	return db.DB.Create(music).Error
 }
 
+func UpdateMusic(music *model.Music) error {
+	return db.DB.Save(music).Error
+}
+
 func DeleteMusic(id uint64) error {
 	return db.DB.Delete(&model.Music{}, id).Error
 }

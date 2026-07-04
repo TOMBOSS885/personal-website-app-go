@@ -1,5 +1,22 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, FileText, Folder, Award, User, LogOut, Palette, Sparkles, Bot, LayoutGrid, ShieldCheck, Music, Sun, Moon, UploadCloud } from 'lucide-react'
+import {
+  Activity,
+  Award,
+  Bot,
+  FileText,
+  Folder,
+  LayoutDashboard,
+  LayoutGrid,
+  LogOut,
+  Moon,
+  Music,
+  Palette,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  UploadCloud,
+  User,
+} from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
 export default function AdminLayout() {
@@ -24,23 +41,24 @@ export default function AdminLayout() {
     { path: '/admin/music', label: '音乐管理', icon: Music },
     { path: '/admin/profile', label: '个人信息', icon: User },
     { path: '/admin/upload-settings', label: '上传限制', icon: UploadCloud },
+    { path: '/admin/stability', label: '站点稳定性', icon: Activity },
     { path: '/admin/account', label: '账号安全', icon: ShieldCheck },
   ]
 
   return (
-    <div className="admin-shell min-h-screen bg-transparent flex transition-colors duration-300">
-      <aside className="w-64 bg-white/95 shadow-sm border-r border-gray-100 flex flex-col backdrop-blur-xl transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900/95">
-        <div className="p-6 border-b border-gray-100">
+    <div className="admin-shell flex min-h-screen bg-transparent transition-colors duration-300">
+      <aside className="flex w-64 flex-col border-r border-gray-100 bg-white/95 shadow-sm backdrop-blur-xl transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900/95">
+        <div className="border-b border-gray-100 p-6 dark:border-slate-800">
           <div className="flex items-center gap-3">
             <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg"
+              className="flex h-10 w-10 items-center justify-center rounded-xl shadow-lg"
               style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}
             >
-              <Sparkles className="w-5 h-5 text-white" />
+              <Sparkles className="h-5 w-5 text-white" />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">管理后台</h1>
-              <p className="text-xs text-gray-400">Personal Website</p>
+              <h1 className="text-lg font-bold text-gray-900 dark:text-slate-100">管理后台</h1>
+              <p className="text-xs text-gray-400 dark:text-slate-500">Personal Website</p>
             </div>
           </div>
           <button
@@ -54,51 +72,52 @@ export default function AdminLayout() {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-4">
           {navItems.map(({ path, label, icon: Icon, exact }) => (
             <NavLink
               key={path}
               to={path}
               end={exact}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all ${
+                `flex items-center gap-3 rounded-xl px-4 py-2.5 transition-all ${
                   isActive
                     ? 'text-white'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
                 }`
               }
               style={({ isActive }) => isActive ? {
                 background: 'var(--theme-gradient)',
-                boxShadow: 'var(--theme-shadow)'
+                boxShadow: 'var(--theme-shadow)',
               } : {}}
             >
-              <Icon className="w-5 h-5" />
+              <Icon className="h-5 w-5" />
               <span className="font-medium">{label}</span>
             </NavLink>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-gray-100">
-          <div className="flex items-center gap-3 px-4 py-2 mb-2">
+        <div className="border-t border-gray-100 p-4 dark:border-slate-800">
+          <div className="mb-2 flex items-center gap-3 px-4 py-2">
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium text-white"
               style={{ background: 'var(--theme-gradient)' }}
             >
               {username.charAt(0).toUpperCase()}
             </div>
-            <span className="text-sm text-gray-600">{username}</span>
+            <span className="text-sm text-gray-600 dark:text-slate-300">{username}</span>
           </div>
           <button
+            type="button"
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-2.5 w-full text-gray-500 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors"
+            className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
           >
-            <LogOut className="w-5 h-5" />
+            <LogOut className="h-5 w-5" />
             <span className="font-medium">退出登录</span>
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 p-8 overflow-y-auto transition-colors duration-300">
+      <main className="flex-1 overflow-y-auto p-8 transition-colors duration-300">
         <Outlet />
       </main>
     </div>

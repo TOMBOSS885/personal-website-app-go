@@ -28,6 +28,7 @@ func main() {
 			&model.Live2DSettings{},
 			&model.Music{},
 			&model.UploadSettings{},
+			&model.OperationLog{},
 		); err != nil {
 			log.Fatalf("database migration failed: %v", err)
 		}
@@ -63,10 +64,12 @@ func main() {
 			public.GET("/theme/background-images", handler.AdminListThemeBackgrounds)
 			public.GET("/live2d-model", handler.GetLive2DModel)
 			public.GET("/music", handler.GetMusics)
+			public.GET("/search", handler.PublicSearch)
 		}
 
 		admin := api.Group("/admin")
 		admin.Use(middleware.JWTAuth())
+		admin.Use(middleware.OperationLogger())
 		{
 			admin.GET("/articles", handler.AdminGetArticles)
 			admin.POST("/articles", handler.AdminCreateArticle)
@@ -96,6 +99,9 @@ func main() {
 			admin.PUT("/account/password", handler.AdminChangePassword)
 			admin.GET("/upload-settings", handler.AdminGetUploadSettings)
 			admin.PUT("/upload-settings", handler.AdminUpdateUploadSettings)
+			admin.GET("/operation-logs", handler.AdminGetOperationLogs)
+			admin.GET("/export", handler.AdminExportData)
+			admin.GET("/search", handler.AdminSearch)
 
 			admin.POST("/theme", handler.AdminSaveTheme)
 			admin.GET("/theme/background-images", handler.AdminListThemeBackgrounds)
@@ -113,6 +119,8 @@ func main() {
 			admin.GET("/music", handler.AdminGetMusics)
 			admin.POST("/music", handler.AdminUploadMusic)
 			admin.DELETE("/music", handler.AdminBatchDeleteMusic)
+			admin.POST("/music/:id/lyrics", handler.AdminUploadMusicLyrics)
+			admin.DELETE("/music/:id/lyrics", handler.AdminDeleteMusicLyrics)
 			admin.DELETE("/music/:id", handler.AdminDeleteMusic)
 		}
 	}

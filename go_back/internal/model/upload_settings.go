@@ -6,6 +6,7 @@ type UploadSettings struct {
 	ThemeBackgroundMaxMB int    `gorm:"column:theme_background_max_mb;default:10" json:"themeBackgroundMaxMB"`
 	AvatarImageMaxMB     int    `gorm:"column:avatar_image_max_mb;default:5" json:"avatarImageMaxMB"`
 	MusicFileMaxMB       int    `gorm:"column:music_file_max_mb;default:50" json:"musicFileMaxMB"`
+	LyricsFileMaxMB      int    `gorm:"column:lyrics_file_max_mb;default:1" json:"lyricsFileMaxMB"`
 	MusicBatchMaxCount   int    `gorm:"column:music_batch_max_count;default:50" json:"musicBatchMaxCount"`
 	Live2DTotalMaxMB     int    `gorm:"column:live2d_total_max_mb;default:200" json:"live2dTotalMaxMB"`
 	Live2DFileMaxCount   int    `gorm:"column:live2d_file_max_count;default:300" json:"live2dFileMaxCount"`

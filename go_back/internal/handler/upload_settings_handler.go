@@ -18,6 +18,7 @@ func defaultUploadSettings() *model.UploadSettings {
 		ThemeBackgroundMaxMB: 10,
 		AvatarImageMaxMB:     5,
 		MusicFileMaxMB:       50,
+		LyricsFileMaxMB:      1,
 		MusicBatchMaxCount:   50,
 		Live2DTotalMaxMB:     200,
 		Live2DFileMaxCount:   300,
@@ -55,6 +56,9 @@ func applyUploadSettingsDefaults(settings *model.UploadSettings) {
 	}
 	if settings.MusicFileMaxMB <= 0 {
 		settings.MusicFileMaxMB = defaults.MusicFileMaxMB
+	}
+	if settings.LyricsFileMaxMB <= 0 {
+		settings.LyricsFileMaxMB = defaults.LyricsFileMaxMB
 	}
 	if settings.MusicBatchMaxCount <= 0 {
 		settings.MusicBatchMaxCount = defaults.MusicBatchMaxCount
@@ -98,6 +102,7 @@ func AdminUpdateUploadSettings(c *gin.Context) {
 	settings.ThemeBackgroundMaxMB = clampInt(payload.ThemeBackgroundMaxMB, 1, 100)
 	settings.AvatarImageMaxMB = clampInt(payload.AvatarImageMaxMB, 1, 50)
 	settings.MusicFileMaxMB = clampInt(payload.MusicFileMaxMB, 1, 500)
+	settings.LyricsFileMaxMB = clampInt(payload.LyricsFileMaxMB, 1, 10)
 	settings.MusicBatchMaxCount = clampInt(payload.MusicBatchMaxCount, 1, 200)
 	settings.Live2DTotalMaxMB = clampInt(payload.Live2DTotalMaxMB, 1, 1000)
 	settings.Live2DFileMaxCount = clampInt(payload.Live2DFileMaxCount, 1, 2000)

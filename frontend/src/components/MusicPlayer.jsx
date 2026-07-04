@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Loader, Music, Pause, Play, Volume2 } from 'lucide-react'
+import { ChevronDown, FileText, Loader, Music, Pause, Play, Volume2 } from 'lucide-react'
 
 const DEFAULT_TOP = 96
 const PLAYER_HEIGHT = 56
@@ -49,10 +49,11 @@ export default function MusicPlayer() {
   const [dragPoint, setDragPoint] = useState(null)
   const [idleCollapsed, setIdleCollapsed] = useState(false)
   const [seeking, setSeeking] = useState(false)
+  const [lyricsLines, setLyricsLines] = useState([])
+  const [lyricsStatus, setLyricsStatus] = useState('none')
 
   const fetchSongs = useCallback(async () => {
     if (loaded || loading) return
-
     setLoading(true)
     try {
       const res = await fetch('/api/public/music')
@@ -72,6 +73,36 @@ export default function MusicPlayer() {
       .then(() => setPlaying(true))
       .catch(() => setPlaying(false))
   }, [currentSong])
+
+  useEffect(() => {
+    if (!currentSong?.lyricsUrl) {
+      setLyricsLines([])
+      setLyricsStatus(currentSong ? 'missing' : 'none')
+      return undefined
+    }
+
+    const controller = new AbortController()
+    setLyricsStatus('loading')
+    setLyricsLines([])
+    fetch(currentSong.lyricsUrl, { signal: controller.signal })
+      .then(async res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const buffer = await res.arrayBuffer()
+        return decodeLyricsBuffer(buffer)
+      })
+      .then(text => {
+        const lines = parseLrc(text)
+        setLyricsLines(lines)
+        setLyricsStatus(lines.length > 0 ? 'ready' : 'empty')
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setLyricsLines([])
+          setLyricsStatus('error')
+        }
+      })
+    return () => controller.abort()
+  }, [currentSong?.id, currentSong?.lyricsUrl])
 
   useEffect(() => {
     const keepInViewport = () => {
@@ -101,7 +132,6 @@ export default function MusicPlayer() {
   const scheduleCollapse = useCallback(() => {
     clearCollapseTimer()
     if (!currentSong || dragging) return
-
     collapseTimerRef.current = window.setTimeout(() => {
       setOpen(false)
       setIdleCollapsed(true)
@@ -110,9 +140,7 @@ export default function MusicPlayer() {
 
   const wakePlayer = useCallback(() => {
     clearCollapseTimer()
-    if (currentSong) {
-      setIdleCollapsed(false)
-    }
+    if (currentSong) setIdleCollapsed(false)
   }, [currentSong])
 
   const markPlayerActivity = useCallback(() => {
@@ -141,7 +169,6 @@ export default function MusicPlayer() {
       startY: event.clientY,
       started: false,
     }
-
     window.addEventListener('pointermove', moveDrag)
     window.addEventListener('pointerup', endDrag)
     window.addEventListener('pointercancel', cancelDrag)
@@ -164,12 +191,9 @@ export default function MusicPlayer() {
   const scheduleDragPaint = (point) => {
     dragPointRef.current = point
     if (dragFrameRef.current) return
-
     dragFrameRef.current = window.requestAnimationFrame(() => {
       dragFrameRef.current = null
-      if (dragPointRef.current) {
-        paintDragPoint(dragPointRef.current)
-      }
+      if (dragPointRef.current) paintDragPoint(dragPointRef.current)
     })
   }
 
@@ -199,9 +223,7 @@ export default function MusicPlayer() {
     const x = clamp(event.clientX - COLLAPSED_WIDTH / 2, gap, window.innerWidth - COLLAPSED_WIDTH - gap)
     const y = clamp(event.clientY - PLAYER_HEIGHT / 2, gap, window.innerHeight - PLAYER_HEIGHT - gap)
     const point = { x, y }
-    if (!dragPointRef.current) {
-      setDragPoint(point)
-    }
+    if (!dragPointRef.current) setDragPoint(point)
     scheduleDragPaint(point)
   }
 
@@ -311,6 +333,16 @@ export default function MusicPlayer() {
     scheduleCollapse()
   }
 
+  const activeLyricIndex = useMemo(() => {
+    if (lyricsLines.length === 0) return -1
+    let index = -1
+    for (let i = 0; i < lyricsLines.length; i += 1) {
+      if (lyricsLines[i].time <= currentTime + 0.2) index = i
+      else break
+    }
+    return index
+  }, [currentTime, lyricsLines])
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
   const collapsed = dragging || !currentSong || idleCollapsed
   const showText = !dragging && !currentSong
@@ -330,6 +362,8 @@ export default function MusicPlayer() {
       }
   const listHorizontalClass = dockSide === 'right' ? 'right-0' : 'left-0'
   const listVerticalClass = panelDropsUp ? 'bottom-full mb-2' : 'top-full mt-2'
+  const lyricsVerticalClass = panelDropsUp ? 'bottom-full mb-3' : 'top-full mt-3'
+  const showLyricsPanel = currentSong && !dragging && !open
 
   return (
     <div
@@ -343,10 +377,24 @@ export default function MusicPlayer() {
         ref={audioRef}
         src={currentSong?.fileUrl || ''}
         preload="none"
-        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
-        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime || 0)}
+        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime || 0)}
         onEnded={playNextSong}
       />
+
+      <AnimatePresence>
+        {showLyricsPanel && (
+          <LyricsPanel
+            dockSide={dockSide}
+            verticalClass={lyricsVerticalClass}
+            song={currentSong}
+            status={lyricsStatus}
+            lines={lyricsLines}
+            activeIndex={activeLyricIndex}
+            collapsed={idleCollapsed}
+          />
+        )}
+      </AnimatePresence>
 
       <motion.div
         ref={playerRef}
@@ -360,7 +408,7 @@ export default function MusicPlayer() {
             : '0 18px 35px rgba(79, 70, 229, 0.14)',
         }}
         transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-        className={`select-none overflow-hidden rounded-full border border-white/70 bg-white/90 backdrop-blur-xl ${
+        className={`select-none overflow-hidden rounded-full border border-white/70 bg-white/90 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/90 ${
           dragging ? 'cursor-grabbing ring-4 ring-indigo-300/30' : 'cursor-grab'
         }`}
       >
@@ -391,7 +439,7 @@ export default function MusicPlayer() {
                 exit={{ width: 0, opacity: 0, x: -6 }}
                 transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                 onClick={toggleList}
-                className="overflow-hidden whitespace-nowrap pr-2 text-sm font-semibold text-gray-800"
+                className="overflow-hidden whitespace-nowrap pr-2 text-sm font-semibold text-gray-800 dark:text-slate-100"
                 title="歌曲列表"
               >
                 音乐
@@ -409,50 +457,50 @@ export default function MusicPlayer() {
                 transition={{ type: 'spring', stiffness: 420, damping: 36 }}
                 className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
               >
-              <button
-                type="button"
-                onClick={toggleList}
-                className="min-w-0 flex-1 text-left"
-                title={currentSong.title}
-              >
-                <div className="truncate text-sm font-semibold text-gray-900">{currentSong.title}</div>
-                <div className="truncate text-xs text-gray-500">
-                  {currentSong.artist || '未知歌手'} · {formatTime(currentTime)} / {formatTime(duration)}
-                </div>
-              </button>
-              <div
-                className={`relative h-5 w-28 rounded-full ${seeking ? 'music-progress-seeking' : ''}`}
-                onPointerDown={beginSeek}
-                onPointerUp={endSeek}
-                onPointerCancel={endSeek}
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 overflow-hidden rounded-full bg-gray-200">
-                  <div
-                    className="h-full rounded-full transition-[width]"
-                    style={{ width: `${progress}%`, background: 'var(--theme-gradient)' }}
+                <button
+                  type="button"
+                  onClick={toggleList}
+                  className="min-w-0 flex-1 text-left"
+                  title={currentSong.title}
+                >
+                  <div className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">{currentSong.title}</div>
+                  <div className="truncate text-xs text-gray-500 dark:text-slate-400">
+                    {currentSong.artist || '未知歌手'} · {formatTime(currentTime)} / {formatTime(duration)}
+                  </div>
+                </button>
+                <div
+                  className={`relative h-5 w-28 rounded-full ${seeking ? 'music-progress-seeking' : ''}`}
+                  onPointerDown={beginSeek}
+                  onPointerUp={endSeek}
+                  onPointerCancel={endSeek}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="absolute left-0 right-0 top-1/2 h-2 -translate-y-1/2 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700">
+                    <div
+                      className="h-full rounded-full transition-[width]"
+                      style={{ width: `${progress}%`, background: 'var(--theme-gradient)' }}
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max={duration || 0}
+                    step="0.1"
+                    value={duration > 0 ? currentTime : 0}
+                    onChange={(event) => seekTo(event.target.value)}
+                    onInput={(event) => seekTo(event.currentTarget.value)}
+                    className="music-progress-range absolute inset-0 h-full w-full cursor-pointer"
+                    aria-label="播放进度"
                   />
                 </div>
-                <input
-                  type="range"
-                  min="0"
-                  max={duration || 0}
-                  step="0.1"
-                  value={duration > 0 ? currentTime : 0}
-                  onChange={(event) => seekTo(event.target.value)}
-                  onInput={(event) => seekTo(event.currentTarget.value)}
-                  className="music-progress-range absolute inset-0 h-full w-full cursor-pointer"
-                  aria-label="播放进度"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={toggleList}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                title="歌曲列表"
-              >
-                <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
-              </button>
+                <button
+                  type="button"
+                  onClick={toggleList}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                  title="歌曲列表"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+                </button>
               </motion.div>
             )}
           </AnimatePresence>
@@ -465,10 +513,10 @@ export default function MusicPlayer() {
             initial={{ opacity: 0, y: panelDropsUp ? 8 : -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: panelDropsUp ? 8 : -8, scale: 0.98 }}
-            className={`absolute ${listHorizontalClass} ${listVerticalClass} w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl`}
+            className={`absolute ${listHorizontalClass} ${listVerticalClass} w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/95`}
           >
             {songs.length === 0 ? (
-              <div className="px-4 py-5 text-center text-sm text-gray-500">
+              <div className="px-4 py-5 text-center text-sm text-gray-500 dark:text-slate-400">
                 {loading ? '加载中...' : '暂无可播放歌曲'}
               </div>
             ) : (
@@ -479,16 +527,17 @@ export default function MusicPlayer() {
                     type="button"
                     onClick={() => selectSong(song)}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
-                      currentSong?.id === song.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50'
+                      currentSong?.id === song.id ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' : 'hover:bg-gray-50 dark:text-slate-200 dark:hover:bg-slate-800'
                     }`}
                   >
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-indigo-600">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-indigo-600 dark:bg-slate-800 dark:text-indigo-300">
                       {currentSong?.id === song.id && playing ? <Volume2 className="h-4 w-4" /> : <Music className="h-4 w-4" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-semibold">{song.title}</div>
-                      <div className="truncate text-xs text-gray-500">{song.artist || '未知歌手'}</div>
+                      <div className="truncate text-xs text-gray-500 dark:text-slate-400">{song.artist || '未知歌手'}</div>
                     </div>
+                    {song.lyricsUrl && <FileText className="h-4 w-4 shrink-0 text-emerald-500" />}
                   </button>
                 ))}
               </div>
@@ -498,4 +547,110 @@ export default function MusicPlayer() {
       </AnimatePresence>
     </div>
   )
+}
+
+function LyricsPanel({ dockSide, verticalClass, song, status, lines, activeIndex, collapsed }) {
+  const visibleLines = getVisibleLyrics(lines, activeIndex)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: verticalClass.includes('bottom') ? 8 : -8, scale: 0.98 }}
+      animate={{ opacity: collapsed ? 0.82 : 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: verticalClass.includes('bottom') ? 8 : -8, scale: 0.98 }}
+      transition={{ duration: 0.2 }}
+      className={`pointer-events-none absolute ${dockSide === 'right' ? 'right-0' : 'left-0'} ${verticalClass} w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/88 shadow-2xl shadow-indigo-500/10 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/88`}
+    >
+      <div className="border-b border-white/60 px-4 py-2.5 dark:border-slate-800/80">
+        <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-slate-400">
+          <FileText className="h-3.5 w-3.5" />
+          同步歌词
+        </div>
+        <div className="mt-0.5 truncate text-sm font-semibold text-gray-900 dark:text-slate-100">{song.title}</div>
+      </div>
+      <div className="px-4 py-3">
+        {status === 'loading' && (
+          <div className="flex items-center justify-center py-4 text-sm text-gray-500 dark:text-slate-400">
+            <Loader className="mr-2 h-4 w-4 animate-spin" />
+            歌词加载中...
+          </div>
+        )}
+        {status === 'missing' && (
+          <div className="rounded-xl bg-gray-50 px-3 py-3 text-center text-sm text-gray-500 dark:bg-slate-900 dark:text-slate-400">
+            这首歌还没有导入歌词
+          </div>
+        )}
+        {(status === 'empty' || status === 'error') && (
+          <div className="rounded-xl bg-amber-50 px-3 py-3 text-center text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">
+            歌词文件暂时无法显示
+          </div>
+        )}
+        {status === 'ready' && (
+          <div className="space-y-1.5">
+            {visibleLines.map(item => (
+              <div
+                key={`${item.index}-${item.line.time}`}
+                className={`truncate text-center transition-all duration-200 ${
+                  item.active
+                    ? 'text-base font-semibold text-indigo-600 dark:text-indigo-300'
+                    : 'text-sm text-gray-400 dark:text-slate-500'
+                }`}
+              >
+                {item.line.text}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+function decodeLyricsBuffer(buffer) {
+  const bytes = new Uint8Array(buffer)
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(bytes)
+  }
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    return new TextDecoder('utf-16be').decode(bytes)
+  }
+  return new TextDecoder('utf-8').decode(bytes)
+}
+
+function parseLrc(text) {
+  const lines = []
+  const timePattern = /\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?]/g
+
+  String(text || '').split(/\r?\n/).forEach(rawLine => {
+    const line = rawLine.trim()
+    if (!line) return
+
+    const matches = [...line.matchAll(timePattern)]
+    if (matches.length === 0) return
+
+    const lyricText = line.replace(timePattern, '').trim()
+    if (!lyricText) return
+
+    matches.forEach(match => {
+      const mins = Number(match[1])
+      const secs = Number(match[2])
+      const fraction = match[3] || '0'
+      const ms = Number(fraction.padEnd(3, '0').slice(0, 3))
+      const time = mins * 60 + secs + ms / 1000
+      if (Number.isFinite(time)) {
+        lines.push({ time, text: lyricText })
+      }
+    })
+  })
+
+  return lines.sort((a, b) => a.time - b.time)
+}
+
+function getVisibleLyrics(lines, activeIndex) {
+  if (lines.length === 0) return []
+  const safeIndex = activeIndex >= 0 ? activeIndex : 0
+  const start = clamp(safeIndex - 1, 0, Math.max(0, lines.length - 3))
+  return lines.slice(start, start + 3).map((line, offset) => {
+    const index = start + offset
+    return { line, index, active: index === safeIndex }
+  })
 }

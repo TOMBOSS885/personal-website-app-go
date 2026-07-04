@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Home, FileText, Folder, Menu, X, Sun, Moon, Github } from 'lucide-react'
+import { Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
@@ -30,6 +30,7 @@ export default function Navbar({ profile }) {
     { path: '/', label: t('nav.home'), icon: Home },
     { path: '/blog', label: t('nav.blog'), icon: FileText },
     { path: '/projects', label: t('nav.projects'), icon: Folder },
+    { path: '/search', label: '搜索', icon: Search },
   ]
 
   return (

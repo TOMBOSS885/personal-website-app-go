@@ -12,6 +12,7 @@ const HomePage = lazy(() => import('./pages/HomePage'))
 const BlogPage = lazy(() => import('./pages/BlogPage'))
 const ArticleDetailPage = lazy(() => import('./pages/ArticleDetailPage'))
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
+const SearchPage = lazy(() => import('./pages/SearchPage'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
 const ArticleManager = lazy(() => import('./pages/admin/ArticleManager'))
@@ -23,6 +24,7 @@ const ThemeManager = lazy(() => import('./pages/admin/ThemeManager'))
 const Live2DManager = lazy(() => import('./pages/admin/Live2DManager'))
 const MusicManager = lazy(() => import('./pages/admin/MusicManager'))
 const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsManager'))
+const StabilityManager = lazy(() => import('./pages/admin/StabilityManager'))
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Footer = lazy(() => import('./components/Footer'))
@@ -114,6 +116,7 @@ function App() {
                   <Route path="live2d" element={<Live2DManager />} />
                   <Route path="music" element={<MusicManager />} />
                   <Route path="upload-settings" element={<UploadSettingsManager />} />
+                  <Route path="stability" element={<StabilityManager />} />
                 </Route>
                 <Route path="/*" element={
                   <>
@@ -124,6 +127,7 @@ function App() {
                         <Route path="/blog" element={<BlogPage />} />
                         <Route path="/blog/:id" element={<ArticleDetailPage />} />
                         <Route path="/projects" element={<ProjectsPage />} />
+                        <Route path="/search" element={<SearchPage />} />
                       </Routes>
                     </main>
                     <DeferredMount timeout={900}>

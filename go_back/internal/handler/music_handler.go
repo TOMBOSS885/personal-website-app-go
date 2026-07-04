@@ -19,6 +19,8 @@ import (
 )
 
 var musicExts = []string{".mp3", ".wav", ".ogg", ".m4a", ".aac", ".flac"}
+var lyricsExts = []string{".lrc"}
+
 var musicTypes = map[string]bool{
 	"audio/mpeg":               true,
 	"audio/wav":                true,
@@ -136,6 +138,7 @@ func AdminDeleteMusic(c *gin.Context) {
 	if err == nil {
 		_ = repository.DeleteMusic(id)
 		_ = removeUploadedMusic(existing.FileURL)
+		_ = removeUploadedLyrics(existing.LyricsURL)
 	}
 	response.Success(c, nil)
 }
@@ -169,8 +172,72 @@ func AdminBatchDeleteMusic(c *gin.Context) {
 	}
 	for _, music := range existing {
 		_ = removeUploadedMusic(music.FileURL)
+		_ = removeUploadedLyrics(music.LyricsURL)
 	}
 	response.Success(c, gin.H{"deleted": len(existing)})
+}
+
+func AdminUploadMusicLyrics(c *gin.Context) {
+	settings := getOrCreateUploadSettings()
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	music, err := repository.GetMusicByID(id)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "music not found")
+		return
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil || file == nil {
+		response.Error(c, http.StatusBadRequest, "please select an lrc file")
+		return
+	}
+	if err := validateLyricsFile(file, settings); err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	dir := filepath.Join(config.AppConfig.UploadDir, "music-lyrics", strconv.FormatUint(id, 10))
+	name := uuid.NewString() + ".lrc"
+	target := filepath.Join(dir, name)
+	if err := saveUploadedFile(c, file, dir, target); err != nil {
+		response.Error(c, http.StatusInternalServerError, "upload lyrics failed")
+		return
+	}
+
+	oldLyricsURL := music.LyricsURL
+	music.LyricsURL = "/uploads/music-lyrics/" + strconv.FormatUint(id, 10) + "/" + name
+	music.LyricsName = file.Filename
+	music.LyricsSize = file.Size
+	if err := repository.UpdateMusic(music); err != nil {
+		_ = os.Remove(target)
+		response.Error(c, http.StatusInternalServerError, "save lyrics info failed")
+		return
+	}
+	if oldLyricsURL != "" && oldLyricsURL != music.LyricsURL {
+		_ = removeUploadedLyrics(oldLyricsURL)
+	}
+
+	response.Success(c, music)
+}
+
+func AdminDeleteMusicLyrics(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	music, err := repository.GetMusicByID(id)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "music not found")
+		return
+	}
+
+	oldLyricsURL := music.LyricsURL
+	music.LyricsURL = ""
+	music.LyricsName = ""
+	music.LyricsSize = 0
+	if err := repository.UpdateMusic(music); err != nil {
+		response.Error(c, http.StatusInternalServerError, "remove lyrics info failed")
+		return
+	}
+	_ = removeUploadedLyrics(oldLyricsURL)
+	response.Success(c, music)
 }
 
 func prepareMusicFile(file *multipart.FileHeader, settings *model.UploadSettings) (preparedMusicFile, error) {
@@ -202,6 +269,34 @@ func prepareMusicFile(file *multipart.FileHeader, settings *model.UploadSettings
 	}, nil
 }
 
+func validateLyricsFile(file *multipart.FileHeader, settings *model.UploadSettings) error {
+	if file.Size <= 0 {
+		return errors.New("lyrics file is empty")
+	}
+	if file.Size > bytesFromMB(settings.LyricsFileMaxMB) {
+		return errors.New("lyrics file exceeds configured upload size limit")
+	}
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if !allowedExt(ext, lyricsExts) {
+		return errors.New("lyrics file must be .lrc")
+	}
+
+	contentType, err := detectUploadedContentType(file)
+	headerType := strings.ToLower(file.Header.Get("Content-Type"))
+	if err != nil {
+		return errors.New("cannot read lyrics file")
+	}
+	if contentType != "text/plain; charset=utf-8" &&
+		contentType != "text/plain; charset=utf-16le" &&
+		contentType != "text/plain; charset=utf-16be" &&
+		!strings.HasPrefix(contentType, "text/plain") &&
+		!strings.HasPrefix(headerType, "text/") &&
+		contentType != "application/octet-stream" {
+		return errors.New("lyrics file must be plain text")
+	}
+	return nil
+}
+
 func cleanupUploadedMusic(musics []model.Music) {
 	for _, music := range musics {
 		_ = repository.DeleteMusic(music.ID)
@@ -224,6 +319,26 @@ func uniqueMusicIDs(ids []uint64) []uint64 {
 
 func removeUploadedMusic(fileURL string) error {
 	if !strings.HasPrefix(fileURL, "/uploads/music/") {
+		return nil
+	}
+	rel := strings.TrimPrefix(fileURL, "/uploads/")
+	target := filepath.Join(config.AppConfig.UploadDir, filepath.FromSlash(rel))
+	uploadAbs, err := filepath.Abs(config.AppConfig.UploadDir)
+	if err != nil {
+		return err
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(targetAbs, uploadAbs+string(os.PathSeparator)) {
+		return nil
+	}
+	return os.Remove(targetAbs)
+}
+
+func removeUploadedLyrics(fileURL string) error {
+	if !strings.HasPrefix(fileURL, "/uploads/music-lyrics/") {
 		return nil
 	}
 	rel := strings.TrimPrefix(fileURL, "/uploads/")

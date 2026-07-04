@@ -5,6 +5,7 @@ import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
 const RichTextEditor = lazy(() => import('../../components/RichTextEditor'))
+const NEW_ARTICLE_DRAFT_KEY = 'article-draft-new'
 
 export default function ArticleManager() {
   const [articles, setArticles] = useState([])
@@ -16,6 +17,7 @@ export default function ArticleManager() {
   const [coverImages, setCoverImages] = useState([])
   const [loadingCoverImages, setLoadingCoverImages] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [draftNotice, setDraftNotice] = useState('')
   const coverFileInputRef = useRef(null)
   const [form, setForm] = useState({ 
     title: '', 
@@ -32,6 +34,16 @@ export default function ArticleManager() {
   useEffect(() => {
     fetchArticles()
   }, [])
+
+  useEffect(() => {
+    if (!showModal) return undefined
+    const key = getDraftKey(editingArticle)
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(key, JSON.stringify({ ...form, savedAt: Date.now() }))
+      setDraftNotice(`已自动保存 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`)
+    }, 700)
+    return () => window.clearTimeout(timer)
+  }, [form, showModal, editingArticle])
 
   const fetchArticles = async () => {
     setLoading(true)
@@ -151,6 +163,8 @@ export default function ArticleManager() {
       })
       
       if (res.ok) {
+        localStorage.removeItem(getDraftKey(editingArticle))
+        setDraftNotice('')
         setShowModal(false)
         setEditingArticle(null)
         setForm({ 
@@ -175,16 +189,18 @@ export default function ArticleManager() {
   }
 
   const handleEdit = (article) => {
+    const draft = loadDraft(getDraftKey(article))
     setEditingArticle(article)
     setForm({
-      title: article.title,
-      summary: article.summary || '',
-      content: article.content || '',
-      category: article.category || '',
-      tags: article.tags ? article.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-      published: article.published,
-      coverImage: article.coverImage || ''
+      title: draft?.title ?? article.title,
+      summary: draft?.summary ?? article.summary ?? '',
+      content: draft?.content ?? article.content ?? '',
+      category: draft?.category ?? article.category ?? '',
+      tags: draft?.tags ?? (article.tags ? article.tags.split(',').map(t => t.trim()).filter(Boolean) : []),
+      published: draft?.published ?? article.published,
+      coverImage: draft?.coverImage ?? article.coverImage ?? ''
     })
+    setDraftNotice(draft ? '已恢复本地自动保存草稿' : '')
     setShowModal(true)
   }
 
@@ -219,8 +235,9 @@ export default function ArticleManager() {
         </div>
         <button
           onClick={() => {
+            const draft = loadDraft(NEW_ARTICLE_DRAFT_KEY)
             setEditingArticle(null)
-            setForm({ 
+            setForm(draft || {
               title: '', 
               summary: '', 
               content: '', 
@@ -229,6 +246,7 @@ export default function ArticleManager() {
               published: true,
               coverImage: '' 
             })
+            setDraftNotice(draft ? '已恢复本地自动保存草稿' : '')
             setShowModal(true)
           }}
           className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all"
@@ -340,6 +358,9 @@ export default function ArticleManager() {
                 </h2>
                 {form.title && (
                   <span className="text-white/80 text-sm">- {form.title}</span>
+                )}
+                {draftNotice && (
+                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs text-white/85">{draftNotice}</span>
                 )}
               </div>
               <div className="flex items-center gap-2">
@@ -580,6 +601,24 @@ function formatImageSize(size) {
   if (!Number.isFinite(bytes) || bytes <= 0) return ''
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function getDraftKey(article) {
+  return article?.id ? `article-draft-${article.id}` : NEW_ARTICLE_DRAFT_KEY
+}
+
+function loadDraft(key) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    const { savedAt, ...draft } = parsed
+    const hasContent = draft.title || draft.summary || draft.content || draft.coverImage || draft.category || draft.tags?.length
+    return hasContent ? draft : null
+  } catch {
+    return null
+  }
 }
 
 // ========== TagInput 组件 ==========

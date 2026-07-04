@@ -10,6 +10,9 @@ type Music struct {
 	FileName     string    `gorm:"column:file_name;size:255" json:"fileName"`
 	ContentType  string    `gorm:"column:content_type;size:100" json:"contentType"`
 	Size         int64     `gorm:"column:size;default:0" json:"size"`
+	LyricsURL    string    `gorm:"column:lyrics_url;size:500" json:"lyricsUrl"`
+	LyricsName   string    `gorm:"column:lyrics_name;size:255" json:"lyricsName"`
+	LyricsSize   int64     `gorm:"column:lyrics_size;default:0" json:"lyricsSize"`
 	DisplayOrder int       `gorm:"column:display_order;default:0" json:"displayOrder"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
