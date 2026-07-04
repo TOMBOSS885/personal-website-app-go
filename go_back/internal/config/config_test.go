@@ -2,7 +2,7 @@ package config
 
 import "testing"
 
-func TestUnsafeJWTSecret(t *testing.T) {
+func TestShortOrDefaultJWTSecret(t *testing.T) {
 	tests := []struct {
 		name   string
 		secret string
@@ -10,16 +10,25 @@ func TestUnsafeJWTSecret(t *testing.T) {
 	}{
 		{name: "short", secret: "short", want: true},
 		{name: "default", secret: "please-change-this-secret-key-at-least-32-chars", want: true},
-		{name: "placeholder", secret: "replace_with_a_random_secret_at_least_32_chars", want: true},
+		{name: "placeholder but long enough", secret: "replace_with_a_random_secret_at_least_32_chars", want: false},
 		{name: "random enough", secret: "a-real-random-secret-value-with-48-bytes", want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isUnsafeJWTSecret(tt.secret); got != tt.want {
-				t.Fatalf("isUnsafeJWTSecret(%q) = %v, want %v", tt.secret, got, tt.want)
+			if got := isShortOrDefaultJWTSecret(tt.secret); got != tt.want {
+				t.Fatalf("isShortOrDefaultJWTSecret(%q) = %v, want %v", tt.secret, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPlaceholderJWTSecret(t *testing.T) {
+	if !isPlaceholderJWTSecret("replace_with_a_random_secret_at_least_32_chars") {
+		t.Fatal("expected placeholder JWT secret to be detected")
+	}
+	if isPlaceholderJWTSecret("a-real-random-secret-value-with-48-bytes") {
+		t.Fatal("real-looking JWT secret was detected as placeholder")
 	}
 }
 

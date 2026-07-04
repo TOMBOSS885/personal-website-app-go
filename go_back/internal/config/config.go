@@ -59,29 +59,31 @@ func validateProductionConfig(cfg *Config) {
 	if cfg.GinMode != "release" {
 		return
 	}
-	if isUnsafeJWTSecret(cfg.JWTSecret) {
+	if isShortOrDefaultJWTSecret(cfg.JWTSecret) {
 		log.Fatal("JWT_SECRET must be set to a unique value with at least 32 characters in release mode")
 	}
+	if isPlaceholderJWTSecret(cfg.JWTSecret) {
+		log.Println("warning: JWT_SECRET still looks like a placeholder; replace it with a real random secret before public deployment")
+	}
+	if isUnsafeAdminPassword(cfg.AdminPassword) && cfg.AdminResetPassword {
+		log.Fatal("refusing to reset the admin password to an unsafe default or placeholder value in release mode")
+	}
 	if isUnsafeAdminPassword(cfg.AdminPassword) {
-		log.Fatal("ADMIN_PASSWORD must be changed from the default or placeholder value in release mode")
+		log.Println("warning: ADMIN_PASSWORD still looks unsafe; it is only used when creating or explicitly resetting the admin account")
 	}
 	if strings.TrimSpace(cfg.CORSAllowedOrigins) == "*" {
-		log.Fatal("CORS_ALLOWED_ORIGINS cannot be '*' in release mode; leave it empty for same-origin or list explicit origins")
+		log.Println("warning: CORS_ALLOWED_ORIGINS is '*'; leave it empty for same-origin deployment or list explicit origins")
 	}
 }
 
-func isUnsafeJWTSecret(secret string) bool {
+func isShortOrDefaultJWTSecret(secret string) bool {
 	secret = strings.TrimSpace(secret)
-	if len(secret) < 32 {
-		return true
-	}
-	switch secret {
-	case "please-change-this-secret-key-at-least-32-chars",
-		"replace_with_a_random_secret_at_least_32_chars":
-		return true
-	default:
-		return false
-	}
+	return len(secret) < 32 || secret == "please-change-this-secret-key-at-least-32-chars"
+}
+
+func isPlaceholderJWTSecret(secret string) bool {
+	secret = strings.TrimSpace(secret)
+	return secret == "replace_with_a_random_secret_at_least_32_chars"
 }
 
 func isUnsafeAdminPassword(password string) bool {
