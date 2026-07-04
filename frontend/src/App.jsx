@@ -3,10 +3,8 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './contexts/LanguageContext'
 import Navbar from './components/Navbar'
-import Footer from './components/Footer'
-import MusicPlayer from './components/MusicPlayer'
-import HomeBackgroundCustomizer from './components/HomeBackgroundCustomizer'
 import CursorEffects from './components/CursorEffects'
+import DeferredMount from './components/DeferredMount'
 
 const API_BASE = ''
 
@@ -27,6 +25,9 @@ const MusicManager = lazy(() => import('./pages/admin/MusicManager'))
 const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsManager'))
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
+const Footer = lazy(() => import('./components/Footer'))
+const MusicPlayer = lazy(() => import('./components/MusicPlayer'))
+const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
 const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
 
 function setupAdminApiInterceptor() {
@@ -125,12 +126,26 @@ function App() {
                         <Route path="/projects" element={<ProjectsPage />} />
                       </Routes>
                     </main>
-                    <Footer profile={profile} />
-                    <MusicPlayer />
-                    <HomeBackgroundCustomizer />
-                    <Suspense fallback={null}>
-                      <Live2DWidget />
-                    </Suspense>
+                    <DeferredMount timeout={900}>
+                      <Suspense fallback={null}>
+                        <Footer profile={profile} />
+                      </Suspense>
+                    </DeferredMount>
+                    <DeferredMount timeout={1400}>
+                      <Suspense fallback={null}>
+                        <MusicPlayer />
+                      </Suspense>
+                    </DeferredMount>
+                    <DeferredMount timeout={1800}>
+                      <Suspense fallback={null}>
+                        <HomeBackgroundCustomizer />
+                      </Suspense>
+                    </DeferredMount>
+                    <DeferredMount timeout={2400}>
+                      <Suspense fallback={null}>
+                        <Live2DWidget />
+                      </Suspense>
+                    </DeferredMount>
                   </>
                 } />
               </Routes>

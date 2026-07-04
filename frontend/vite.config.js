@@ -18,7 +18,7 @@ export default defineConfig({
           if (normalized.includes('/node_modules/framer-motion/')) {
             return 'vendor-motion'
           }
-          if (/\/node_modules\/(react-markdown|remark-|rehype-|micromark|unified|mdast-|hast-|unist-|vfile|decode-named-character-reference|devlop|comma-separated-tokens|property-information|space-separated-tokens|trim-lines|zwitch|bail|is-plain-obj|trough)\//.test(normalized)) {
+          if (/\/node_modules\/(react-markdown|remark-[^/]+|rehype-[^/]+|micromark[^/]*|unified|mdast-[^/]+|mdast-util-[^/]+|hast-[^/]+|hast-util-[^/]+|unist-[^/]+|unist-util-[^/]+|vfile[^/]*|decode-named-character-reference|devlop|comma-separated-tokens|property-information|space-separated-tokens|trim-lines|zwitch|bail|is-plain-obj|trough|ccount|character-entities|html-void-elements|markdown-table|fault)\//.test(normalized)) {
             return 'vendor-markdown'
           }
           if (normalized.includes('/node_modules/lucide-react/')) {

@@ -1,13 +1,26 @@
 import { useEffect, useRef } from 'react'
+import { isConstrainedConnection, isLowEndDevice } from '../utils/network'
 
 export default function ParticleBackground() {
   const canvasRef = useRef(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const coarsePointer = window.matchMedia('(pointer: coarse)')
+    if (
+      prefersReducedMotion.matches
+      || coarsePointer.matches
+      || isConstrainedConnection()
+      || isLowEndDevice()
+    ) {
+      return undefined
+    }
+
     const ctx = canvas.getContext('2d')
     let animationFrameId
     let particles = []
+    let lastFrameTime = 0
 
     const resize = () => {
       canvas.width = window.innerWidth
@@ -15,7 +28,8 @@ export default function ParticleBackground() {
     }
 
     const createParticles = () => {
-      const particleCount = Math.floor((canvas.width * canvas.height) / 15000)
+      const areaCount = Math.floor((canvas.width * canvas.height) / 28000)
+      const particleCount = Math.min(window.innerWidth < 768 ? 28 : 72, Math.max(18, areaCount))
       particles = []
       
       for (let i = 0; i < particleCount; i++) {
@@ -31,7 +45,13 @@ export default function ParticleBackground() {
       }
     }
 
-    const drawParticles = () => {
+    const drawParticles = (timestamp = 0) => {
+      if (timestamp - lastFrameTime < 33) {
+        animationFrameId = requestAnimationFrame(drawParticles)
+        return
+      }
+      lastFrameTime = timestamp
+
       ctx.clearRect(0, 0, canvas.width, canvas.height)
 
       particles.forEach((particle, i) => {
@@ -73,14 +93,16 @@ export default function ParticleBackground() {
     createParticles()
     drawParticles()
 
-    window.addEventListener('resize', () => {
+    const handleResize = () => {
       resize()
       createParticles()
-    })
+    }
+
+    window.addEventListener('resize', handleResize)
 
     return () => {
       cancelAnimationFrame(animationFrameId)
-      window.removeEventListener('resize', resize)
+      window.removeEventListener('resize', handleResize)
     }
   }, [])
 

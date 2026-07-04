@@ -18,7 +18,6 @@ export default function HomePage() {
   const [featureCards, setFeatureCards] = useState([])
   const [profile, setProfile] = useState(null)
   const [stats, setStats] = useState(null)
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
   const { language } = useLanguage()
   const { t } = useTranslation()
   
@@ -70,11 +69,7 @@ export default function HomePage() {
         // 使用默认统计数据
       })
 
-    const handleMouseMove = (e) => {
-      setMousePosition({ x: e.clientX, y: e.clientY })
-    }
-    window.addEventListener('mousemove', handleMouseMove)
-    return () => window.removeEventListener('mousemove', handleMouseMove)
+    return undefined
   }, [])
 
   // 语言切换时重新获取 profile
@@ -191,16 +186,6 @@ export default function HomePage() {
         <div className="absolute top-20 left-10 w-72 h-72 bg-purple-300/30 rounded-full blur-3xl float" />
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-indigo-300/30 rounded-full blur-3xl float-delay-1" />
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-pink-200/20 rounded-full blur-3xl float-delay-2" />
-        
-        {/* 鼠标跟随光效 */}
-        <motion.div 
-          className="pointer-events-none fixed w-96 h-96 bg-gradient-radial from-indigo-500/20 to-transparent rounded-full blur-3xl"
-          animate={{
-            x: mousePosition.x - 192,
-            y: mousePosition.y - 192,
-          }}
-          transition={{ type: 'spring', damping: 30, stiffness: 200 }}
-        />
 
         <motion.div 
           style={{ opacity: heroOpacity, scale: heroScale }}
