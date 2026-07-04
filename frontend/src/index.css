@@ -1436,6 +1436,14 @@ img {
   outline: none;
 }
 
+.lyrics-module-shell {
+  background-color: rgb(255 255 255 / var(--lyrics-bg-opacity, 0.88));
+}
+
+html.theme-dark .lyrics-module-shell {
+  background-color: rgb(2 6 23 / var(--lyrics-bg-opacity, 0.88));
+}
+
 .music-progress-range::-webkit-slider-runnable-track {
   height: 1.25rem;
   background: transparent;

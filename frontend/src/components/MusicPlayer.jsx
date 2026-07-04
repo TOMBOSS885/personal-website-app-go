@@ -12,11 +12,12 @@ const COLLAPSE_DELAY = 3000
 const LYRICS_SETTINGS_KEY = 'music-lyrics-module-settings'
 const DEFAULT_LYRICS_SETTINGS = {
   enabled: true,
-  orientation: 'horizontal',
   effect: 'pop',
   fontSize: 16,
   opacity: 88,
   lineCount: 3,
+  width: 360,
+  height: 176,
 }
 
 function formatTime(seconds) {
@@ -637,7 +638,8 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
   const [panelOpen, setPanelOpen] = useState(false)
   const [position, setPosition] = useState(() => readLyricsPosition())
   const visibleLines = getVisibleLyrics(lines, activeIndex, settings.lineCount)
-  const isVertical = settings.orientation === 'vertical'
+  const moduleWidth = lyricsModuleWidth(settings.width)
+  const moduleHeight = lyricsModuleHeight(settings.height)
 
   const moveLyricsDrag = useCallback((event) => {
     const drag = dragRef.current
@@ -645,8 +647,8 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
     setPosition(clampLyricsPosition({
       x: event.clientX - drag.offsetX,
       y: event.clientY - drag.offsetY,
-    }))
-  }, [])
+    }, moduleWidth, moduleHeight))
+  }, [moduleHeight, moduleWidth])
 
   const endLyricsDrag = useCallback(() => {
     dragRef.current = null
@@ -664,6 +666,10 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
     window.addEventListener('resize', keepInside)
     return () => window.removeEventListener('resize', keepInside)
   }, [])
+
+  useEffect(() => {
+    setPosition(current => clampLyricsPosition(current, moduleWidth, moduleHeight))
+  }, [moduleHeight, moduleWidth])
 
   useEffect(() => {
     return () => {
@@ -693,13 +699,13 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
       ref={moduleRef}
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
-      className="fixed z-[65] overflow-hidden rounded-2xl border border-white/70 bg-white/85 shadow-2xl shadow-indigo-500/10 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/85"
+      className="lyrics-module-shell fixed z-[65] overflow-hidden rounded-2xl border border-white/70 shadow-2xl shadow-indigo-500/10 backdrop-blur-xl dark:border-slate-700/70"
       style={{
         left: position.x,
         top: position.y,
-        width: isVertical ? 180 : 360,
-        minHeight: isVertical ? 300 : 176,
-        opacity: settings.opacity / 100,
+        width: moduleWidth,
+        height: moduleHeight,
+        '--lyrics-bg-opacity': settings.opacity / 100,
       }}
     >
       <div
@@ -737,13 +743,12 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
 
       {panelOpen && <LyricsSettingsPanel settings={settings} onChange={onSettingsChange} />}
 
-      <div className={isVertical ? 'flex min-h-[14rem] justify-center px-4 py-4' : 'px-4 py-3'}>
+      <div className="h-[calc(100%-3.25rem)] overflow-hidden px-4 py-3">
         <LyricsContent
           status={status}
           visibleLines={visibleLines}
           effect={settings.effect}
           fontSize={settings.fontSize}
-          isVertical={isVertical}
         />
       </div>
     </motion.div>
@@ -753,10 +758,6 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
 function LyricsSettingsPanel({ settings, onChange }) {
   return (
     <div className="grid gap-3 border-b border-white/60 bg-white/55 px-3 py-3 text-xs dark:border-slate-800/80 dark:bg-slate-900/55">
-      <div className="grid grid-cols-2 gap-2">
-        <SettingButton active={settings.orientation === 'horizontal'} onClick={() => onChange({ orientation: 'horizontal' })}>横向</SettingButton>
-        <SettingButton active={settings.orientation === 'vertical'} onClick={() => onChange({ orientation: 'vertical' })}>竖向</SettingButton>
-      </div>
       <label className="grid gap-1 text-gray-500 dark:text-slate-400">
         <span>显示特效</span>
         <select
@@ -774,24 +775,12 @@ function LyricsSettingsPanel({ settings, onChange }) {
         <RangeSetting label="字号" value={settings.fontSize} min={13} max={24} unit="px" onChange={value => onChange({ fontSize: value })} />
         <RangeSetting label="行数" value={settings.lineCount} min={1} max={5} unit="行" onChange={value => onChange({ lineCount: value })} />
       </div>
+      <div className="grid grid-cols-2 gap-3">
+        <RangeSetting label="宽度" value={lyricsModuleWidth(settings.width)} min={280} max={560} unit="px" onChange={value => onChange({ width: value })} />
+        <RangeSetting label="高度" value={lyricsModuleHeight(settings.height)} min={150} max={360} unit="px" onChange={value => onChange({ height: value })} />
+      </div>
       <RangeSetting label="透明度" value={settings.opacity} min={45} max={100} unit="%" onChange={value => onChange({ opacity: value })} />
     </div>
-  )
-}
-
-function SettingButton({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
-        active
-          ? 'bg-indigo-600 text-white shadow-sm'
-          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-      }`}
-    >
-      {children}
-    </button>
   )
 }
 
@@ -811,7 +800,7 @@ function RangeSetting({ label, value, min, max, unit, onChange }) {
   )
 }
 
-function LyricsContent({ status, visibleLines, effect, fontSize, isVertical }) {
+function LyricsContent({ status, visibleLines, effect, fontSize }) {
   if (status === 'loading') {
     return (
       <div className="flex w-full items-center justify-center py-5 text-sm text-gray-500 dark:text-slate-400">
@@ -824,10 +813,7 @@ function LyricsContent({ status, visibleLines, effect, fontSize, isVertical }) {
   if (status === 'empty' || status === 'error') return <LyricsNotice tone="warn">歌词文件暂时无法显示</LyricsNotice>
 
   return (
-    <div
-      className={isVertical ? 'flex max-h-[22rem] flex-row-reverse gap-3 overflow-hidden' : 'w-full space-y-1.5'}
-      style={isVertical ? { writingMode: 'vertical-rl' } : undefined}
-    >
+    <div className="h-full w-full space-y-1.5 overflow-hidden">
       {visibleLines.map(item => (
         <LyricLine
           key={`${item.index}-${item.line.time}`}
@@ -835,7 +821,6 @@ function LyricsContent({ status, visibleLines, effect, fontSize, isVertical }) {
           active={item.active}
           effect={effect}
           fontSize={fontSize}
-          isVertical={isVertical}
         />
       ))}
     </div>
@@ -849,7 +834,7 @@ function LyricsNotice({ tone = 'muted', children }) {
   return <div className={`w-full rounded-xl px-3 py-3 text-center text-sm ${classes}`}>{children}</div>
 }
 
-function LyricLine({ text, active, effect, fontSize, isVertical }) {
+function LyricLine({ text, active, effect, fontSize }) {
   const baseClass = active
     ? 'font-semibold text-indigo-600 drop-shadow-sm dark:text-indigo-300'
     : 'text-gray-400 dark:text-slate-500'
@@ -860,7 +845,7 @@ function LyricLine({ text, active, effect, fontSize, isVertical }) {
         {Array.from(text).map((char, index) => (
           <motion.span
             key={`${char}-${index}`}
-            initial={{ opacity: 0, y: isVertical ? 0 : 8, x: isVertical ? -8 : 0, scale: 0.72 }}
+            initial={{ opacity: 0, y: 8, scale: 0.72 }}
             animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
             transition={{ delay: Math.min(index * 0.025, 0.7), type: 'spring', stiffness: 420, damping: 24 }}
             className="inline-block"
@@ -876,8 +861,8 @@ function LyricLine({ text, active, effect, fontSize, isVertical }) {
     <motion.div
       initial={{
         opacity: active ? 0 : 0.72,
-        y: effect === 'slide' && active && !isVertical ? 8 : 0,
-        x: effect === 'slide' && active && isVertical ? -8 : 0,
+        y: effect === 'slide' && active ? 8 : 0,
+        x: 0,
         scale: effect === 'karaoke' && active ? 0.96 : 1,
       }}
       animate={{
@@ -902,9 +887,12 @@ function readLyricsSettings() {
     return {
       ...DEFAULT_LYRICS_SETTINGS,
       ...parsed,
+      orientation: undefined,
       fontSize: clamp(Number(parsed.fontSize) || DEFAULT_LYRICS_SETTINGS.fontSize, 13, 24),
       opacity: clamp(Number(parsed.opacity) || DEFAULT_LYRICS_SETTINGS.opacity, 45, 100),
       lineCount: clamp(Number(parsed.lineCount) || DEFAULT_LYRICS_SETTINGS.lineCount, 1, 5),
+      width: lyricsModuleWidth(parsed.width || DEFAULT_LYRICS_SETTINGS.width),
+      height: lyricsModuleHeight(parsed.height || DEFAULT_LYRICS_SETTINGS.height),
     }
   } catch {
     return DEFAULT_LYRICS_SETTINGS
@@ -927,15 +915,29 @@ function readLyricsPosition() {
   })
 }
 
-function clampLyricsPosition(position) {
+function clampLyricsPosition(position, widthValue = DEFAULT_LYRICS_SETTINGS.width, heightValue = DEFAULT_LYRICS_SETTINGS.height) {
   if (typeof window === 'undefined') return position
   const gap = edgeGap()
-  const maxX = Math.max(gap, window.innerWidth - 190)
-  const maxY = Math.max(gap, window.innerHeight - 160)
+  const width = lyricsModuleWidth(widthValue)
+  const height = lyricsModuleHeight(heightValue)
+  const maxX = Math.max(gap, window.innerWidth - width - gap)
+  const maxY = Math.max(gap, window.innerHeight - height - gap)
   return {
     x: clamp(Number(position.x) || gap, gap, maxX),
     y: clamp(Number(position.y) || DEFAULT_TOP, gap, maxY),
   }
+}
+
+function lyricsModuleWidth(value) {
+  if (typeof window === 'undefined') return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.width, 280, 560)
+  const maxWidth = Math.max(280, window.innerWidth - edgeGap() * 2)
+  return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.width, 280, Math.min(560, maxWidth))
+}
+
+function lyricsModuleHeight(value) {
+  if (typeof window === 'undefined') return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.height, 150, 360)
+  const maxHeight = Math.max(150, window.innerHeight - edgeGap() * 2)
+  return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.height, 150, Math.min(360, maxHeight))
 }
 
 function decodeLyricsBuffer(buffer) {
