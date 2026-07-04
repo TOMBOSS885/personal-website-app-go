@@ -13,6 +13,15 @@ func GetMusics() ([]model.Music, error) {
 	return musics, err
 }
 
+func GetPublicMusics() ([]model.Music, error) {
+	var musics []model.Music
+	err := db.DB.Model(&model.Music{}).
+		Where("is_public = ?", true).
+		Order("display_order ASC, created_at DESC").
+		Find(&musics).Error
+	return musics, err
+}
+
 func GetMusicByID(id uint64) (*model.Music, error) {
 	var music model.Music
 	err := db.DB.First(&music, id).Error

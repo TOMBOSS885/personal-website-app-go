@@ -125,6 +125,7 @@ func main() {
 			admin.GET("/music", handler.AdminGetMusics)
 			admin.POST("/music", handler.AdminUploadMusic)
 			admin.DELETE("/music", handler.AdminBatchDeleteMusic)
+			admin.PATCH("/music/:id", handler.AdminUpdateMusic)
 			admin.POST("/music/:id/lyrics", handler.AdminUploadMusicLyrics)
 			admin.DELETE("/music/:id/lyrics", handler.AdminDeleteMusicLyrics)
 			admin.DELETE("/music/:id", handler.AdminDeleteMusic)

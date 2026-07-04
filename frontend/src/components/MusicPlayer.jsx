@@ -18,6 +18,8 @@ const DEFAULT_LYRICS_SETTINGS = {
   lineCount: 3,
   width: 360,
   height: 176,
+  primaryLyricLine: 'first',
+  showTranslation: true,
 }
 
 function formatTime(seconds) {
@@ -38,6 +40,10 @@ function clamp(value, min, max) {
 
 function isInteractiveTarget(target) {
   return Boolean(target?.closest?.('button, input, select, textarea, a, label, [data-drag-ignore="true"]'))
+}
+
+function isPlayableSong(song) {
+  return song?.isPublic !== false
 }
 
 export default function MusicPlayer() {
@@ -67,20 +73,27 @@ export default function MusicPlayer() {
   const [lyricsStatus, setLyricsStatus] = useState('none')
   const [lyricsSettings, setLyricsSettings] = useState(() => readLyricsSettings())
 
+  const loadPublicSongs = useCallback(async () => {
+    const res = await fetch('/api/public/music')
+    const data = res.ok ? await res.json() : []
+    const list = Array.isArray(data) ? data.filter(isPlayableSong) : []
+    setSongs(list)
+    setLoaded(true)
+    return list
+  }, [])
+
   const fetchSongs = useCallback(async () => {
-    if (loaded || loading) return
+    if (loaded || loading) return songs.filter(isPlayableSong)
     setLoading(true)
     try {
-      const res = await fetch('/api/public/music')
-      const data = res.ok ? await res.json() : []
-      setSongs(Array.isArray(data) ? data : [])
-      setLoaded(true)
+      return await loadPublicSongs()
     } catch {
       setSongs([])
+      return []
     } finally {
       setLoading(false)
     }
-  }, [loaded, loading])
+  }, [loadPublicSongs, loaded, loading, songs])
 
   useEffect(() => {
     if (!currentSong || !audioRef.current) return
@@ -275,45 +288,58 @@ export default function MusicPlayer() {
   const endDrag = (event) => finishDrag(event, true)
   const cancelDrag = (event) => finishDrag(event, false)
 
-  const playNextSong = useCallback(() => {
-    if (songs.length === 0) {
+  const playNextSong = useCallback(async () => {
+    let playableSongs = songs.filter(isPlayableSong)
+    try {
+      playableSongs = await loadPublicSongs()
+    } catch {
+      // Keep playback usable during a temporary network hiccup.
+    }
+    if (playableSongs.length === 0) {
       setPlaying(false)
       return
     }
 
-    const currentIndex = songs.findIndex(song => song.id === currentSong?.id)
-    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % songs.length : 0
-    if (currentSong?.id === songs[nextIndex]?.id && audioRef.current) {
+    const currentIndex = playableSongs.findIndex(song => song.id === currentSong?.id)
+    const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % playableSongs.length : 0
+    if (currentSong?.id === playableSongs[nextIndex]?.id && audioRef.current) {
       audioRef.current.currentTime = 0
       audioRef.current.play()
         .then(() => setPlaying(true))
         .catch(() => setPlaying(false))
     }
-    setCurrentSong(songs[nextIndex])
+    setCurrentSong(playableSongs[nextIndex])
     setCurrentTime(0)
-  }, [currentSong, songs])
+  }, [currentSong, loadPublicSongs, songs])
 
-  const playPreviousSong = useCallback(() => {
-    if (songs.length === 0) {
+  const playPreviousSong = useCallback(async () => {
+    let playableSongs = songs.filter(isPlayableSong)
+    try {
+      playableSongs = await loadPublicSongs()
+    } catch {
+      // Keep playback usable during a temporary network hiccup.
+    }
+    if (playableSongs.length === 0) {
       setPlaying(false)
       return
     }
 
-    const currentIndex = songs.findIndex(song => song.id === currentSong?.id)
+    const currentIndex = playableSongs.findIndex(song => song.id === currentSong?.id)
     const previousIndex = currentIndex >= 0
-      ? (currentIndex - 1 + songs.length) % songs.length
-      : songs.length - 1
-    if (currentSong?.id === songs[previousIndex]?.id && audioRef.current) {
+      ? (currentIndex - 1 + playableSongs.length) % playableSongs.length
+      : playableSongs.length - 1
+    if (currentSong?.id === playableSongs[previousIndex]?.id && audioRef.current) {
       audioRef.current.currentTime = 0
       audioRef.current.play()
         .then(() => setPlaying(true))
         .catch(() => setPlaying(false))
     }
-    setCurrentSong(songs[previousIndex])
+    setCurrentSong(playableSongs[previousIndex])
     setCurrentTime(0)
-  }, [currentSong, songs])
+  }, [currentSong, loadPublicSongs, songs])
 
   const selectSong = (song) => {
+    if (!isPlayableSong(song)) return
     markPlayerActivity()
     setCurrentSong(song)
     setOpen(false)
@@ -405,6 +431,8 @@ export default function MusicPlayer() {
       }
   const listHorizontalClass = dockSide === 'right' ? 'right-0' : 'left-0'
   const listVerticalClass = panelDropsUp ? 'bottom-full mb-2' : 'top-full mt-2'
+  const playerContentDirection = dockSide === 'right' && !dragging ? 'flex-row-reverse' : 'flex-row'
+  const revealOffset = dockSide === 'right' && !dragging ? 6 : -6
 
   return (
     <>
@@ -460,7 +488,7 @@ export default function MusicPlayer() {
           dragging ? 'cursor-grabbing ring-4 ring-indigo-300/30' : 'cursor-grab'
         }`}
       >
-        <div className="flex h-14 items-center gap-2 px-2">
+        <div className={`flex h-14 items-center gap-2 px-2 ${playerContentDirection}`}>
           <button
             type="button"
             onClick={togglePlay}
@@ -482,12 +510,12 @@ export default function MusicPlayer() {
               <motion.button
                 key="compact-label"
                 type="button"
-                initial={{ width: 0, opacity: 0, x: -6 }}
+                initial={{ width: 0, opacity: 0, x: revealOffset }}
                 animate={{ width: 40, opacity: 1, x: 0 }}
-                exit={{ width: 0, opacity: 0, x: -6 }}
+                exit={{ width: 0, opacity: 0, x: revealOffset }}
                 transition={{ type: 'spring', stiffness: 420, damping: 34 }}
                 onClick={toggleList}
-                className="overflow-hidden whitespace-nowrap pr-2 text-sm font-semibold text-gray-800 dark:text-slate-100"
+                className={`overflow-hidden whitespace-nowrap text-sm font-semibold text-gray-800 dark:text-slate-100 ${dockSide === 'right' ? 'pl-2 text-right' : 'pr-2 text-left'}`}
                 title="歌曲列表"
               >
                 音乐
@@ -499,16 +527,16 @@ export default function MusicPlayer() {
             {showSongInfo && (
               <motion.div
                 key="song-info"
-                initial={{ width: 0, opacity: 0, x: -6 }}
+                initial={{ width: 0, opacity: 0, x: revealOffset }}
                 animate={{ width: 'auto', opacity: 1, x: 0 }}
-                exit={{ width: 0, opacity: 0, x: -6 }}
+                exit={{ width: 0, opacity: 0, x: revealOffset }}
                 transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-                className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden"
+                className={`flex min-w-0 flex-1 items-center gap-2 overflow-hidden ${dockSide === 'right' ? 'flex-row-reverse' : 'flex-row'}`}
               >
                 <button
                   type="button"
                   onClick={toggleList}
-                  className="min-w-0 flex-1 text-left"
+                  className={`min-w-0 flex-1 ${dockSide === 'right' ? 'text-right' : 'text-left'}`}
                   title={currentSong.title}
                 >
                   <div className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">{currentSong.title}</div>
@@ -685,7 +713,12 @@ function LyricsModule({
   const visibleLines = getVisibleLyrics(lines, activeIndex, settings.lineCount)
   const moduleWidth = lyricsModuleWidth(settings.width)
   const moduleHeight = lyricsModuleHeight(settings.height)
-  const shellHeight = panelOpen ? Math.max(moduleHeight, 326) : moduleHeight
+  const hasBilingualLyrics = lines.some(line => Array.isArray(line.parts) && line.parts.length > 1)
+  const maxShellHeight = typeof window !== 'undefined'
+    ? Math.max(260, window.innerHeight - edgeGap() * 2)
+    : 424
+  const settingsHeight = hasBilingualLyrics ? 424 : 326
+  const shellHeight = panelOpen ? Math.min(maxShellHeight, Math.max(moduleHeight, settingsHeight)) : moduleHeight
 
   const moveLyricsDrag = useCallback((event) => {
     const drag = dragRef.current
@@ -790,7 +823,13 @@ function LyricsModule({
         </div>
       </div>
 
-      {panelOpen && <LyricsSettingsPanel settings={settings} onChange={onSettingsChange} />}
+      {panelOpen && (
+        <LyricsSettingsPanel
+          settings={settings}
+          hasBilingualLyrics={hasBilingualLyrics}
+          onChange={onSettingsChange}
+        />
+      )}
 
       {!panelOpen && (
         <div className="flex h-[calc(100%-3.25rem)] flex-col overflow-hidden px-4 py-3">
@@ -800,6 +839,8 @@ function LyricsModule({
               visibleLines={visibleLines}
               effect={settings.effect}
               fontSize={settings.fontSize}
+              primaryLyricLine={settings.primaryLyricLine}
+              showTranslation={settings.showTranslation}
             />
           </div>
           <LyricsPlaybackControls
@@ -851,9 +892,9 @@ function LyricsPlaybackControls({ playing, onTogglePlay, onPrevious, onNext }) {
   )
 }
 
-function LyricsSettingsPanel({ settings, onChange }) {
+function LyricsSettingsPanel({ settings, hasBilingualLyrics, onChange }) {
   return (
-    <div className="grid gap-3 border-b border-white/60 bg-white/55 px-3 py-3 text-xs dark:border-slate-800/80 dark:bg-slate-900/55">
+    <div className="grid max-h-[calc(100vh-8rem)] gap-3 overflow-y-auto border-b border-white/60 bg-white/55 px-3 py-3 text-xs dark:border-slate-800/80 dark:bg-slate-900/55">
       <label className="grid gap-1 text-gray-500 dark:text-slate-400">
         <span>显示特效</span>
         <select
@@ -875,6 +916,30 @@ function LyricsSettingsPanel({ settings, onChange }) {
         <RangeSetting label="宽度" value={lyricsModuleWidth(settings.width)} min={280} max={560} unit="px" onChange={value => onChange({ width: value })} />
         <RangeSetting label="高度" value={lyricsModuleHeight(settings.height)} min={150} max={360} unit="px" onChange={value => onChange({ height: value })} />
       </div>
+      {hasBilingualLyrics && (
+        <div className="grid gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+          <label className="grid gap-1 text-gray-500 dark:text-slate-400">
+            <span>主歌词行</span>
+            <select
+              value={settings.primaryLyricLine}
+              onChange={event => onChange({ primaryLyricLine: event.target.value })}
+              className="rounded-lg border border-indigo-100 bg-white px-2 py-1.5 text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            >
+              <option value="first">第一行作为主歌词</option>
+              <option value="second">第二行作为主歌词</option>
+            </select>
+          </label>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-gray-600 dark:text-slate-300">
+            <input
+              type="checkbox"
+              checked={settings.showTranslation !== false}
+              onChange={event => onChange({ showTranslation: event.target.checked })}
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span>显示下方翻译小字</span>
+          </label>
+        </div>
+      )}
       <RangeSetting label="透明度" value={settings.opacity} min={45} max={100} unit="%" onChange={value => onChange({ opacity: value })} />
     </div>
   )
@@ -896,7 +961,7 @@ function RangeSetting({ label, value, min, max, unit, onChange }) {
   )
 }
 
-function LyricsContent({ status, visibleLines, effect, fontSize }) {
+function LyricsContent({ status, visibleLines, effect, fontSize, primaryLyricLine, showTranslation }) {
   if (status === 'loading') {
     return (
       <div className="flex w-full items-center justify-center py-5 text-sm text-gray-500 dark:text-slate-400">
@@ -913,10 +978,12 @@ function LyricsContent({ status, visibleLines, effect, fontSize }) {
       {visibleLines.map(item => (
         <LyricLine
           key={`${item.index}-${item.line.time}`}
-          text={item.line.text}
+          line={item.line}
           active={item.active}
           effect={effect}
           fontSize={fontSize}
+          primaryLyricLine={primaryLyricLine}
+          showTranslation={showTranslation}
         />
       ))}
     </div>
@@ -930,28 +997,40 @@ function LyricsNotice({ tone = 'muted', children }) {
   return <div className={`w-full rounded-xl px-3 py-3 text-center text-sm ${classes}`}>{children}</div>
 }
 
-function LyricLine({ text, active, effect, fontSize }) {
+function LyricsLineText({ text, active, effect }) {
+  if (active && effect === 'pop') {
+    return Array.from(text).map((char, index) => (
+      <motion.span
+        key={`${char}-${index}`}
+        initial={{ opacity: 0, y: 8, scale: 0.72 }}
+        animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
+        transition={{ delay: Math.min(index * 0.025, 0.7), type: 'spring', stiffness: 420, damping: 24 }}
+        className="inline-block"
+      >
+        {char}
+      </motion.span>
+    ))
+  }
+  return text
+}
+
+function getLyricDisplayParts(line, primaryLyricLine, showTranslation) {
+  const parts = Array.isArray(line?.parts) && line.parts.length > 0
+    ? line.parts
+    : [line?.text || '']
+  const primaryIndex = primaryLyricLine === 'second' && parts.length > 1 ? 1 : 0
+  const primary = parts[primaryIndex] || parts[0] || ''
+  const translation = showTranslation === false
+    ? ''
+    : parts.filter((part, index) => index !== primaryIndex && part && part !== primary).join(' / ')
+  return { primary, translation }
+}
+
+function LyricLine({ line, active, effect, fontSize, primaryLyricLine, showTranslation }) {
+  const { primary, translation } = getLyricDisplayParts(line, primaryLyricLine, showTranslation)
   const baseClass = active
     ? 'font-semibold text-indigo-600 drop-shadow-sm dark:text-indigo-300'
     : 'text-gray-400 dark:text-slate-500'
-
-  if (active && effect === 'pop') {
-    return (
-      <div className={`text-center ${baseClass}`} style={{ fontSize }}>
-        {Array.from(text).map((char, index) => (
-          <motion.span
-            key={`${char}-${index}`}
-            initial={{ opacity: 0, y: 8, scale: 0.72 }}
-            animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
-            transition={{ delay: Math.min(index * 0.025, 0.7), type: 'spring', stiffness: 420, damping: 24 }}
-            className="inline-block"
-          >
-            {char}
-          </motion.span>
-        ))}
-      </div>
-    )
-  }
 
   return (
     <motion.div
@@ -968,10 +1047,23 @@ function LyricLine({ text, active, effect, fontSize }) {
         scale: effect === 'karaoke' && active ? 1.04 : 1,
       }}
       transition={{ duration: 0.22 }}
-      className={`truncate text-center transition-colors ${baseClass}`}
-      style={{ fontSize }}
+      className={`text-center transition-colors ${baseClass}`}
     >
-      {text}
+      <div className="truncate" style={{ fontSize }}>
+        <LyricsLineText text={primary} active={active} effect={effect} />
+      </div>
+      {translation && (
+        <div
+          className={`mt-0.5 truncate font-medium ${
+            active
+              ? 'text-[color:color-mix(in_srgb,var(--theme-primary)_72%,#64748b)] dark:text-indigo-200/85'
+              : 'text-gray-300 dark:text-slate-600'
+          }`}
+          style={{ fontSize: Math.max(11, Number(fontSize) * 0.72) }}
+        >
+          {translation}
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -989,6 +1081,8 @@ function readLyricsSettings() {
       lineCount: clamp(Number(parsed.lineCount) || DEFAULT_LYRICS_SETTINGS.lineCount, 1, 5),
       width: lyricsModuleWidth(parsed.width || DEFAULT_LYRICS_SETTINGS.width),
       height: lyricsModuleHeight(parsed.height || DEFAULT_LYRICS_SETTINGS.height),
+      primaryLyricLine: parsed.primaryLyricLine === 'second' ? 'second' : 'first',
+      showTranslation: parsed.showTranslation !== false,
     }
   } catch {
     return DEFAULT_LYRICS_SETTINGS
@@ -1015,7 +1109,7 @@ function clampLyricsPosition(position, widthValue = DEFAULT_LYRICS_SETTINGS.widt
   if (typeof window === 'undefined') return position
   const gap = edgeGap()
   const width = lyricsModuleWidth(widthValue)
-  const height = lyricsModuleHeight(heightValue)
+  const height = Math.max(lyricsModuleHeight(heightValue), Number(heightValue) || 0)
   const maxX = Math.max(gap, window.innerWidth - width - gap)
   const maxY = Math.max(gap, window.innerHeight - height - gap)
   return {
@@ -1048,7 +1142,7 @@ function decodeLyricsBuffer(buffer) {
 }
 
 function parseLrc(text) {
-  const lines = []
+  const lineGroups = new Map()
   const timePattern = /\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?]/g
 
   String(text || '').split(/\r?\n/).forEach(rawLine => {
@@ -1068,12 +1162,23 @@ function parseLrc(text) {
       const ms = Number(fraction.padEnd(3, '0').slice(0, 3))
       const time = mins * 60 + secs + ms / 1000
       if (Number.isFinite(time)) {
-        lines.push({ time, text: lyricText })
+        const key = time.toFixed(3)
+        const group = lineGroups.get(key) || { time, parts: [] }
+        if (!group.parts.includes(lyricText)) {
+          group.parts.push(lyricText)
+        }
+        lineGroups.set(key, group)
       }
     })
   })
 
-  return lines.sort((a, b) => a.time - b.time)
+  return Array.from(lineGroups.values())
+    .map(group => ({
+      time: group.time,
+      text: group.parts[0] || '',
+      parts: group.parts,
+    }))
+    .sort((a, b) => a.time - b.time)
 }
 
 function getVisibleLyrics(lines, activeIndex, lineCount = 3) {

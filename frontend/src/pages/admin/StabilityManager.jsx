@@ -18,6 +18,7 @@ const ACTION_LABELS = {
   delete_background_image: '删除背景',
   upload_avatar: '上传头像',
   upload_music: '上传音乐',
+  save_music_settings: '保存音乐设置',
   delete_music: '删除音乐',
   upload_music_lyrics: '上传歌词',
   delete_music_lyrics: '删除歌词',

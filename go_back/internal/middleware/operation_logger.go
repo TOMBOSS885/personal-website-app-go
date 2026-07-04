@@ -74,6 +74,9 @@ func actionFromRequest(method, path string) string {
 		if method == "DELETE" {
 			return "delete_music"
 		}
+		if method == "PATCH" || method == "PUT" {
+			return "save_music_settings"
+		}
 		return "upload_music"
 	case strings.Contains(path, "articles"):
 		if method == "DELETE" {

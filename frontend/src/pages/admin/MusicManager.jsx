@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, Loader, Music, Plus, Trash2, Upload } from 'lucide-react'
+import { Eye, EyeOff, FileText, Loader, Music, Plus, Trash2, Upload } from 'lucide-react'
 
 const API_BASE = ''
 
@@ -30,6 +30,10 @@ function replaceSong(current, nextSong) {
   return sortSongs(current.map(song => song.id === nextSong.id ? nextSong : song))
 }
 
+function isSongPublic(song) {
+  return song?.isPublic !== false
+}
+
 export default function MusicManager() {
   const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -38,7 +42,8 @@ export default function MusicManager() {
   const [selectedIds, setSelectedIds] = useState([])
   const [lyricsTarget, setLyricsTarget] = useState(null)
   const [lyricsSavingId, setLyricsSavingId] = useState(null)
-  const [form, setForm] = useState({ title: '', artist: '', displayOrder: 0, files: [] })
+  const [visibilitySavingId, setVisibilitySavingId] = useState(null)
+  const [form, setForm] = useState({ title: '', artist: '', displayOrder: 0, isPublic: true, files: [] })
   const lyricsInputRef = useRef(null)
   const token = localStorage.getItem('token')
 
@@ -82,6 +87,7 @@ export default function MusicManager() {
     body.append('title', form.title)
     body.append('artist', form.artist)
     body.append('displayOrder', String(form.displayOrder || 0))
+    body.append('isPublic', String(form.isPublic !== false))
 
     try {
       const res = await fetch(`${API_BASE}/api/admin/music`, {
@@ -99,7 +105,7 @@ export default function MusicManager() {
       if (uploadedSongs.length > 0) {
         setSongs(current => mergeSongs(current, uploadedSongs))
       }
-      setForm({ title: '', artist: '', displayOrder: 0, files: [] })
+      setForm({ title: '', artist: '', displayOrder: 0, isPublic: true, files: [] })
       event.currentTarget.reset()
       await fetchSongs({ showLoading: false })
     } finally {
@@ -207,6 +213,35 @@ export default function MusicManager() {
     }
   }
 
+  const toggleVisibility = async (song) => {
+    const nextVisible = !isSongPublic(song)
+    setVisibilitySavingId(song.id)
+    setSongs(current => replaceSong(current, { ...song, isPublic: nextVisible }))
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/music/${song.id}`, {
+        method: 'PATCH',
+        headers: {
+          ...authHeaders(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isPublic: nextVisible }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        setSongs(current => replaceSong(current, song))
+        alert(data?.message || '保存显示设置失败')
+        return
+      }
+      setSongs(current => replaceSong(current, data))
+    } catch {
+      setSongs(current => replaceSong(current, song))
+      alert('保存显示设置失败')
+    } finally {
+      setVisibilitySavingId(null)
+    }
+  }
+
   const toggleSelect = (id) => {
     setSelectedIds(ids => (
       ids.includes(id) ? ids.filter(item => item !== id) : [...ids, id]
@@ -289,6 +324,15 @@ export default function MusicManager() {
             上传
           </button>
         </div>
+        <label className="mt-4 inline-flex cursor-pointer items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600 transition-colors hover:bg-gray-100 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-300 dark:hover:bg-slate-800">
+          <input
+            type="checkbox"
+            checked={form.isPublic !== false}
+            onChange={event => setForm({ ...form, isPublic: event.target.checked })}
+            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+          />
+          <span className="font-medium">上传后在前台播放器显示</span>
+        </label>
         {fileCount > 1 && (
           <p className="mt-3 text-xs text-gray-500 dark:text-slate-400">
             批量上传会按当前排序值递增保存；歌曲名默认使用各自文件名，歌手信息会应用到全部文件。
@@ -332,6 +376,7 @@ export default function MusicManager() {
                   <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">歌曲</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">文件</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">歌词</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">前台显示</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">排序</th>
                   <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">操作</th>
                 </tr>
@@ -393,6 +438,28 @@ export default function MusicManager() {
                           上传歌词
                         </button>
                       )}
+                    </td>
+                    <td className="px-6 py-4 text-sm">
+                      <button
+                        type="button"
+                        onClick={() => toggleVisibility(song)}
+                        disabled={visibilitySavingId === song.id}
+                        className={`inline-flex min-w-[5.5rem] items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                          isSongPublic(song)
+                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700'
+                        }`}
+                        title={isSongPublic(song) ? '点击后前台隐藏' : '点击后前台显示'}
+                      >
+                        {visibilitySavingId === song.id ? (
+                          <Loader className="h-3.5 w-3.5 animate-spin" />
+                        ) : isSongPublic(song) ? (
+                          <Eye className="h-3.5 w-3.5" />
+                        ) : (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        )}
+                        {isSongPublic(song) ? '显示' : '隐藏'}
+                      </button>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 dark:text-slate-400">{song.displayOrder || 0}</td>
                     <td className="px-6 py-4 text-right">

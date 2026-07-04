@@ -43,8 +43,12 @@ type batchDeleteMusicRequest struct {
 	IDs []uint64 `json:"ids"`
 }
 
+type updateMusicRequest struct {
+	IsPublic *bool `json:"isPublic"`
+}
+
 func GetMusics(c *gin.Context) {
-	musics, err := repository.GetMusics()
+	musics, err := repository.GetPublicMusics()
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取音乐列表失败")
 		return
@@ -53,7 +57,12 @@ func GetMusics(c *gin.Context) {
 }
 
 func AdminGetMusics(c *gin.Context) {
-	GetMusics(c)
+	musics, err := repository.GetMusics()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取音乐列表失败")
+		return
+	}
+	response.Success(c, musics)
 }
 
 func AdminUploadMusic(c *gin.Context) {
@@ -90,6 +99,7 @@ func AdminUploadMusic(c *gin.Context) {
 	displayOrder, _ := strconv.Atoi(c.DefaultPostForm("displayOrder", "0"))
 	artist := strings.TrimSpace(c.PostForm("artist"))
 	title := strings.TrimSpace(c.PostForm("title"))
+	isPublic := c.DefaultPostForm("isPublic", "true") != "false"
 	singleUpload := len(files) == 1
 
 	uploaded := make([]model.Music, 0, len(prepared))
@@ -114,6 +124,7 @@ func AdminUploadMusic(c *gin.Context) {
 			FileName:     item.file.Filename,
 			ContentType:  item.contentType,
 			Size:         item.file.Size,
+			IsPublic:     isPublic,
 			DisplayOrder: displayOrder + index,
 		}
 		if err := repository.CreateMusic(&music); err != nil {
@@ -130,6 +141,30 @@ func AdminUploadMusic(c *gin.Context) {
 		return
 	}
 	response.Success(c, uploaded)
+}
+
+func AdminUpdateMusic(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	music, err := repository.GetMusicByID(id)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "music not found")
+		return
+	}
+
+	var req updateMusicRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, http.StatusBadRequest, "invalid music settings")
+		return
+	}
+	if req.IsPublic != nil {
+		music.IsPublic = *req.IsPublic
+	}
+
+	if err := repository.UpdateMusic(music); err != nil {
+		response.Error(c, http.StatusInternalServerError, "save music settings failed")
+		return
+	}
+	response.Success(c, music)
 }
 
 func AdminDeleteMusic(c *gin.Context) {
