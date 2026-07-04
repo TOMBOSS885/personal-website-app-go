@@ -27,8 +27,8 @@ export default function AdminLayout() {
   ]
 
   return (
-    <div className="admin-shell min-h-screen bg-gray-50 flex transition-colors duration-300 dark:bg-slate-950">
-      <aside className="w-64 bg-white shadow-sm border-r border-gray-100 flex flex-col transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900/95">
+    <div className="admin-shell min-h-screen bg-transparent flex transition-colors duration-300">
+      <aside className="w-64 bg-white/95 shadow-sm border-r border-gray-100 flex flex-col backdrop-blur-xl transition-colors duration-300 dark:border-slate-800 dark:bg-slate-900/95">
         <div className="p-6 border-b border-gray-100">
           <div className="flex items-center gap-3">
             <div
@@ -45,21 +45,11 @@ export default function AdminLayout() {
           <button
             type="button"
             onClick={toggleColorMode}
-            className="mt-5 flex w-full items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100 dark:hover:bg-slate-700"
+            className="mt-5 flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100 dark:hover:bg-slate-700"
             title={colorMode === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
           >
-            <span className="flex items-center gap-2">
-              {colorMode === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              {colorMode === 'dark' ? '亮色模式' : '暗色模式'}
-            </span>
-            <span
-              className={`relative h-5 w-9 rounded-full transition-colors ${colorMode === 'dark' ? 'bg-indigo-500' : 'bg-gray-300'}`}
-              aria-hidden="true"
-            >
-              <span
-                className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${colorMode === 'dark' ? 'translate-x-4' : 'translate-x-0.5'}`}
-              />
-            </span>
+            {colorMode === 'dark' ? <Sun className="h-4 w-4 shrink-0" /> : <Moon className="h-4 w-4 shrink-0" />}
+            <span>{colorMode === 'dark' ? '亮色模式' : '暗色模式'}</span>
           </button>
         </div>
 

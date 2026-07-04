@@ -52,20 +52,20 @@ export default function Navbar({ profile }) {
             {/* Logo */}
             <Link to="/" className="flex items-center space-x-3 group">
               <motion.div 
-                className="relative"
+                className="relative isolate"
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 whileTap={{ scale: 0.95 }}
               >
+                <div
+                  className="pointer-events-none absolute -inset-1 -z-10 rounded-full opacity-30 blur transition-opacity group-hover:opacity-50"
+                  style={{ background: 'var(--theme-gradient)' }}
+                />
                 <ProfileAvatar
                   profile={profile}
                   sizeClass="h-12 w-12"
                   textClass="text-xl"
-                  className="shadow-lg transition-shadow group-hover:shadow-xl"
+                  className="relative z-10 bg-white shadow-lg ring-2 ring-white/80 transition-shadow group-hover:shadow-xl dark:bg-slate-900 dark:ring-slate-800/80"
                 />
-                <div 
-                className="absolute -inset-1 rounded-full blur opacity-30 group-hover:opacity-50 transition-opacity"
-                style={{ background: 'var(--theme-gradient)' }}
-              />
               </motion.div>
               <div className="hidden sm:block">
                 <span 

@@ -50,15 +50,15 @@ export default function Footer({ profile }) {
               viewport={{ once: true }}
               className="flex items-center space-x-3 mb-6"
             >
-              <div className="relative">
+              <div className="relative isolate">
+                <div className="pointer-events-none absolute -inset-1 -z-10 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-30 blur" />
                 <ProfileAvatar
                   profile={profile}
                   sizeClass="h-12 w-12"
                   textClass="text-xl"
-                  className="shadow-lg shadow-indigo-500/30"
+                  className="relative z-10 bg-gray-950 shadow-lg shadow-indigo-500/30 ring-2 ring-white/10"
                   fallbackClassName="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"
                 />
-                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-full blur opacity-30" />
               </div>
               <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
                 {profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')}

@@ -715,10 +715,32 @@ html:not(.theme-dark) .admin-login input::placeholder {
   color: #94a3b8;
 }
 
+html:not(.theme-dark) .admin-shell {
+  background:
+    linear-gradient(rgba(248, 250, 252, 0.58), rgba(248, 250, 252, 0.72));
+  color: #111827;
+}
+
+html:not(.theme-dark) .admin-shell main {
+  background: transparent;
+}
+
+html:not(.theme-dark) .admin-shell aside {
+  background-color: rgba(255, 255, 255, 0.92);
+}
+
+html:not(.theme-dark) .admin-shell .bg-white {
+  background-color: rgba(255, 255, 255, 0.94);
+}
+
+html:not(.theme-dark) .admin-shell .bg-gray-50 {
+  background-color: rgba(249, 250, 251, 0.88);
+}
+
 html.theme-dark .admin-shell {
   background:
     radial-gradient(circle at top right, rgba(99, 102, 241, 0.14), transparent 30rem),
-    #020617;
+    rgba(2, 6, 23, 0.84);
   color: #f8fafc;
 }
 
