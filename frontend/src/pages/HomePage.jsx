@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, useScroll, useTransform, useInView } from 'framer-motion'
-import { ArrowRight, Code, PenTool, Briefcase, Sparkles, Github, Linkedin, Mail, ChevronDown, Star, Zap, Heart, Coffee, Rocket, Cpu, Database, Globe } from 'lucide-react'
+import { motion, useScroll, useTransform } from 'framer-motion'
+import { ArrowRight, Code, PenTool, Briefcase, Sparkles, Github, Linkedin, Mail, ChevronDown, Star, Zap, Coffee, Rocket, Cpu, Database, Globe } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ParticleBackground from '../components/ParticleBackground'
 import TypewriterText from '../components/TypewriterText'
@@ -27,61 +27,90 @@ export default function HomePage() {
   const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.95])
 
   useEffect(() => {
-    // 使用真实后端 API
-    fetch('/api/public/articles?page=0&size=3')
-      .then(res => res.json())
-      .then(data => setArticles(data.content || []))
-      .catch(() => {
-        // 如果后端不可用，使用 mock 数据
+    const controller = new AbortController()
+    let cancelled = false
+
+    const readJson = async (url) => {
+      const res = await fetch(url, { signal: controller.signal })
+      if (!res.ok) throw new Error(`Request failed: ${url}`)
+      return res.json()
+    }
+
+    async function loadHomeData() {
+      const [articlesResult, projectsResult, skillsResult, featureCardsResult, statsResult] = await Promise.allSettled([
+        readJson('/api/public/articles?page=0&size=3'),
+        readJson('/api/public/projects/featured'),
+        readJson('/api/public/skills'),
+        readJson('/api/public/feature-cards'),
+        readJson('/api/public/stats'),
+      ])
+
+      if (cancelled) return
+
+      if (articlesResult.status === 'fulfilled') {
+        setArticles(articlesResult.value.content || [])
+      } else {
         import('../api/mockApi').then(module => {
-          setArticles(module.default.getArticles().slice(0, 3))
+          if (!cancelled) setArticles(module.default.getArticles().slice(0, 3))
         })
-      })
+      }
 
-    fetch('/api/public/projects/featured')
-      .then(res => res.json())
-      .then(data => setProjects(data || []))
-      .catch(() => {
+      if (projectsResult.status === 'fulfilled') {
+        setProjects(Array.isArray(projectsResult.value) ? projectsResult.value : [])
+      } else {
         import('../api/mockApi').then(module => {
-          setProjects(module.default.getProjects().filter(p => p.featured))
+          if (!cancelled) setProjects(module.default.getProjects().filter(p => p.featured))
         })
-      })
+      }
 
-    fetch('/api/public/skills')
-      .then(res => res.json())
-      .then(data => setSkills(data || []))
-      .catch(() => {
+      if (skillsResult.status === 'fulfilled') {
+        setSkills(Array.isArray(skillsResult.value) ? skillsResult.value : [])
+      } else {
         import('../api/mockApi').then(module => {
-          setSkills(module.default.getSkills())
+          if (!cancelled) setSkills(module.default.getSkills())
         })
-      })
+      }
 
-    fetch('/api/public/feature-cards')
-      .then(res => res.json())
-      .then(data => setFeatureCards(Array.isArray(data) ? data : []))
-      .catch(() => setFeatureCards([]))
+      setFeatureCards(
+        featureCardsResult.status === 'fulfilled' && Array.isArray(featureCardsResult.value)
+          ? featureCardsResult.value
+          : []
+      )
 
-    // 获取统计数据
-    fetch('/api/public/stats')
-      .then(res => res.json())
-      .then(data => setStats(data))
-      .catch(() => {
-        // 使用默认统计数据
-      })
+      if (statsResult.status === 'fulfilled') {
+        setStats(statsResult.value)
+      }
+    }
 
-    return undefined
+    void loadHomeData()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [])
 
   // 语言切换时重新获取 profile
   useEffect(() => {
-    fetch(`/api/public/profile?lang=${language}`)
+    const controller = new AbortController()
+    let cancelled = false
+
+    fetch(`/api/public/profile?lang=${language}`, { signal: controller.signal })
       .then(res => res.json())
-      .then(data => setProfile(data))
-      .catch(() => {
+      .then(data => {
+        if (!cancelled) setProfile(data)
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return
         import('../api/mockApi').then(module => {
-          setProfile(module.default.getProfile(language))
+          if (!cancelled) setProfile(module.default.getProfile(language))
         })
       })
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [language])
 
   const skillCategories = skills.reduce((acc, skill) => {

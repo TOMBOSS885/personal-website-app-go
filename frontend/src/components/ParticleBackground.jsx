@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { isConstrainedConnection, isLowEndDevice } from '../utils/network'
 
+const DPR_LIMIT = 2
+const FRAME_INTERVAL = 33
+const LINK_DISTANCE = 120
+const LINK_DISTANCE_SQUARED = LINK_DISTANCE * LINK_DISTANCE
+
 export default function ParticleBackground() {
   const canvasRef = useRef(null)
 
@@ -19,23 +24,28 @@ export default function ParticleBackground() {
 
     const ctx = canvas.getContext('2d')
     let animationFrameId
+    let resizeFrameId
     let particles = []
     let lastFrameTime = 0
 
     const resize = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
+      const dpr = Math.min(window.devicePixelRatio || 1, DPR_LIMIT)
+      canvas.width = Math.floor(window.innerWidth * dpr)
+      canvas.height = Math.floor(window.innerHeight * dpr)
+      canvas.style.width = `${window.innerWidth}px`
+      canvas.style.height = `${window.innerHeight}px`
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     }
 
     const createParticles = () => {
-      const areaCount = Math.floor((canvas.width * canvas.height) / 28000)
+      const areaCount = Math.floor((window.innerWidth * window.innerHeight) / 28000)
       const particleCount = Math.min(window.innerWidth < 768 ? 28 : 72, Math.max(18, areaCount))
       particles = []
       
       for (let i = 0; i < particleCount; i++) {
         particles.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
           radius: Math.random() * 2 + 1,
           vx: (Math.random() - 0.5) * 0.5,
           vy: (Math.random() - 0.5) * 0.5,
@@ -46,13 +56,13 @@ export default function ParticleBackground() {
     }
 
     const drawParticles = (timestamp = 0) => {
-      if (timestamp - lastFrameTime < 33) {
+      if (timestamp - lastFrameTime < FRAME_INTERVAL) {
         animationFrameId = requestAnimationFrame(drawParticles)
         return
       }
       lastFrameTime = timestamp
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
 
       particles.forEach((particle, i) => {
         // 更新位置
@@ -60,8 +70,8 @@ export default function ParticleBackground() {
         particle.y += particle.vy
 
         // 边界处理
-        if (particle.x < 0 || particle.x > canvas.width) particle.vx *= -1
-        if (particle.y < 0 || particle.y > canvas.height) particle.vy *= -1
+        if (particle.x < 0 || particle.x > window.innerWidth) particle.vx *= -1
+        if (particle.y < 0 || particle.y > window.innerHeight) particle.vy *= -1
 
         // 绘制粒子
         ctx.beginPath()
@@ -73,13 +83,14 @@ export default function ParticleBackground() {
         particles.slice(i + 1).forEach(otherParticle => {
           const dx = particle.x - otherParticle.x
           const dy = particle.y - otherParticle.y
-          const distance = Math.sqrt(dx * dx + dy * dy)
+          const distanceSquared = dx * dx + dy * dy
 
-          if (distance < 120) {
+          if (distanceSquared < LINK_DISTANCE_SQUARED) {
+            const distance = Math.sqrt(distanceSquared)
             ctx.beginPath()
             ctx.moveTo(particle.x, particle.y)
             ctx.lineTo(otherParticle.x, otherParticle.y)
-            ctx.strokeStyle = `rgba(99, 102, 241, ${0.15 * (1 - distance / 120)})`
+            ctx.strokeStyle = `rgba(99, 102, 241, ${0.15 * (1 - distance / LINK_DISTANCE)})`
             ctx.lineWidth = 0.5
             ctx.stroke()
           }
@@ -94,14 +105,19 @@ export default function ParticleBackground() {
     drawParticles()
 
     const handleResize = () => {
-      resize()
-      createParticles()
+      if (resizeFrameId) return
+      resizeFrameId = requestAnimationFrame(() => {
+        resizeFrameId = null
+        resize()
+        createParticles()
+      })
     }
 
     window.addEventListener('resize', handleResize)
 
     return () => {
       cancelAnimationFrame(animationFrameId)
+      if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
       window.removeEventListener('resize', handleResize)
     }
   }, [])

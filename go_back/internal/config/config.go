@@ -59,11 +59,41 @@ func validateProductionConfig(cfg *Config) {
 	if cfg.GinMode != "release" {
 		return
 	}
-	if cfg.JWTSecret == "please-change-this-secret-key-at-least-32-chars" || len(cfg.JWTSecret) < 32 {
+	if isUnsafeJWTSecret(cfg.JWTSecret) {
 		log.Fatal("JWT_SECRET must be set to a unique value with at least 32 characters in release mode")
 	}
-	if cfg.AdminPassword == "admin123" && cfg.AdminResetPassword {
-		log.Fatal("refusing to reset the admin password to the default admin123 value in release mode")
+	if isUnsafeAdminPassword(cfg.AdminPassword) {
+		log.Fatal("ADMIN_PASSWORD must be changed from the default or placeholder value in release mode")
+	}
+	if strings.TrimSpace(cfg.CORSAllowedOrigins) == "*" {
+		log.Fatal("CORS_ALLOWED_ORIGINS cannot be '*' in release mode; leave it empty for same-origin or list explicit origins")
+	}
+}
+
+func isUnsafeJWTSecret(secret string) bool {
+	secret = strings.TrimSpace(secret)
+	if len(secret) < 32 {
+		return true
+	}
+	switch secret {
+	case "please-change-this-secret-key-at-least-32-chars",
+		"replace_with_a_random_secret_at_least_32_chars":
+		return true
+	default:
+		return false
+	}
+}
+
+func isUnsafeAdminPassword(password string) bool {
+	password = strings.TrimSpace(password)
+	if password == "" {
+		return true
+	}
+	switch password {
+	case "admin", "admin123", "password", "123456", "replace_with_initial_admin_password":
+		return true
+	default:
+		return false
 	}
 }
 

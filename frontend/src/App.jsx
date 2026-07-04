@@ -33,6 +33,9 @@ const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundC
 const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
 
 function setupAdminApiInterceptor() {
+  if (window.__adminApiInterceptorInstalled) return
+  window.__adminApiInterceptorInstalled = true
+
   const originalFetch = window.fetch
   window.fetch = async (url, options = {}) => {
     const res = await originalFetch(url, options)

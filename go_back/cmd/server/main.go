@@ -39,7 +39,13 @@ func main() {
 	r := gin.New()
 	r.MaxMultipartMemory = 256 << 20
 	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.CORS())
-	r.Static("/uploads", config.AppConfig.UploadDir)
+
+	uploads := r.Group("/uploads")
+	uploads.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=604800, immutable")
+		c.Next()
+	})
+	uploads.Static("/", config.AppConfig.UploadDir)
 
 	api := r.Group("/api")
 	{

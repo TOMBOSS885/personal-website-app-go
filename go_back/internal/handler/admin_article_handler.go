@@ -13,6 +13,7 @@ import (
 func AdminGetArticles(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
+	page, size = normalizePagination(page, size, 100)
 
 	articles, total, err := repository.GetArticles(page, size, "", false)
 	if err != nil {

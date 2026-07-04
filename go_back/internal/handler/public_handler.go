@@ -61,6 +61,7 @@ func GetStats(c *gin.Context) {
 func GetArticles(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
+	page, size = normalizePagination(page, size, 20)
 	tag := c.Query("tag")
 
 	articles, total, err := repository.GetArticleSummaries(page, size, tag)
@@ -69,6 +70,19 @@ func GetArticles(c *gin.Context) {
 		return
 	}
 	response.Page(c, articles, total, size, page)
+}
+
+func normalizePagination(page, size, maxSize int) (int, int) {
+	if page < 0 {
+		page = 0
+	}
+	if size <= 0 {
+		size = 10
+	}
+	if maxSize > 0 && size > maxSize {
+		size = maxSize
+	}
+	return page, size
 }
 
 func GetArticle(c *gin.Context) {

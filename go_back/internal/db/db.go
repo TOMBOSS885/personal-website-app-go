@@ -3,6 +3,7 @@ package db
 import (
 	"log"
 	"personal-website-go/internal/config"
+	"time"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -31,5 +32,7 @@ func InitDB() {
 	}
 	sqlDB.SetMaxIdleConns(5)
 	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
+	sqlDB.SetConnMaxLifetime(55 * time.Minute)
 	log.Println("database connection established")
 }
