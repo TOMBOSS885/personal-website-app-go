@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, FileText, Loader, Move, Music, Pause, Play, Settings, Volume2, X } from 'lucide-react'
+import { ChevronDown, FileText, Loader, Move, Music, Pause, Play, Settings, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
 
 const DEFAULT_TOP = 96
 const PLAYER_HEIGHT = 56
@@ -289,6 +289,26 @@ export default function MusicPlayer() {
     setCurrentTime(0)
   }, [currentSong, songs])
 
+  const playPreviousSong = useCallback(() => {
+    if (songs.length === 0) {
+      setPlaying(false)
+      return
+    }
+
+    const currentIndex = songs.findIndex(song => song.id === currentSong?.id)
+    const previousIndex = currentIndex >= 0
+      ? (currentIndex - 1 + songs.length) % songs.length
+      : songs.length - 1
+    if (currentSong?.id === songs[previousIndex]?.id && audioRef.current) {
+      audioRef.current.currentTime = 0
+      audioRef.current.play()
+        .then(() => setPlaying(true))
+        .catch(() => setPlaying(false))
+    }
+    setCurrentSong(songs[previousIndex])
+    setCurrentTime(0)
+  }, [currentSong, songs])
+
   const selectSong = (song) => {
     markPlayerActivity()
     setCurrentSong(song)
@@ -395,11 +415,21 @@ export default function MusicPlayer() {
 
       <LyricsModule
         song={currentSong}
+        playing={playing}
         status={lyricsStatus}
         lines={lyricsLines}
         activeIndex={activeLyricIndex}
         settings={lyricsSettings}
         onSettingsChange={updateLyricsSettings}
+        onTogglePlay={togglePlay}
+        onPrevious={() => {
+          markPlayerActivity()
+          playPreviousSong()
+        }}
+        onNext={() => {
+          markPlayerActivity()
+          playNextSong()
+        }}
       />
 
       <div
@@ -632,7 +662,18 @@ function LyricsPanel({ dockSide, verticalClass, song, status, lines, activeIndex
   )
 }
 
-function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsChange }) {
+function LyricsModule({
+  song,
+  playing,
+  status,
+  lines,
+  activeIndex,
+  settings,
+  onSettingsChange,
+  onTogglePlay,
+  onPrevious,
+  onNext,
+}) {
   const moduleRef = useRef(null)
   const dragRef = useRef(null)
   const [panelOpen, setPanelOpen] = useState(false)
@@ -640,6 +681,7 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
   const visibleLines = getVisibleLyrics(lines, activeIndex, settings.lineCount)
   const moduleWidth = lyricsModuleWidth(settings.width)
   const moduleHeight = lyricsModuleHeight(settings.height)
+  const shellHeight = panelOpen ? Math.max(moduleHeight, 326) : moduleHeight
 
   const moveLyricsDrag = useCallback((event) => {
     const drag = dragRef.current
@@ -647,8 +689,8 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
     setPosition(clampLyricsPosition({
       x: event.clientX - drag.offsetX,
       y: event.clientY - drag.offsetY,
-    }, moduleWidth, moduleHeight))
-  }, [moduleHeight, moduleWidth])
+    }, moduleWidth, shellHeight))
+  }, [moduleWidth, shellHeight])
 
   const endLyricsDrag = useCallback(() => {
     dragRef.current = null
@@ -668,8 +710,8 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
   }, [])
 
   useEffect(() => {
-    setPosition(current => clampLyricsPosition(current, moduleWidth, moduleHeight))
-  }, [moduleHeight, moduleWidth])
+    setPosition(current => clampLyricsPosition(current, moduleWidth, shellHeight))
+  }, [moduleWidth, shellHeight])
 
   useEffect(() => {
     return () => {
@@ -704,7 +746,7 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
         left: position.x,
         top: position.y,
         width: moduleWidth,
-        height: moduleHeight,
+        height: shellHeight,
         '--lyrics-bg-opacity': settings.opacity / 100,
       }}
     >
@@ -743,15 +785,62 @@ function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsCh
 
       {panelOpen && <LyricsSettingsPanel settings={settings} onChange={onSettingsChange} />}
 
-      <div className="h-[calc(100%-3.25rem)] overflow-hidden px-4 py-3">
-        <LyricsContent
-          status={status}
-          visibleLines={visibleLines}
-          effect={settings.effect}
-          fontSize={settings.fontSize}
-        />
-      </div>
+      {!panelOpen && (
+        <div className="flex h-[calc(100%-3.25rem)] flex-col overflow-hidden px-4 py-3">
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <LyricsContent
+              status={status}
+              visibleLines={visibleLines}
+              effect={settings.effect}
+              fontSize={settings.fontSize}
+            />
+          </div>
+          <LyricsPlaybackControls
+            playing={playing}
+            onTogglePlay={onTogglePlay}
+            onPrevious={onPrevious}
+            onNext={onNext}
+          />
+        </div>
+      )}
     </motion.div>
+  )
+}
+
+function LyricsPlaybackControls({ playing, onTogglePlay, onPrevious, onNext }) {
+  const stopDrag = event => event.stopPropagation()
+
+  return (
+    <div className="mt-2 flex shrink-0 items-center justify-center gap-2 border-t border-white/55 pt-2 dark:border-slate-800/70">
+      <button
+        type="button"
+        onPointerDown={stopDrag}
+        onClick={onPrevious}
+        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+        title="上一首"
+      >
+        <SkipBack className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onPointerDown={stopDrag}
+        onClick={onTogglePlay}
+        className="flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105"
+        style={{ background: 'var(--theme-gradient)' }}
+        title={playing ? '暂停' : '播放'}
+      >
+        {playing ? <Pause className="h-4.5 w-4.5" /> : <Play className="h-4.5 w-4.5 translate-x-0.5" />}
+      </button>
+      <button
+        type="button"
+        onPointerDown={stopDrag}
+        onClick={onNext}
+        className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+        title="下一首"
+      >
+        <SkipForward className="h-4 w-4" />
+      </button>
+    </div>
   )
 }
 
