@@ -531,6 +531,21 @@ body {
   color: var(--theme-text-primary, #1f2937);
 }
 
+.cursor-effects-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  pointer-events: none;
+  opacity: 0.92;
+  mix-blend-mode: normal;
+}
+
+@media (pointer: coarse), (prefers-reduced-motion: reduce) {
+  .cursor-effects-canvas {
+    display: none;
+  }
+}
+
 html.theme-dark .theme-app-shell .text-gray-950,
 html.theme-dark .theme-app-shell .text-gray-900,
 html.theme-dark .theme-app-shell .text-gray-800,

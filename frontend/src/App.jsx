@@ -6,6 +6,7 @@ import Navbar from './components/Navbar'
 import Footer from './components/Footer'
 import MusicPlayer from './components/MusicPlayer'
 import HomeBackgroundCustomizer from './components/HomeBackgroundCustomizer'
+import CursorEffects from './components/CursorEffects'
 
 const API_BASE = ''
 
@@ -92,6 +93,7 @@ function App() {
         <div className="theme-page-background" aria-hidden="true" />
         <Router>
           <div className="theme-app-shell min-h-screen flex flex-col">
+            <CursorEffects />
             <Suspense fallback={<PageLoading />}>
               <Routes>
                 <Route path="/admin/login" element={<LoginPage />} />
