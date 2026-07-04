@@ -94,8 +94,8 @@ export default function ArticleDetailPage() {
 
   return (
     <div className="min-h-screen bg-transparent">
-      <div className="mx-auto max-w-4xl px-4 pb-8 pt-28">
-        <div className="rounded-3xl border border-white/50 bg-white/60 px-5 py-6 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/50 md:px-8">
+      <div className="mx-auto max-w-[92rem] px-4 pb-8 pt-28 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem] lg:gap-6">
+        <div className="rounded-3xl border border-white/50 bg-white/60 px-5 py-6 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/50 md:px-8 lg:col-start-2">
           <Link to="/blog" className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-100">
             <ArrowLeft className="h-4 w-4" />
             返回
@@ -126,10 +126,10 @@ export default function ArticleDetailPage() {
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="mx-auto max-w-6xl px-4 pb-12 pt-8"
+        className="mx-auto max-w-[92rem] px-4 pb-12 pt-8"
       >
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
-          <div className="rounded-3xl border border-white/60 bg-white/75 px-5 py-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:px-8 md:py-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem]">
+          <div className="rounded-3xl border border-white/60 bg-white/75 px-5 py-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:px-8 md:py-8 lg:col-start-2">
             <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="article-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -164,7 +164,7 @@ export default function ArticleDetailPage() {
           </div>
 
           {tocItems.length > 0 && (
-            <aside className="hidden lg:block">
+            <aside className="hidden lg:col-start-3 lg:block">
               <div className="sticky top-28 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60">
                 <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">文章目录</div>
                 <nav className="mt-3 space-y-1">

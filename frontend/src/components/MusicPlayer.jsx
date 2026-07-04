@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, FileText, Loader, Music, Pause, Play, Volume2 } from 'lucide-react'
+import { ChevronDown, FileText, Loader, Move, Music, Pause, Play, Settings, Volume2, X } from 'lucide-react'
 
 const DEFAULT_TOP = 96
 const PLAYER_HEIGHT = 56
@@ -9,6 +9,15 @@ const EDGE_GAP_MOBILE = 16
 const EDGE_GAP_DESKTOP = 24
 const DRAG_THRESHOLD = 6
 const COLLAPSE_DELAY = 3000
+const LYRICS_SETTINGS_KEY = 'music-lyrics-module-settings'
+const DEFAULT_LYRICS_SETTINGS = {
+  enabled: true,
+  orientation: 'horizontal',
+  effect: 'pop',
+  fontSize: 16,
+  opacity: 88,
+  lineCount: 3,
+}
 
 function formatTime(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
@@ -51,6 +60,7 @@ export default function MusicPlayer() {
   const [seeking, setSeeking] = useState(false)
   const [lyricsLines, setLyricsLines] = useState([])
   const [lyricsStatus, setLyricsStatus] = useState('none')
+  const [lyricsSettings, setLyricsSettings] = useState(() => readLyricsSettings())
 
   const fetchSongs = useCallback(async () => {
     if (loaded || loading) return
@@ -343,6 +353,14 @@ export default function MusicPlayer() {
     return index
   }, [currentTime, lyricsLines])
 
+  const updateLyricsSettings = useCallback((patch) => {
+    setLyricsSettings(current => {
+      const next = { ...current, ...patch }
+      localStorage.setItem(LYRICS_SETTINGS_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
   const collapsed = dragging || !currentSong || idleCollapsed
   const showText = !dragging && !currentSong
@@ -362,17 +380,9 @@ export default function MusicPlayer() {
       }
   const listHorizontalClass = dockSide === 'right' ? 'right-0' : 'left-0'
   const listVerticalClass = panelDropsUp ? 'bottom-full mb-2' : 'top-full mt-2'
-  const lyricsVerticalClass = panelDropsUp ? 'bottom-full mb-3' : 'top-full mt-3'
-  const showLyricsPanel = currentSong && !dragging && !open
 
   return (
-    <div
-      ref={rootRef}
-      className="fixed z-[70]"
-      style={dockStyle}
-      onMouseEnter={wakePlayer}
-      onMouseLeave={scheduleCollapse}
-    >
+    <>
       <audio
         ref={audioRef}
         src={currentSong?.fileUrl || ''}
@@ -382,19 +392,22 @@ export default function MusicPlayer() {
         onEnded={playNextSong}
       />
 
-      <AnimatePresence>
-        {showLyricsPanel && (
-          <LyricsPanel
-            dockSide={dockSide}
-            verticalClass={lyricsVerticalClass}
-            song={currentSong}
-            status={lyricsStatus}
-            lines={lyricsLines}
-            activeIndex={activeLyricIndex}
-            collapsed={idleCollapsed}
-          />
-        )}
-      </AnimatePresence>
+      <LyricsModule
+        song={currentSong}
+        status={lyricsStatus}
+        lines={lyricsLines}
+        activeIndex={activeLyricIndex}
+        settings={lyricsSettings}
+        onSettingsChange={updateLyricsSettings}
+      />
+
+      <div
+        ref={rootRef}
+        className="fixed z-[70]"
+        style={dockStyle}
+        onMouseEnter={wakePlayer}
+        onMouseLeave={scheduleCollapse}
+      >
 
       <motion.div
         ref={playerRef}
@@ -495,6 +508,18 @@ export default function MusicPlayer() {
                 </div>
                 <button
                   type="button"
+                  onClick={() => updateLyricsSettings({ enabled: !lyricsSettings.enabled })}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
+                    lyricsSettings.enabled
+                      ? 'text-indigo-600 hover:bg-indigo-50 dark:text-indigo-300 dark:hover:bg-indigo-500/15'
+                      : 'text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title={lyricsSettings.enabled ? '关闭歌词模块' : '开启歌词模块'}
+                >
+                  <FileText className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
                   onClick={toggleList}
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                   title="歌曲列表"
@@ -545,7 +570,8 @@ export default function MusicPlayer() {
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+      </div>
+    </>
   )
 }
 
@@ -605,6 +631,313 @@ function LyricsPanel({ dockSide, verticalClass, song, status, lines, activeIndex
   )
 }
 
+function LyricsModule({ song, status, lines, activeIndex, settings, onSettingsChange }) {
+  const moduleRef = useRef(null)
+  const dragRef = useRef(null)
+  const [panelOpen, setPanelOpen] = useState(false)
+  const [position, setPosition] = useState(() => readLyricsPosition())
+  const visibleLines = getVisibleLyrics(lines, activeIndex, settings.lineCount)
+  const isVertical = settings.orientation === 'vertical'
+
+  const moveLyricsDrag = useCallback((event) => {
+    const drag = dragRef.current
+    if (!drag) return
+    setPosition(clampLyricsPosition({
+      x: event.clientX - drag.offsetX,
+      y: event.clientY - drag.offsetY,
+    }))
+  }, [])
+
+  const endLyricsDrag = useCallback(() => {
+    dragRef.current = null
+    window.removeEventListener('pointermove', moveLyricsDrag)
+    window.removeEventListener('pointerup', endLyricsDrag)
+    window.removeEventListener('pointercancel', endLyricsDrag)
+  }, [moveLyricsDrag])
+
+  useEffect(() => {
+    localStorage.setItem('music-lyrics-module-position', JSON.stringify(position))
+  }, [position])
+
+  useEffect(() => {
+    const keepInside = () => setPosition(current => clampLyricsPosition(current))
+    window.addEventListener('resize', keepInside)
+    return () => window.removeEventListener('resize', keepInside)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      window.removeEventListener('pointermove', moveLyricsDrag)
+      window.removeEventListener('pointerup', endLyricsDrag)
+      window.removeEventListener('pointercancel', endLyricsDrag)
+    }
+  }, [endLyricsDrag, moveLyricsDrag])
+
+  if (!settings.enabled || !song) return null
+
+  const startDrag = (event) => {
+    if (event.button !== undefined && event.button !== 0) return
+    event.preventDefault()
+    const rect = moduleRef.current?.getBoundingClientRect()
+    dragRef.current = {
+      offsetX: event.clientX - (rect?.left || position.x),
+      offsetY: event.clientY - (rect?.top || position.y),
+    }
+    window.addEventListener('pointermove', moveLyricsDrag)
+    window.addEventListener('pointerup', endLyricsDrag)
+    window.addEventListener('pointercancel', endLyricsDrag)
+  }
+
+  return (
+    <motion.div
+      ref={moduleRef}
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="fixed z-[65] overflow-hidden rounded-2xl border border-white/70 bg-white/85 shadow-2xl shadow-indigo-500/10 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/85"
+      style={{
+        left: position.x,
+        top: position.y,
+        width: isVertical ? 180 : 360,
+        minHeight: isVertical ? 300 : 176,
+        opacity: settings.opacity / 100,
+      }}
+    >
+      <div
+        className="flex cursor-grab items-center justify-between gap-2 border-b border-white/60 px-3 py-2 active:cursor-grabbing dark:border-slate-800/80"
+        onPointerDown={startDrag}
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-slate-400">
+            <Move className="h-3.5 w-3.5" />
+            同步歌词
+          </div>
+          <div className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">{song.title}</div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onPointerDown={event => event.stopPropagation()}
+            onClick={() => setPanelOpen(value => !value)}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            title="歌词设置"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onPointerDown={event => event.stopPropagation()}
+            onClick={() => onSettingsChange({ enabled: false })}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-slate-400 dark:hover:bg-red-500/15 dark:hover:text-red-300"
+            title="关闭歌词"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {panelOpen && <LyricsSettingsPanel settings={settings} onChange={onSettingsChange} />}
+
+      <div className={isVertical ? 'flex min-h-[14rem] justify-center px-4 py-4' : 'px-4 py-3'}>
+        <LyricsContent
+          status={status}
+          visibleLines={visibleLines}
+          effect={settings.effect}
+          fontSize={settings.fontSize}
+          isVertical={isVertical}
+        />
+      </div>
+    </motion.div>
+  )
+}
+
+function LyricsSettingsPanel({ settings, onChange }) {
+  return (
+    <div className="grid gap-3 border-b border-white/60 bg-white/55 px-3 py-3 text-xs dark:border-slate-800/80 dark:bg-slate-900/55">
+      <div className="grid grid-cols-2 gap-2">
+        <SettingButton active={settings.orientation === 'horizontal'} onClick={() => onChange({ orientation: 'horizontal' })}>横向</SettingButton>
+        <SettingButton active={settings.orientation === 'vertical'} onClick={() => onChange({ orientation: 'vertical' })}>竖向</SettingButton>
+      </div>
+      <label className="grid gap-1 text-gray-500 dark:text-slate-400">
+        <span>显示特效</span>
+        <select
+          value={settings.effect}
+          onChange={event => onChange({ effect: event.target.value })}
+          className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-gray-800 outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+        >
+          <option value="pop">逐字弹出</option>
+          <option value="slide">滑入</option>
+          <option value="fade">淡入</option>
+          <option value="karaoke">高亮聚焦</option>
+        </select>
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <RangeSetting label="字号" value={settings.fontSize} min={13} max={24} unit="px" onChange={value => onChange({ fontSize: value })} />
+        <RangeSetting label="行数" value={settings.lineCount} min={1} max={5} unit="行" onChange={value => onChange({ lineCount: value })} />
+      </div>
+      <RangeSetting label="透明度" value={settings.opacity} min={45} max={100} unit="%" onChange={value => onChange({ opacity: value })} />
+    </div>
+  )
+}
+
+function SettingButton({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
+        active
+          ? 'bg-indigo-600 text-white shadow-sm'
+          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function RangeSetting({ label, value, min, max, unit, onChange }) {
+  return (
+    <label className="grid gap-1 text-gray-500 dark:text-slate-400">
+      <span>{label}: {value}{unit}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={event => onChange(Number(event.target.value))}
+        className="accent-indigo-600"
+      />
+    </label>
+  )
+}
+
+function LyricsContent({ status, visibleLines, effect, fontSize, isVertical }) {
+  if (status === 'loading') {
+    return (
+      <div className="flex w-full items-center justify-center py-5 text-sm text-gray-500 dark:text-slate-400">
+        <Loader className="mr-2 h-4 w-4 animate-spin" />
+        歌词加载中...
+      </div>
+    )
+  }
+  if (status === 'missing') return <LyricsNotice>这首歌还没有导入歌词</LyricsNotice>
+  if (status === 'empty' || status === 'error') return <LyricsNotice tone="warn">歌词文件暂时无法显示</LyricsNotice>
+
+  return (
+    <div
+      className={isVertical ? 'flex max-h-[22rem] flex-row-reverse gap-3 overflow-hidden' : 'w-full space-y-1.5'}
+      style={isVertical ? { writingMode: 'vertical-rl' } : undefined}
+    >
+      {visibleLines.map(item => (
+        <LyricLine
+          key={`${item.index}-${item.line.time}`}
+          text={item.line.text}
+          active={item.active}
+          effect={effect}
+          fontSize={fontSize}
+          isVertical={isVertical}
+        />
+      ))}
+    </div>
+  )
+}
+
+function LyricsNotice({ tone = 'muted', children }) {
+  const classes = tone === 'warn'
+    ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200'
+    : 'bg-gray-50 text-gray-500 dark:bg-slate-900 dark:text-slate-400'
+  return <div className={`w-full rounded-xl px-3 py-3 text-center text-sm ${classes}`}>{children}</div>
+}
+
+function LyricLine({ text, active, effect, fontSize, isVertical }) {
+  const baseClass = active
+    ? 'font-semibold text-indigo-600 drop-shadow-sm dark:text-indigo-300'
+    : 'text-gray-400 dark:text-slate-500'
+
+  if (active && effect === 'pop') {
+    return (
+      <div className={`text-center ${baseClass}`} style={{ fontSize }}>
+        {Array.from(text).map((char, index) => (
+          <motion.span
+            key={`${char}-${index}`}
+            initial={{ opacity: 0, y: isVertical ? 0 : 8, x: isVertical ? -8 : 0, scale: 0.72 }}
+            animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
+            transition={{ delay: Math.min(index * 0.025, 0.7), type: 'spring', stiffness: 420, damping: 24 }}
+            className="inline-block"
+          >
+            {char}
+          </motion.span>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <motion.div
+      initial={{
+        opacity: active ? 0 : 0.72,
+        y: effect === 'slide' && active && !isVertical ? 8 : 0,
+        x: effect === 'slide' && active && isVertical ? -8 : 0,
+        scale: effect === 'karaoke' && active ? 0.96 : 1,
+      }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        x: 0,
+        scale: effect === 'karaoke' && active ? 1.04 : 1,
+      }}
+      transition={{ duration: 0.22 }}
+      className={`truncate text-center transition-colors ${baseClass}`}
+      style={{ fontSize }}
+    >
+      {text}
+    </motion.div>
+  )
+}
+
+function readLyricsSettings() {
+  if (typeof window === 'undefined') return DEFAULT_LYRICS_SETTINGS
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LYRICS_SETTINGS_KEY) || '{}')
+    return {
+      ...DEFAULT_LYRICS_SETTINGS,
+      ...parsed,
+      fontSize: clamp(Number(parsed.fontSize) || DEFAULT_LYRICS_SETTINGS.fontSize, 13, 24),
+      opacity: clamp(Number(parsed.opacity) || DEFAULT_LYRICS_SETTINGS.opacity, 45, 100),
+      lineCount: clamp(Number(parsed.lineCount) || DEFAULT_LYRICS_SETTINGS.lineCount, 1, 5),
+    }
+  } catch {
+    return DEFAULT_LYRICS_SETTINGS
+  }
+}
+
+function readLyricsPosition() {
+  if (typeof window === 'undefined') return { x: 24, y: 120 }
+  try {
+    const parsed = JSON.parse(localStorage.getItem('music-lyrics-module-position') || '{}')
+    if (Number.isFinite(parsed.x) && Number.isFinite(parsed.y)) {
+      return clampLyricsPosition(parsed)
+    }
+  } catch {
+    // ignore broken local settings
+  }
+  return clampLyricsPosition({
+    x: window.innerWidth - 420,
+    y: 96,
+  })
+}
+
+function clampLyricsPosition(position) {
+  if (typeof window === 'undefined') return position
+  const gap = edgeGap()
+  const maxX = Math.max(gap, window.innerWidth - 190)
+  const maxY = Math.max(gap, window.innerHeight - 160)
+  return {
+    x: clamp(Number(position.x) || gap, gap, maxX),
+    y: clamp(Number(position.y) || DEFAULT_TOP, gap, maxY),
+  }
+}
+
 function decodeLyricsBuffer(buffer) {
   const bytes = new Uint8Array(buffer)
   if (bytes[0] === 0xff && bytes[1] === 0xfe) {
@@ -645,11 +978,13 @@ function parseLrc(text) {
   return lines.sort((a, b) => a.time - b.time)
 }
 
-function getVisibleLyrics(lines, activeIndex) {
+function getVisibleLyrics(lines, activeIndex, lineCount = 3) {
   if (lines.length === 0) return []
   const safeIndex = activeIndex >= 0 ? activeIndex : 0
-  const start = clamp(safeIndex - 1, 0, Math.max(0, lines.length - 3))
-  return lines.slice(start, start + 3).map((line, offset) => {
+  const count = clamp(Number(lineCount) || 3, 1, 5)
+  const before = Math.floor((count - 1) / 2)
+  const start = clamp(safeIndex - before, 0, Math.max(0, lines.length - count))
+  return lines.slice(start, start + count).map((line, offset) => {
     const index = start + offset
     return { line, index, active: index === safeIndex }
   })
