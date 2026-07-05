@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"personal-website-go/internal/cache"
 	"personal-website-go/internal/config"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ func (w cachedResponseWriter) Write(data []byte) (int, error) {
 
 func CacheGET(prefix string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		setPublicHTTPCacheHeaders(c)
 		if !shouldCacheRequest(c) {
 			c.Next()
 			return
@@ -59,6 +61,17 @@ func CacheGET(prefix string) gin.HandlerFunc {
 		defer setCancel()
 		_ = cache.Client.Set(setCtx, key, buffer.Bytes(), ttl).Err()
 	}
+}
+
+func setPublicHTTPCacheHeaders(c *gin.Context) {
+	ttl := 30
+	if config.AppConfig != nil && config.AppConfig.CacheTTLSeconds > 0 {
+		ttl = config.AppConfig.CacheTTLSeconds
+	}
+	if ttl > 60 {
+		ttl = 60
+	}
+	c.Header("Cache-Control", "public, max-age="+strconv.Itoa(ttl)+", stale-while-revalidate=300")
 }
 
 func InvalidatePublicCacheAfterMutation() gin.HandlerFunc {

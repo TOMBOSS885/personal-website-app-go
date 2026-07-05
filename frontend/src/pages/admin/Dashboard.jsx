@@ -9,28 +9,21 @@ export default function Dashboard() {
   const token = localStorage.getItem('token')
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API_BASE}/api/admin/articles?page=0&size=100`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }).then(r => r.json()),
-      fetch(`${API_BASE}/api/admin/projects`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }).then(r => r.json()),
-      fetch(`${API_BASE}/api/admin/skills`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      }).then(r => r.json()),
-    ]).then(([articles, projects, skills]) => {
-      const articlesList = Array.isArray(articles) ? articles : (articles.content || [])
-      const totalViews = articlesList.reduce((sum, article) => sum + (article.views || 0), 0)
-      setStats({
-        articles: articles.totalElements || articlesList.length || 0,
-        projects: projects.length || 0,
-        skills: skills.length || 0,
-        views: totalViews
+    fetch(`${API_BASE}/api/admin/dashboard-stats`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => {
+        setStats({
+          articles: data?.articles || 0,
+          projects: data?.projects || 0,
+          skills: data?.skills || 0,
+          views: data?.views || 0
+        })
       })
-    }).catch(err => console.error('获取统计失败:', err))
+      .catch(err => console.error('获取统计失败:', err))
       .finally(() => setLoading(false))
-  }, [])
+  }, [token])
 
   const cards = [
     { label: '文章总数', value: stats.articles, icon: FileText, color: 'blue', bg: 'from-blue-500 to-cyan-500' },

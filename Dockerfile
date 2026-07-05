@@ -25,6 +25,14 @@ RUN --mount=type=cache,target=/root/.npm \
     npm ci --legacy-peer-deps --no-audit --no-fund
 COPY frontend/ ./
 RUN npm run build
+RUN find /app/frontend/dist -type f \( \
+      -name '*.html' -o \
+      -name '*.js' -o \
+      -name '*.css' -o \
+      -name '*.json' -o \
+      -name '*.svg' -o \
+      -name '*.txt' \
+    \) -exec sh -c 'gzip -9 -c "$1" > "$1.gz"' sh {} \;
 
 FROM golang:1.25-alpine AS backend-builder
 

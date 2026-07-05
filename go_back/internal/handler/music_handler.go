@@ -127,7 +127,7 @@ func StreamMusic(c *gin.Context) {
 		c.Header("Content-Type", music.ContentType)
 	}
 	c.Header("Accept-Ranges", "bytes")
-	c.Header("Cache-Control", "private, max-age=0, no-store")
+	c.Header("Cache-Control", "private, max-age="+strconv.Itoa(mediaURLCacheSeconds()))
 	http.ServeContent(c.Writer, c.Request, music.FileName, stat.ModTime(), file)
 }
 
@@ -453,6 +453,16 @@ func mediaURLTTL() time.Duration {
 		return time.Duration(config.AppConfig.MediaURLTTLSeconds) * time.Second
 	}
 	return 10 * time.Minute
+}
+
+func mediaURLCacheSeconds() int {
+	if config.AppConfig != nil && config.AppConfig.MediaURLTTLSeconds > 0 {
+		if config.AppConfig.MediaURLTTLSeconds > 3600 {
+			return 3600
+		}
+		return config.AppConfig.MediaURLTTLSeconds
+	}
+	return 600
 }
 
 func uploadedMusicPath(fileURL string) (string, error) {

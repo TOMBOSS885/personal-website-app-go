@@ -87,3 +87,9 @@ func GetArticleCount() (int64, error) {
 	err := db.DB.Model(&model.Article{}).Count(&count).Error
 	return count, err
 }
+
+func GetTotalArticleViews() (int64, error) {
+	var total int64
+	err := db.DB.Model(&model.Article{}).Select("COALESCE(SUM(views), 0)").Scan(&total).Error
+	return total, err
+}

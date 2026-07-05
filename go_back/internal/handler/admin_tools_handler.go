@@ -22,6 +22,35 @@ type SearchResult struct {
 	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
 }
 
+func AdminDashboardStats(c *gin.Context) {
+	articleCount, err := repository.GetArticleCount()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取统计失败")
+		return
+	}
+	projectCount, err := repository.GetProjectCount()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取统计失败")
+		return
+	}
+	skillCount, err := repository.GetSkillCount()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取统计失败")
+		return
+	}
+	totalViews, err := repository.GetTotalArticleViews()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取统计失败")
+		return
+	}
+	response.Success(c, gin.H{
+		"articles": articleCount,
+		"projects": projectCount,
+		"skills":   skillCount,
+		"views":    totalViews,
+	})
+}
+
 func AdminGetOperationLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))

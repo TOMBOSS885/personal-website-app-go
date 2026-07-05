@@ -11,6 +11,12 @@ func GetSkills() ([]model.Skill, error) {
 	return skills, err
 }
 
+func GetSkillCount() (int64, error) {
+	var count int64
+	err := db.DB.Model(&model.Skill{}).Count(&count).Error
+	return count, err
+}
+
 func GetSkillByID(id uint64) (*model.Skill, error) {
 	var skill model.Skill
 	err := db.DB.First(&skill, id).Error
