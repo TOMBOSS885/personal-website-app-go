@@ -2,16 +2,19 @@ package tasks
 
 import (
 	"log"
+	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/repository"
 	"time"
 )
 
 func StartMaintenanceTasks() {
 	go runArticleViewFlushLoop()
+	go runLocalRateLimitCleanupLoop()
 	go runDailyCleanupLoop()
 }
 
 func RunStartupMaintenance() {
+	middleware.CleanupExpiredLocalRateLimits(time.Now())
 	repository.CleanupSecurityLogs()
 	repository.CleanupOperationLogs()
 	repository.FlushPendingArticleViews()
@@ -22,6 +25,16 @@ func runArticleViewFlushLoop() {
 	defer ticker.Stop()
 	for range ticker.C {
 		repository.FlushPendingArticleViews()
+	}
+}
+
+func runLocalRateLimitCleanupLoop() {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		if removed := middleware.CleanupExpiredLocalRateLimits(time.Now()); removed > 0 {
+			log.Printf("cleaned %d expired local rate limit entries", removed)
+		}
 	}
 }
 

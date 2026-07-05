@@ -101,6 +101,25 @@ func allowRequestLocal(name, ip string, limit int, window time.Duration) (bool, 
 	return entry.Count <= limit, int64(entry.Count), time.Until(entry.ResetAt)
 }
 
+func CleanupExpiredLocalRateLimits(now time.Time) int {
+	if now.IsZero() {
+		now = time.Now()
+	}
+
+	localRateStore.Lock()
+	defer localRateStore.Unlock()
+
+	removed := 0
+	for key, entry := range localRateStore.entries {
+		if entry.ResetAt.IsZero() || now.Before(entry.ResetAt) {
+			continue
+		}
+		delete(localRateStore.entries, key)
+		removed++
+	}
+	return removed
+}
+
 func limitForCategory(settings model.RateLimitSettings, name string, fallback int) int {
 	switch name {
 	case securityCategoryPublic:
