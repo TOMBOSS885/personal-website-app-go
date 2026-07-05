@@ -165,6 +165,43 @@ func GetHighAccessStats(date string, threshold int) ([]model.SecurityAccessStat,
 	return stats, err
 }
 
+type HighAccessThresholds struct {
+	Public          int `json:"public"`
+	Music           int `json:"music"`
+	MusicStream     int `json:"musicStream"`
+	MusicStreamSong int `json:"musicStreamSong"`
+}
+
+func BuildHighAccessThresholds(settings model.RateLimitSettings) HighAccessThresholds {
+	normalizeRateLimitSettings(&settings)
+	return HighAccessThresholds{
+		Public:          settings.PublicPerMinute * 10,
+		Music:           settings.MusicPerMinute * 10,
+		MusicStream:     settings.MusicStreamPerMinute * 10,
+		MusicStreamSong: settings.MusicStreamPerMinute * 10,
+	}
+}
+
+func GetHighAccessStatsByRateLimit(date string, settings model.RateLimitSettings) ([]model.SecurityAccessStat, error) {
+	if date == "" {
+		date = time.Now().Format("20060102")
+	}
+	thresholds := BuildHighAccessThresholds(settings)
+	var stats []model.SecurityAccessStat
+	err := db.DB.Where("date = ?", date).
+		Where(
+			"(category = ? AND count > ?) OR (category = ? AND count > ?) OR (category = ? AND count > ?) OR (category = ? AND count > ?)",
+			"public", thresholds.Public,
+			"music", thresholds.Music,
+			"music-stream", thresholds.MusicStream,
+			"music-stream-song", thresholds.MusicStreamSong,
+		).
+		Order("count DESC").
+		Limit(20).
+		Find(&stats).Error
+	return stats, err
+}
+
 func FindActiveBan(ip string) (*model.SecurityEvent, error) {
 	var event model.SecurityEvent
 	err := db.DB.Where("type = ? AND ip = ? AND expires_at > ?", "ban", ip, time.Now()).

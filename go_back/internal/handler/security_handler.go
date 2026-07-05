@@ -42,7 +42,12 @@ func AdminSecurityDashboard(c *gin.Context) {
 	if view == "stats" || view == "all" {
 		stats, totalStats, _ = repository.SearchSecurityStats(keyword, date, page, size)
 	}
-	highAccess, _ := repository.GetHighAccessStats(date, 100)
+	highAccess := []model.SecurityAccessStat{}
+	highAccessThresholds := repository.HighAccessThresholds{}
+	if settings != nil {
+		highAccessThresholds = repository.BuildHighAccessThresholds(*settings)
+		highAccess, _ = repository.GetHighAccessStatsByRateLimit(date, *settings)
+	}
 
 	response.Success(c, gin.H{
 		"settings":           settings,
@@ -51,6 +56,7 @@ func AdminSecurityDashboard(c *gin.Context) {
 		"stats":              stats,
 		"statsTotal":         totalStats,
 		"highAccess":         highAccess,
+		"highAccessRules":    highAccessThresholds,
 		"activeRestrictions": listActiveRestrictions(),
 		"date":               date,
 	})

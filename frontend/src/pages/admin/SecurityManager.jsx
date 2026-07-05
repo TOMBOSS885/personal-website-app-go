@@ -90,6 +90,7 @@ export default function SecurityManager() {
 
   const restrictions = data?.activeRestrictions || []
   const highAccess = data?.highAccess || []
+  const highAccessRules = data?.highAccessRules || {}
   const stats = data?.stats || []
   const events = data?.events || []
   const total = activeTab === 'events' ? Number(data?.eventsTotal || 0) : Number(data?.statsTotal || 0)
@@ -235,6 +236,9 @@ export default function SecurityManager() {
       </Section>
 
       <Section title="高访问用户">
+        <p className="mb-3 text-sm text-gray-500 dark:text-slate-400">
+          动态规则：当天访问次数大于当前每分钟限流的 10 倍后标记。公开接口 &gt; {highAccessRules.public || '-'}，音乐列表 &gt; {highAccessRules.music || '-'}，音乐流 &gt; {highAccessRules.musicStream || '-'}，单曲流 &gt; {highAccessRules.musicStreamSong || '-'}。
+        </p>
         <DataTable columns={['日期', 'IP', '类型', '歌曲', '次数']} rows={highAccess.map(item => [
           item.date,
           item.ip,
