@@ -29,10 +29,19 @@ func AdminSecurityDashboard(c *gin.Context) {
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "30"))
 	keyword := c.Query("keyword")
 	date := c.DefaultQuery("date", time.Now().Format("20060102"))
+	view := strings.TrimSpace(c.DefaultQuery("view", "stats"))
 
 	settings, _ := repository.GetOrCreateRateLimitSettings()
-	events, totalEvents, _ := repository.SearchSecurityEvents(keyword, c.Query("type"), c.Query("severity"), page, size)
-	stats, totalStats, _ := repository.SearchSecurityStats(keyword, date, page, size)
+	events := []model.SecurityEvent{}
+	stats := []model.SecurityAccessStat{}
+	var totalEvents int64
+	var totalStats int64
+	if view == "events" || view == "all" {
+		events, totalEvents, _ = repository.SearchSecurityEvents(keyword, c.Query("type"), c.Query("severity"), page, size)
+	}
+	if view == "stats" || view == "all" {
+		stats, totalStats, _ = repository.SearchSecurityStats(keyword, date, page, size)
+	}
 	highAccess, _ := repository.GetHighAccessStats(date, 100)
 
 	response.Success(c, gin.H{

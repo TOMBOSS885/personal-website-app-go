@@ -196,7 +196,14 @@ func recordLimitTrigger(c *gin.Context, category string) {
 			_ = cache.Client.Expire(ctx, key, 48*time.Hour).Err()
 		}
 	}
-	if triggerCount != int64(settings.DailyLimitTriggerThreshold) {
+
+	if dbCount, err := repository.CountDailySecurityEvents(ip, "limit", time.Now()); err == nil && dbCount > triggerCount {
+		triggerCount = dbCount
+	}
+	if triggerCount < int64(settings.DailyLimitTriggerThreshold) {
+		return
+	}
+	if activeBan, err := repository.FindActiveBan(ip); err == nil && activeBan != nil {
 		return
 	}
 

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, Ban, RefreshCw, Save, Search, Settings, ShieldAlert, TrendingUp } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Ban, ChevronLeft, ChevronRight, RefreshCw, Save, Search, Settings, ShieldAlert, TrendingUp } from 'lucide-react'
 
 const API = '/api/admin/security'
+const PAGE_SIZES = [20, 30, 50, 100]
 
 function authHeaders() {
   return {
@@ -12,13 +13,33 @@ function authHeaders() {
 
 export default function SecurityManager() {
   const [data, setData] = useState(null)
-  const [keyword, setKeyword] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10).replaceAll('-', ''))
   const [settings, setSettings] = useState(null)
+  const [keyword, setKeyword] = useState('')
+  const [appliedKeyword, setAppliedKeyword] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10).replaceAll('-', ''))
+  const [appliedDate, setAppliedDate] = useState(date)
+  const [activeTab, setActiveTab] = useState('stats')
+  const [page, setPage] = useState(0)
+  const [size, setSize] = useState(30)
+  const [eventType, setEventType] = useState('')
+  const [severity, setSeverity] = useState('')
+  const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(() => {
-    const params = new URLSearchParams({ keyword, date, size: '60' })
+    setLoading(true)
+    const params = new URLSearchParams({
+      view: activeTab,
+      keyword: appliedKeyword,
+      date: appliedDate,
+      page: String(page),
+      size: String(size),
+    })
+    if (activeTab === 'events') {
+      if (eventType) params.set('type', eventType)
+      if (severity) params.set('severity', severity)
+    }
+
     fetch(`${API}?${params}`, { headers: authHeaders() })
       .then(res => res.json())
       .then(json => {
@@ -26,7 +47,8 @@ export default function SecurityManager() {
         setSettings(json.settings)
       })
       .catch(() => {})
-  }, [date, keyword])
+      .finally(() => setLoading(false))
+  }, [activeTab, appliedDate, appliedKeyword, eventType, page, severity, size])
 
   useEffect(() => {
     load()
@@ -49,10 +71,53 @@ export default function SecurityManager() {
     }
   }
 
+  const applySearch = () => {
+    setPage(0)
+    setAppliedKeyword(keyword.trim())
+    setAppliedDate(normalizeDate(date))
+  }
+
+  const switchTab = tab => {
+    if (tab === activeTab) return
+    setActiveTab(tab)
+    setPage(0)
+  }
+
+  const changeSize = nextSize => {
+    setSize(nextSize)
+    setPage(0)
+  }
+
   const restrictions = data?.activeRestrictions || []
   const highAccess = data?.highAccess || []
   const stats = data?.stats || []
   const events = data?.events || []
+  const total = activeTab === 'events' ? Number(data?.eventsTotal || 0) : Number(data?.statsTotal || 0)
+  const totalPages = Math.max(1, Math.ceil(total / size))
+
+  const rows = useMemo(() => {
+    if (activeTab === 'events') {
+      return events.map(item => [
+        formatTime(item.createdAt),
+        <SeverityBadge key={`severity-${item.id}`} severity={item.severity} />,
+        eventTypeLabel(item.type),
+        item.ip || '-',
+        item.username || '-',
+        item.message || '-',
+      ])
+    }
+    return stats.map(item => [
+      item.date,
+      item.ip || '-',
+      categoryLabel(item.category),
+      item.musicTitle || '-',
+      item.count,
+      item.limitedCount,
+      item.blockedCount,
+      item.loginAttempts,
+      item.loginFailures,
+    ])
+  }, [activeTab, events, stats])
 
   return (
     <div className="space-y-6">
@@ -66,7 +131,7 @@ export default function SecurityManager() {
           onClick={load}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           刷新
         </button>
       </div>
@@ -107,7 +172,7 @@ export default function SecurityManager() {
         )}
       </details>
 
-      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/90 sm:flex-row">
+      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white/90 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/90 lg:flex-row lg:items-center">
         <label className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
@@ -123,7 +188,40 @@ export default function SecurityManager() {
           placeholder="20260705"
           className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
         />
-        <button type="button" onClick={load} className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-900">搜索</button>
+        {activeTab === 'events' && (
+          <>
+            <select
+              value={eventType}
+              onChange={event => {
+                setEventType(event.target.value)
+                setPage(0)
+              }}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            >
+              <option value="">全部事件</option>
+              <option value="limit">触发限流</option>
+              <option value="ban">封禁</option>
+              <option value="login_success">登录成功</option>
+              <option value="login_failure">登录失败</option>
+              <option value="login_blocked">登录被限制</option>
+            </select>
+            <select
+              value={severity}
+              onChange={event => {
+                setSeverity(event.target.value)
+                setPage(0)
+              }}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            >
+              <option value="">全部等级</option>
+              <option value="info">info</option>
+              <option value="warning">warning</option>
+              <option value="high">high</option>
+              <option value="critical">critical</option>
+            </select>
+          </>
+        )}
+        <button type="button" onClick={applySearch} className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-900">搜索</button>
       </div>
 
       <Section title="当前限制与封禁">
@@ -146,29 +244,34 @@ export default function SecurityManager() {
         ])} empty="暂无高访问用户" />
       </Section>
 
-      <Section title="每日访问统计">
-        <DataTable columns={['日期', 'IP', '类型', '歌曲', '访问', '限流', '登录尝试', '失败']} rows={stats.map(item => [
-          item.date,
-          item.ip,
-          categoryLabel(item.category),
-          item.musicTitle || '-',
-          item.count,
-          item.limitedCount,
-          item.loginAttempts,
-          item.loginFailures,
-        ])} empty="暂无访问统计" />
-      </Section>
+      <section className="rounded-2xl border border-gray-200 bg-white/90 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">日志记录</h2>
+            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">选择一个日志类型后按页加载，避免日志过多时一次性请求太慢。</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <TabButton active={activeTab === 'stats'} onClick={() => switchTab('stats')}>访问统计</TabButton>
+            <TabButton active={activeTab === 'events'} onClick={() => switchTab('events')}>安全事件</TabButton>
+            <select
+              value={size}
+              onChange={event => changeSize(Number(event.target.value))}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            >
+              {PAGE_SIZES.map(item => <option key={item} value={item}>{item} 条/页</option>)}
+            </select>
+          </div>
+        </div>
 
-      <Section title="安全事件日志">
-        <DataTable columns={['时间', '等级', '类型', 'IP', '用户', '消息']} rows={events.map(item => [
-          formatTime(item.createdAt),
-          <SeverityBadge key={item.id} severity={item.severity} />,
-          item.type,
-          item.ip,
-          item.username || '-',
-          item.message,
-        ])} empty="暂无安全事件" />
-      </Section>
+        <DataTable
+          columns={activeTab === 'events'
+            ? ['时间', '等级', '类型', 'IP', '用户', '消息']
+            : ['日期', 'IP', '类型', '歌曲', '访问', '限流', '封禁拦截', '登录尝试', '失败']}
+          rows={rows}
+          empty={loading ? '加载中...' : '暂无日志'}
+        />
+        <Pagination page={page} size={size} total={total} totalPages={totalPages} onPage={setPage} />
+      </section>
     </div>
   )
 }
@@ -220,6 +323,51 @@ function DataTable({ columns, rows, empty }) {
   )
 }
 
+function Pagination({ page, size, total, totalPages, onPage }) {
+  const from = total === 0 ? 0 : page * size + 1
+  const to = Math.min((page + 1) * size, total)
+  return (
+    <div className="mt-4 flex flex-col gap-3 text-sm text-gray-500 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+      <span>共 {total} 条，当前 {from}-{to}</span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          disabled={page <= 0}
+          onClick={() => onPage(Math.max(0, page - 1))}
+          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          上一页
+        </button>
+        <span className="rounded-lg bg-gray-100 px-3 py-2 text-gray-700 dark:bg-slate-800 dark:text-slate-200">{page + 1} / {totalPages}</span>
+        <button
+          type="button"
+          disabled={page >= totalPages - 1}
+          onClick={() => onPage(Math.min(totalPages - 1, page + 1))}
+          className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700"
+        >
+          下一页
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function TabButton({ active, children, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${active
+        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+        : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800'}`}
+    >
+      {children}
+    </button>
+  )
+}
+
 function NumberField({ label, value, onChange }) {
   return (
     <label className="grid gap-1 text-sm text-gray-500 dark:text-slate-400">
@@ -264,6 +412,22 @@ function categoryLabel(category) {
     ban: '封禁',
   }
   return map[category] || category
+}
+
+function eventTypeLabel(type) {
+  const map = {
+    limit: '触发限流',
+    ban: '封禁',
+    login_success: '登录成功',
+    login_failure: '登录失败',
+    login_blocked: '登录被限制',
+  }
+  return map[type] || type
+}
+
+function normalizeDate(value) {
+  const normalized = String(value || '').replaceAll('-', '').trim()
+  return /^\d{8}$/.test(normalized) ? normalized : new Date().toISOString().slice(0, 10).replaceAll('-', '')
 }
 
 function formatTime(value) {

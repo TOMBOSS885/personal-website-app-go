@@ -80,6 +80,19 @@ func CreateSecurityEvent(event *model.SecurityEvent) {
 	_ = db.DB.Create(event).Error
 }
 
+func CountDailySecurityEvents(ip, eventType string, day time.Time) (int64, error) {
+	var total int64
+	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
+	end := start.Add(24 * time.Hour)
+	query := db.DB.Model(&model.SecurityEvent{}).
+		Where("ip = ? AND created_at >= ? AND created_at < ?", strings.TrimSpace(ip), start, end)
+	if eventType = strings.TrimSpace(eventType); eventType != "" {
+		query = query.Where("type = ?", eventType)
+	}
+	err := query.Count(&total).Error
+	return total, err
+}
+
 func SearchSecurityEvents(keyword, eventType, severity string, page, size int) ([]model.SecurityEvent, int64, error) {
 	var events []model.SecurityEvent
 	var total int64
