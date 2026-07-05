@@ -122,7 +122,7 @@ func StreamMusic(c *gin.Context) {
 		return
 	}
 
-	recordMusicStreamRequest(c.ClientIP(), music.ID)
+	recordMusicStreamRequest(c.ClientIP(), music.ID, music.Title)
 	if music.ContentType != "" {
 		c.Header("Content-Type", music.ContentType)
 	}
@@ -475,7 +475,15 @@ func uploadedMusicPath(fileURL string) (string, error) {
 	return targetAbs, nil
 }
 
-func recordMusicStreamRequest(ip string, id uint64) {
+func recordMusicStreamRequest(ip string, id uint64, title string) {
+	repository.RecordSecurityAccess(model.SecurityAccessStat{
+		Date:       time.Now().Format("20060102"),
+		IP:         strings.TrimSpace(ip),
+		Category:   "music-stream-song",
+		MusicID:    id,
+		MusicTitle: title,
+		Count:      1,
+	})
 	if !cache.Ready() {
 		return
 	}

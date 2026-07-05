@@ -9,6 +9,7 @@ import (
 	"personal-website-go/internal/handler"
 	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/model"
+	"personal-website-go/internal/repository"
 	"strings"
 	"time"
 
@@ -33,16 +34,23 @@ func main() {
 			&model.Music{},
 			&model.UploadSettings{},
 			&model.OperationLog{},
+			&model.RateLimitSettings{},
+			&model.SecurityAccessStat{},
+			&model.SecurityEvent{},
 		); err != nil {
 			log.Fatalf("database migration failed: %v", err)
 		}
 	}
 	bootstrap.SeedDefaultData()
+	if _, err := repository.GetOrCreateRateLimitSettings(); err != nil {
+		log.Printf("rate limit settings init failed: %v", err)
+	}
+	repository.CleanupSecurityLogs()
 
 	gin.SetMode(config.AppConfig.GinMode)
 	r := gin.New()
 	r.MaxMultipartMemory = 256 << 20
-	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.CORS())
+	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.CORS(), middleware.IPBanGuard())
 
 	uploads := r.Group("/uploads")
 	uploads.Use(func(c *gin.Context) {
@@ -120,6 +128,9 @@ func main() {
 			admin.GET("/operation-logs", handler.AdminGetOperationLogs)
 			admin.GET("/export", handler.AdminExportData)
 			admin.GET("/search", handler.AdminSearch)
+			admin.GET("/security", handler.AdminSecurityDashboard)
+			admin.GET("/security/rate-limit-settings", handler.AdminGetRateLimitSettings)
+			admin.PUT("/security/rate-limit-settings", handler.AdminUpdateRateLimitSettings)
 
 			admin.POST("/theme", handler.AdminSaveTheme)
 			admin.GET("/theme/background-images", handler.AdminListThemeBackgrounds)

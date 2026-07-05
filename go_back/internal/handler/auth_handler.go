@@ -22,9 +22,10 @@ func Login(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "参数错误")
 		return
 	}
+
 	if !middleware.AllowLoginAttempt(c.ClientIP(), req.Username) {
 		middleware.LogOperation(c, req.Username, "login_blocked", "too many failed attempts", http.StatusTooManyRequests)
-		response.Error(c, http.StatusTooManyRequests, "登录失败次数过多，请稍后再试")
+		middleware.WriteTooManyLogin(c, req.Username)
 		return
 	}
 
@@ -32,6 +33,7 @@ func Login(c *gin.Context) {
 	if err != nil || user == nil {
 		log.Printf("login failed for username=%q: user not found", req.Username)
 		middleware.RecordLoginFailure(c.ClientIP(), req.Username)
+		middleware.RecordLoginSecurityEvent(c, req.Username, false, "user not found")
 		middleware.LogOperation(c, req.Username, "login_failed", "user not found", http.StatusUnauthorized)
 		response.Error(c, http.StatusUnauthorized, "用户名或密码错误")
 		return
@@ -39,11 +41,14 @@ func Login(c *gin.Context) {
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)) != nil {
 		log.Printf("login failed for username=%q: password mismatch", req.Username)
 		middleware.RecordLoginFailure(c.ClientIP(), req.Username)
+		middleware.RecordLoginSecurityEvent(c, req.Username, false, "password mismatch")
 		middleware.LogOperation(c, req.Username, "login_failed", "password mismatch", http.StatusUnauthorized)
 		response.Error(c, http.StatusUnauthorized, "用户名或密码错误")
 		return
 	}
+
 	middleware.RecordLoginSuccess(c.ClientIP(), req.Username)
+	middleware.RecordLoginSecurityEvent(c, req.Username, true, "login success")
 	middleware.LogOperation(c, req.Username, "login_success", "", http.StatusOK)
 
 	token, err := middleware.GenerateToken(user.Username)

@@ -11,6 +11,7 @@ import {
   Moon,
   Music,
   Palette,
+  ShieldAlert,
   ShieldCheck,
   Sparkles,
   Sun,
@@ -42,6 +43,7 @@ export default function AdminLayout() {
     { path: '/admin/profile', label: '个人信息', icon: User },
     { path: '/admin/upload-settings', label: '上传限制', icon: UploadCloud },
     { path: '/admin/stability', label: '站点稳定性', icon: Activity },
+    { path: '/admin/security', label: '访问安全', icon: ShieldAlert },
     { path: '/admin/account', label: '账号安全', icon: ShieldCheck },
   ]
 

@@ -2,10 +2,8 @@ package middleware
 
 import (
 	"context"
-	"net/http"
 	"personal-website-go/internal/cache"
-	"personal-website-go/internal/config"
-	"personal-website-go/internal/response"
+	"personal-website-go/internal/model"
 	"sync"
 	"time"
 
@@ -26,7 +24,13 @@ var localRateStore = struct {
 
 func RateLimit(name string, limit int, window time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if config.AppConfig == nil || !config.AppConfig.RateLimitEnabled || limit <= 0 {
+		settings := currentRateLimitSettings()
+		if !settings.Enabled {
+			c.Next()
+			return
+		}
+		limit = limitForCategory(settings, name, limit)
+		if limit <= 0 {
 			c.Next()
 			return
 		}
@@ -34,41 +38,52 @@ func RateLimit(name string, limit int, window time.Duration) gin.HandlerFunc {
 			window = time.Minute
 		}
 
-		ok := allowRequest(name, c.ClientIP(), limit, window)
+		recordAccess(c.ClientIP(), name)
+		ok, count, remaining := allowRequest(name, c.ClientIP(), limit, window)
 		if !ok {
-			response.Error(c, http.StatusTooManyRequests, "too many requests, please try again later")
-			c.Abort()
+			recordLimit(c, name, count, limit, remaining)
+			limitResponse(c, name, int64(remaining.Seconds()))
 			return
 		}
 		c.Next()
 	}
 }
 
-func allowRequest(name, ip string, limit int, window time.Duration) bool {
+func allowRequest(name, ip string, limit int, window time.Duration) (bool, int64, time.Duration) {
 	if cache.Ready() {
 		if ok, err := allowRequestRedis(name, ip, limit, window); err == nil {
-			return ok
+			return ok.allowed, ok.count, ok.remaining
 		}
 	}
 	return allowRequestLocal(name, ip, limit, window)
 }
 
-func allowRequestRedis(name, ip string, limit int, window time.Duration) (bool, error) {
+type rateDecision struct {
+	allowed   bool
+	count     int64
+	remaining time.Duration
+}
+
+func allowRequestRedis(name, ip string, limit int, window time.Duration) (rateDecision, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
 	key := "rl:" + name + ":" + ip
 	count, err := cache.Client.Incr(ctx, key).Result()
 	if err != nil {
-		return true, err
+		return rateDecision{allowed: true, count: 1, remaining: window}, err
 	}
 	if count == 1 {
 		_ = cache.Client.Expire(ctx, key, window).Err()
 	}
-	return count <= int64(limit), nil
+	ttl, err := cache.Client.TTL(ctx, key).Result()
+	if err != nil || ttl <= 0 {
+		ttl = window
+	}
+	return rateDecision{allowed: count <= int64(limit), count: count, remaining: ttl}, nil
 }
 
-func allowRequestLocal(name, ip string, limit int, window time.Duration) bool {
+func allowRequestLocal(name, ip string, limit int, window time.Duration) (bool, int64, time.Duration) {
 	key := "rl:" + name + ":" + ip
 	now := time.Now()
 
@@ -78,10 +93,23 @@ func allowRequestLocal(name, ip string, limit int, window time.Duration) bool {
 	entry, exists := localRateStore.entries[key]
 	if !exists || now.After(entry.ResetAt) {
 		localRateStore.entries[key] = localRateEntry{Count: 1, ResetAt: now.Add(window)}
-		return true
+		return true, 1, window
 	}
 
 	entry.Count++
 	localRateStore.entries[key] = entry
-	return entry.Count <= limit
+	return entry.Count <= limit, int64(entry.Count), time.Until(entry.ResetAt)
+}
+
+func limitForCategory(settings model.RateLimitSettings, name string, fallback int) int {
+	switch name {
+	case securityCategoryPublic:
+		return settings.PublicPerMinute
+	case securityCategoryMusic:
+		return settings.MusicPerMinute
+	case securityCategoryMusicStream:
+		return settings.MusicStreamPerMinute
+	default:
+		return fallback
+	}
 }

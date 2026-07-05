@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"personal-website-go/internal/cache"
-	"personal-website-go/internal/config"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +26,9 @@ var loginAttempts = struct {
 }
 
 func AllowLoginAttempt(ip, username string) bool {
+	if !currentRateLimitSettings().Enabled {
+		return true
+	}
 	if cache.Ready() {
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
@@ -100,15 +102,17 @@ func redisLoginAttemptKey(ip, username string) string {
 }
 
 func loginLimitMaxFailures() int {
-	if config.AppConfig != nil && config.AppConfig.LoginLimitMaxFails > 0 {
-		return config.AppConfig.LoginLimitMaxFails
+	settings := currentRateLimitSettings()
+	if settings.LoginMaxFailures > 0 {
+		return settings.LoginMaxFailures
 	}
 	return loginLimitMaxFails
 }
 
 func loginLimitDuration() time.Duration {
-	if config.AppConfig != nil && config.AppConfig.LoginLimitWindow > 0 {
-		return time.Duration(config.AppConfig.LoginLimitWindow) * time.Second
+	settings := currentRateLimitSettings()
+	if settings.LoginWindowSeconds > 0 {
+		return time.Duration(settings.LoginWindowSeconds) * time.Second
 	}
 	return loginLimitWindow
 }

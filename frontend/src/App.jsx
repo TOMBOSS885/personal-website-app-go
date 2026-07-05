@@ -26,12 +26,14 @@ const Live2DManager = lazy(() => import('./pages/admin/Live2DManager'))
 const MusicManager = lazy(() => import('./pages/admin/MusicManager'))
 const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsManager'))
 const StabilityManager = lazy(() => import('./pages/admin/StabilityManager'))
+const SecurityManager = lazy(() => import('./pages/admin/SecurityManager'))
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Footer = lazy(() => import('./components/Footer'))
 const MusicPlayer = lazy(() => import('./components/MusicPlayer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
 const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
+const AccessAlert = lazy(() => import('./components/AccessAlert'))
 
 function setupAdminApiInterceptor() {
   if (window.__adminApiInterceptorInstalled) return
@@ -40,10 +42,39 @@ function setupAdminApiInterceptor() {
   const originalFetch = window.fetch
   window.fetch = async (url, options = {}) => {
     const res = await originalFetch(url, options)
+    const urlText = typeof url === 'string' ? url : url?.url || ''
+
+    if (res.status === 429 || res.status === 403) {
+      const isMusic = urlText.includes('/api/public/music')
+      res.clone().json()
+        .then(data => {
+          const code = data?.code || ''
+          const category = data?.category || (isMusic ? 'music-stream' : '')
+          if (res.status === 429 || code === 'ip_banned') {
+            window.dispatchEvent(new CustomEvent('access-alert', {
+              detail: {
+                type: code === 'ip_banned' ? 'ban' : 'limit',
+                category,
+                message: data?.message || (isMusic ? '音乐访问次数过多，请稍后重试' : '访问次数过多，请稍后重试'),
+              },
+            }))
+          }
+        })
+        .catch(() => {
+          if (res.status === 429) {
+            window.dispatchEvent(new CustomEvent('access-alert', {
+              detail: {
+                type: 'limit',
+                category: isMusic ? 'music-stream' : '',
+                message: isMusic ? '音乐访问次数过多，请稍后重试' : '访问次数过多，请稍后重试',
+              },
+            }))
+          }
+        })
+    }
 
     if (
-      typeof url === 'string'
-      && url.includes('/api/admin/')
+      urlText.includes('/api/admin/')
       && res.status === 401
       && !window.location.pathname.includes('/admin/login')
     ) {
@@ -101,6 +132,9 @@ function App() {
         <Router>
           <div className="theme-app-shell min-h-screen flex flex-col">
             <CursorEffects />
+            <Suspense fallback={null}>
+              <AccessAlert />
+            </Suspense>
             <Suspense fallback={<PageLoading />}>
               <Routes>
                 <Route path="/admin/login" element={<LoginPage />} />
@@ -121,6 +155,7 @@ function App() {
                   <Route path="music" element={<MusicManager />} />
                   <Route path="upload-settings" element={<UploadSettingsManager />} />
                   <Route path="stability" element={<StabilityManager />} />
+                  <Route path="security" element={<SecurityManager />} />
                 </Route>
                 <Route path="/*" element={
                   <>
