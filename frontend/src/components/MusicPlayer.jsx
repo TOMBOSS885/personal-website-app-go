@@ -12,6 +12,11 @@ const DRAG_THRESHOLD = 6
 const COLLAPSE_DELAY = 3000
 const PLAYLIST_REFRESH_INTERVAL = 45000
 const LYRICS_SETTINGS_KEY = 'music-lyrics-module-settings'
+const LYRICS_MIN_WIDTH_DESKTOP = 280
+const LYRICS_MIN_WIDTH_MOBILE = 240
+const LYRICS_MAX_WIDTH = 680
+const LYRICS_MIN_HEIGHT = 150
+const LYRICS_MAX_HEIGHT = 520
 const DEFAULT_LYRICS_SETTINGS = {
   enabled: true,
   effect: 'pop',
@@ -757,6 +762,7 @@ function LyricsModule({
 }) {
   const moduleRef = useRef(null)
   const dragRef = useRef(null)
+  const resizeRef = useRef(null)
   const [panelOpen, setPanelOpen] = useState(false)
   const [position, setPosition] = useState(() => readLyricsPosition())
   const visibleLines = getVisibleLyrics(lines, activeIndex, settings.lineCount)
@@ -768,6 +774,48 @@ function LyricsModule({
     : 424
   const settingsHeight = hasBilingualLyrics ? 424 : 326
   const shellHeight = panelOpen ? Math.min(maxShellHeight, Math.max(moduleHeight, settingsHeight)) : moduleHeight
+
+  const moveLyricsResize = useCallback((event) => {
+    const resize = resizeRef.current
+    if (!resize) return
+
+    const dx = event.clientX - resize.startX
+    const dy = event.clientY - resize.startY
+    const limits = lyricsSizeLimits()
+    let nextWidth = resize.startWidth
+    let nextHeight = resize.startHeight
+    let nextX = resize.startLeft
+    let nextY = resize.startTop
+
+    if (resize.edge.includes('e')) {
+      nextWidth = clamp(resize.startWidth + dx, limits.minWidth, limits.maxWidth)
+    }
+    if (resize.edge.includes('s')) {
+      nextHeight = clamp(resize.startHeight + dy, limits.minHeight, limits.maxHeight)
+    }
+    if (resize.edge.includes('w')) {
+      nextWidth = clamp(resize.startWidth - dx, limits.minWidth, limits.maxWidth)
+      nextX = resize.startLeft + resize.startWidth - nextWidth
+    }
+    if (resize.edge.includes('n')) {
+      nextHeight = clamp(resize.startHeight - dy, limits.minHeight, limits.maxHeight)
+      nextY = resize.startTop + resize.startHeight - nextHeight
+    }
+
+    const nextPosition = clampLyricsPosition({ x: nextX, y: nextY }, nextWidth, nextHeight)
+    setPosition(nextPosition)
+    onSettingsChange({
+      width: Math.round(nextWidth),
+      height: Math.round(nextHeight),
+    })
+  }, [onSettingsChange])
+
+  const endLyricsResize = useCallback(() => {
+    resizeRef.current = null
+    window.removeEventListener('pointermove', moveLyricsResize)
+    window.removeEventListener('pointerup', endLyricsResize)
+    window.removeEventListener('pointercancel', endLyricsResize)
+  }, [moveLyricsResize])
 
   const moveLyricsDrag = useCallback((event) => {
     const drag = dragRef.current
@@ -804,8 +852,11 @@ function LyricsModule({
       window.removeEventListener('pointermove', moveLyricsDrag)
       window.removeEventListener('pointerup', endLyricsDrag)
       window.removeEventListener('pointercancel', endLyricsDrag)
+      window.removeEventListener('pointermove', moveLyricsResize)
+      window.removeEventListener('pointerup', endLyricsResize)
+      window.removeEventListener('pointercancel', endLyricsResize)
     }
-  }, [endLyricsDrag, moveLyricsDrag])
+  }, [endLyricsDrag, endLyricsResize, moveLyricsDrag, moveLyricsResize])
 
   if (!settings.enabled || !song) return null
 
@@ -822,6 +873,26 @@ function LyricsModule({
     window.addEventListener('pointermove', moveLyricsDrag)
     window.addEventListener('pointerup', endLyricsDrag)
     window.addEventListener('pointercancel', endLyricsDrag)
+  }
+
+  const startResize = (edge) => (event) => {
+    if (event.button !== undefined && event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    const rect = moduleRef.current?.getBoundingClientRect()
+    resizeRef.current = {
+      edge,
+      startX: event.clientX,
+      startY: event.clientY,
+      startLeft: rect?.left || position.x,
+      startTop: rect?.top || position.y,
+      startWidth: rect?.width || moduleWidth,
+      startHeight: rect?.height || moduleHeight,
+    }
+    window.addEventListener('pointermove', moveLyricsResize)
+    window.addEventListener('pointerup', endLyricsResize)
+    window.addEventListener('pointercancel', endLyricsResize)
   }
 
   return (
@@ -900,7 +971,25 @@ function LyricsModule({
           />
         </div>
       )}
+      <LyricsResizeHandles onStartResize={startResize} />
     </motion.div>
+  )
+}
+
+function LyricsResizeHandles({ onStartResize }) {
+  const edgeClass = 'absolute z-20 touch-none bg-transparent'
+  const cornerClass = `${edgeClass} h-6 w-6 sm:h-4 sm:w-4`
+  return (
+    <>
+      <span data-drag-ignore="true" onPointerDown={onStartResize('n')} className={`${edgeClass} left-6 right-6 top-0 h-4 cursor-ns-resize sm:h-2`} />
+      <span data-drag-ignore="true" onPointerDown={onStartResize('s')} className={`${edgeClass} bottom-0 left-6 right-6 h-4 cursor-ns-resize sm:h-2`} />
+      <span data-drag-ignore="true" onPointerDown={onStartResize('w')} className={`${edgeClass} bottom-6 left-0 top-6 w-4 cursor-ew-resize sm:bottom-4 sm:top-4 sm:w-2`} />
+      <span data-drag-ignore="true" onPointerDown={onStartResize('e')} className={`${edgeClass} bottom-6 right-0 top-6 w-4 cursor-ew-resize sm:bottom-4 sm:top-4 sm:w-2`} />
+      <span data-drag-ignore="true" onPointerDown={onStartResize('nw')} className={`${cornerClass} left-0 top-0 cursor-nwse-resize`} />
+      <span data-drag-ignore="true" onPointerDown={onStartResize('ne')} className={`${cornerClass} right-0 top-0 cursor-nesw-resize`} />
+      <span data-drag-ignore="true" onPointerDown={onStartResize('sw')} className={`${cornerClass} bottom-0 left-0 cursor-nesw-resize`} />
+      <span data-drag-ignore="true" onPointerDown={onStartResize('se')} className={`${cornerClass} bottom-0 right-0 cursor-nwse-resize`} />
+    </>
   )
 }
 
@@ -960,10 +1049,6 @@ function LyricsSettingsPanel({ settings, hasBilingualLyrics, onChange }) {
       <div className="grid grid-cols-2 gap-3">
         <RangeSetting label="字号" value={settings.fontSize} min={13} max={24} unit="px" onChange={value => onChange({ fontSize: value })} />
         <RangeSetting label="行数" value={settings.lineCount} min={1} max={5} unit="行" onChange={value => onChange({ lineCount: value })} />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <RangeSetting label="宽度" value={lyricsModuleWidth(settings.width)} min={280} max={560} unit="px" onChange={value => onChange({ width: value })} />
-        <RangeSetting label="高度" value={lyricsModuleHeight(settings.height)} min={150} max={360} unit="px" onChange={value => onChange({ height: value })} />
       </div>
       {hasBilingualLyrics && (
         <div className="grid gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3 dark:border-indigo-500/20 dark:bg-indigo-500/10">
@@ -1168,15 +1253,35 @@ function clampLyricsPosition(position, widthValue = DEFAULT_LYRICS_SETTINGS.widt
 }
 
 function lyricsModuleWidth(value) {
-  if (typeof window === 'undefined') return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.width, 280, 560)
-  const maxWidth = Math.max(280, window.innerWidth - edgeGap() * 2)
-  return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.width, 280, Math.min(560, maxWidth))
+  const limits = lyricsSizeLimits()
+  return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.width, limits.minWidth, limits.maxWidth)
 }
 
 function lyricsModuleHeight(value) {
-  if (typeof window === 'undefined') return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.height, 150, 360)
-  const maxHeight = Math.max(150, window.innerHeight - edgeGap() * 2)
-  return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.height, 150, Math.min(360, maxHeight))
+  const limits = lyricsSizeLimits()
+  return clamp(Number(value) || DEFAULT_LYRICS_SETTINGS.height, limits.minHeight, limits.maxHeight)
+}
+
+function lyricsSizeLimits() {
+  if (typeof window === 'undefined') {
+    return {
+      minWidth: LYRICS_MIN_WIDTH_DESKTOP,
+      maxWidth: LYRICS_MAX_WIDTH,
+      minHeight: LYRICS_MIN_HEIGHT,
+      maxHeight: LYRICS_MAX_HEIGHT,
+    }
+  }
+  const gap = edgeGap()
+  const mobile = window.innerWidth < 640
+  const minWidth = mobile ? LYRICS_MIN_WIDTH_MOBILE : LYRICS_MIN_WIDTH_DESKTOP
+  const viewportWidth = Math.max(minWidth, window.innerWidth - gap * 2)
+  const viewportHeight = Math.max(LYRICS_MIN_HEIGHT, window.innerHeight - gap * 2)
+  return {
+    minWidth,
+    maxWidth: Math.max(minWidth, Math.min(LYRICS_MAX_WIDTH, viewportWidth)),
+    minHeight: LYRICS_MIN_HEIGHT,
+    maxHeight: Math.max(LYRICS_MIN_HEIGHT, Math.min(LYRICS_MAX_HEIGHT, viewportHeight)),
+  }
 }
 
 function decodeLyricsBuffer(buffer) {
