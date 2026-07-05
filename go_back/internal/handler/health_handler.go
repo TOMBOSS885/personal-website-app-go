@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"personal-website-go/internal/cache"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/response"
@@ -24,6 +25,7 @@ func FullHealth(c *gin.Context) {
 		"http":     "up",
 		"database": "unknown",
 		"uploads":  "unknown",
+		"redis":    "disabled",
 	}
 
 	if err := db.DB.Exec("SELECT 1").Error; err != nil {
@@ -60,6 +62,19 @@ func FullHealth(c *gin.Context) {
 	}
 	_ = os.Remove(testPath)
 	checks["uploads"] = "up"
+
+	if config.AppConfig.RedisEnabled {
+		if !cache.Ready() {
+			checks["redis"] = "down"
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status": "down",
+				"checks": checks,
+				"error":  "redis is enabled but unavailable",
+			})
+			return
+		}
+		checks["redis"] = "up"
+	}
 
 	response.Success(c, gin.H{
 		"status": "up",

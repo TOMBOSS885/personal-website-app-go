@@ -3,11 +3,13 @@ package main
 import (
 	"log"
 	"personal-website-go/internal/bootstrap"
+	"personal-website-go/internal/cache"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/handler"
 	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/model"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,6 +17,7 @@ import (
 func main() {
 	config.InitConfig()
 	db.InitDB()
+	cache.InitRedis()
 
 	if config.AppConfig.AutoMigrate {
 		if err := db.DB.AutoMigrate(
@@ -56,26 +59,29 @@ func main() {
 		auth.POST("/login", handler.Login)
 
 		public := api.Group("/public")
+		public.Use(middleware.RateLimit("public", config.AppConfig.PublicRateLimit, time.Minute))
 		{
-			public.GET("/profile", handler.GetProfile)
-			public.GET("/stats", handler.GetStats)
-			public.GET("/articles", handler.GetArticles)
+			publicCache := middleware.CacheGET("public")
+			public.GET("/profile", publicCache, handler.GetProfile)
+			public.GET("/stats", publicCache, handler.GetStats)
+			public.GET("/articles", publicCache, handler.GetArticles)
 			public.GET("/articles/:id", handler.GetArticle)
-			public.GET("/tags", handler.GetTags)
-			public.GET("/projects", handler.GetProjects)
-			public.GET("/projects/featured", handler.GetFeaturedProjects)
-			public.GET("/skills", handler.GetSkills)
-			public.GET("/feature-cards", handler.GetFeatureCards)
-			public.GET("/theme", handler.GetTheme)
-			public.GET("/theme/background-images", handler.AdminListThemeBackgrounds)
-			public.GET("/live2d-model", handler.GetLive2DModel)
-			public.GET("/music", handler.GetMusics)
+			public.GET("/tags", publicCache, handler.GetTags)
+			public.GET("/projects", publicCache, handler.GetProjects)
+			public.GET("/projects/featured", publicCache, handler.GetFeaturedProjects)
+			public.GET("/skills", publicCache, handler.GetSkills)
+			public.GET("/feature-cards", publicCache, handler.GetFeatureCards)
+			public.GET("/theme", publicCache, handler.GetTheme)
+			public.GET("/theme/background-images", publicCache, handler.AdminListThemeBackgrounds)
+			public.GET("/live2d-model", publicCache, handler.GetLive2DModel)
+			public.GET("/music", middleware.RateLimit("music", config.AppConfig.MusicRateLimit, time.Minute), publicCache, handler.GetMusics)
 			public.GET("/search", handler.PublicSearch)
 		}
 
 		admin := api.Group("/admin")
 		admin.Use(middleware.JWTAuth())
 		admin.Use(middleware.OperationLogger())
+		admin.Use(middleware.InvalidatePublicCacheAfterMutation())
 		{
 			admin.GET("/articles", handler.AdminGetArticles)
 			admin.POST("/articles", handler.AdminCreateArticle)

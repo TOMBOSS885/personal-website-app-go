@@ -24,6 +24,17 @@ type Config struct {
 	AdminPassword      string
 	AdminEmail         string
 	AdminResetPassword bool
+	RedisEnabled       bool
+	RedisAddr          string
+	RedisPassword      string
+	RedisDB            int
+	CacheEnabled       bool
+	CacheTTLSeconds    int
+	RateLimitEnabled   bool
+	PublicRateLimit    int
+	MusicRateLimit     int
+	LoginLimitMaxFails int
+	LoginLimitWindow   int
 }
 
 var AppConfig *Config
@@ -51,6 +62,17 @@ func InitConfig() {
 		AdminPassword:      getEnv("ADMIN_PASSWORD", "admin123"),
 		AdminEmail:         getEnv("ADMIN_EMAIL", "admin@example.com"),
 		AdminResetPassword: boolEnv("ADMIN_RESET_PASSWORD", false),
+		RedisEnabled:       boolEnv("REDIS_ENABLED", false),
+		RedisAddr:          getEnv("REDIS_ADDR", "127.0.0.1:6379"),
+		RedisPassword:      getEnv("REDIS_PASSWORD", ""),
+		RedisDB:            intEnv("REDIS_DB", 0),
+		CacheEnabled:       boolEnv("CACHE_ENABLED", true),
+		CacheTTLSeconds:    intEnv("CACHE_TTL_SECONDS", 60),
+		RateLimitEnabled:   boolEnv("RATE_LIMIT_ENABLED", true),
+		PublicRateLimit:    intEnv("PUBLIC_RATE_LIMIT_PER_MINUTE", 180),
+		MusicRateLimit:     intEnv("MUSIC_RATE_LIMIT_PER_MINUTE", 90),
+		LoginLimitMaxFails: intEnv("LOGIN_LIMIT_MAX_FAILS", 5),
+		LoginLimitWindow:   intEnv("LOGIN_LIMIT_WINDOW_SECONDS", 600),
 	}
 	validateProductionConfig(AppConfig)
 }
@@ -136,4 +158,17 @@ func boolEnv(key string, fallback bool) bool {
 		log.Printf("invalid boolean env %s=%q, using default %v", key, value, fallback)
 		return fallback
 	}
+}
+
+func intEnv(key string, fallback int) int {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		log.Printf("invalid integer env %s=%q, using default %d", key, value, fallback)
+		return fallback
+	}
+	return parsed
 }
