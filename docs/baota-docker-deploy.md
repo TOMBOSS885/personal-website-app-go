@@ -78,6 +78,8 @@ MEDIA_SIGN_SECRET=
 MEDIA_URL_TTL_SECONDS=600
 ```
 
+当前项目的 `docker-compose.yml` 使用 `network_mode: host`，连接宝塔本机 MySQL 时请优先使用 `MYSQL_HOST=127.0.0.1`。如果旧配置里写过 `MYSQL_HOST=host.docker.internal`，建议改回 `127.0.0.1`。
+
 ## 4. Start with Docker Compose
 
 ```bash

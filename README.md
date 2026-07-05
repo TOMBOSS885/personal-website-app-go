@@ -167,6 +167,8 @@ docker exec personal-website-go tail -n 100 /var/log/supervisor/api.log
 MYSQL_HOST=127.0.0.1
 ```
 
+如果旧 `.env` 里写的是 `MYSQL_HOST=host.docker.internal`，请改回 `127.0.0.1`。当前 Compose 已兼容这个旧写法，但服务器部署时仍建议直接使用 `127.0.0.1`，更清晰也更不容易受 Docker 网络解析影响。
+
 不要使用 `docker compose down -v`，否则可能删除挂载卷数据。上传文件通过以下挂载持久化：
 
 ```yaml
