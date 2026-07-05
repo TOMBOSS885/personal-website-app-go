@@ -143,6 +143,7 @@ func AdminUploadLive2DModel(c *gin.Context) {
 		return
 	}
 	liveModel.ThumbnailPath = findLive2DThumbnail(liveModel)
+	_ = repository.UpdateLive2DModel(&liveModel)
 	response.Success(c, liveModel)
 }
 
@@ -264,11 +265,19 @@ func applyLive2DSettingsDefaults(settings *model.Live2DSettings) {
 
 func attachLive2DThumbnails(models []model.Live2DModel) {
 	for i := range models {
-		models[i].ThumbnailPath = findLive2DThumbnail(models[i])
+		if models[i].ThumbnailPath == "" {
+			models[i].ThumbnailPath = findLive2DThumbnail(models[i])
+			if models[i].ThumbnailPath != "" {
+				_ = repository.UpdateLive2DModel(&models[i])
+			}
+		}
 	}
 }
 
 func findLive2DThumbnail(m model.Live2DModel) string {
+	if strings.TrimSpace(m.ThumbnailPath) != "" {
+		return m.ThumbnailPath
+	}
 	modelDir := filepath.Join(config.AppConfig.UploadDir, "live2d", m.Directory)
 	var images []string
 	_ = filepath.WalkDir(modelDir, func(path string, d os.DirEntry, err error) error {

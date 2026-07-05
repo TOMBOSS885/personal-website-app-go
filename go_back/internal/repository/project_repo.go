@@ -15,6 +15,32 @@ func GetProjects(featuredOnly bool) ([]model.Project, error) {
 	return projects, err
 }
 
+func GetProjectsPage(page, size int, featuredOnly bool) ([]model.Project, int64, error) {
+	var projects []model.Project
+	var total int64
+	query := db.DB.Model(&model.Project{})
+	if featuredOnly {
+		query = query.Where("featured = ?", true)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if page < 0 {
+		page = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+	if size > 200 {
+		size = 200
+	}
+	err := query.Order("display_order ASC").
+		Offset(page * size).
+		Limit(size).
+		Find(&projects).Error
+	return projects, total, err
+}
+
 func GetProjectCount() (int64, error) {
 	var count int64
 	err := db.DB.Model(&model.Project{}).Count(&count).Error

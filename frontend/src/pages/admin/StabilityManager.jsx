@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Download, FileSearch, Loader, RefreshCw, Search, ShieldCheck } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, Download, FileSearch, Loader, RefreshCw, Search, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
+
+const PAGE_SIZES = [20, 30, 50, 100]
 
 const ACTION_LABELS = {
   login_success: '登录成功',
@@ -34,29 +36,51 @@ export default function StabilityManager() {
   const [loadingLogs, setLoadingLogs] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [query, setQuery] = useState('')
+  const [appliedQuery, setAppliedQuery] = useState('')
+  const [action, setAction] = useState('')
+  const [page, setPage] = useState(0)
+  const [size, setSize] = useState(30)
+  const [total, setTotal] = useState(0)
   const [searching, setSearching] = useState(false)
   const [results, setResults] = useState([])
   const token = localStorage.getItem('token')
 
+  const totalPages = Math.max(1, Math.ceil(total / size))
+  const actionOptions = useMemo(() => Object.keys(ACTION_LABELS).sort(), [])
+
   useEffect(() => {
     fetchLogs()
-  }, [])
+  }, [page, size, action, appliedQuery])
 
   const authHeaders = () => token ? { Authorization: `Bearer ${token}` } : {}
 
   const fetchLogs = async () => {
     setLoadingLogs(true)
     try {
-      const res = await fetch('/api/admin/operation-logs?page=0&size=30', {
+      const params = new URLSearchParams({
+        page: String(page),
+        size: String(size),
+      })
+      if (action) params.set('action', action)
+      if (appliedQuery) params.set('keyword', appliedQuery)
+      const res = await fetch(`/api/admin/operation-logs?${params}`, {
         headers: authHeaders(),
       })
-      const data = res.ok ? await res.json() : { content: [] }
+      const data = res.ok ? await res.json() : { content: [], totalElements: 0 }
       setLogs(Array.isArray(data.content) ? data.content : [])
+      setTotal(Number(data.totalElements || 0))
     } catch {
       setLogs([])
+      setTotal(0)
     } finally {
       setLoadingLogs(false)
     }
+  }
+
+  const applyLogSearch = (event) => {
+    event?.preventDefault()
+    setPage(0)
+    setAppliedQuery(query.trim())
   }
 
   const exportData = async () => {
@@ -104,6 +128,9 @@ export default function StabilityManager() {
       setSearching(false)
     }
   }
+
+  const from = total === 0 ? 0 : page * size + 1
+  const to = Math.min((page + 1) * size, total)
 
   return (
     <div className="space-y-6">
@@ -171,20 +198,53 @@ export default function StabilityManager() {
       </div>
 
       <section className="rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-slate-800">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">后台操作日志</h2>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">记录登录、上传、删除、修改等关键操作。</p>
+        <div className="space-y-4 border-b border-gray-100 px-5 py-4 dark:border-slate-800">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">后台操作日志</h2>
+              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">记录登录、上传、删除、修改等关键操作，支持分页和筛选。</p>
+            </div>
+            <button
+              type="button"
+              onClick={fetchLogs}
+              disabled={loadingLogs}
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              <RefreshCw className={`h-4 w-4 ${loadingLogs ? 'animate-spin' : ''}`} />
+              刷新
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={fetchLogs}
-            disabled={loadingLogs}
-            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
-          >
-            <RefreshCw className={`h-4 w-4 ${loadingLogs ? 'animate-spin' : ''}`} />
-            刷新
-          </button>
+
+          <form onSubmit={applyLogSearch} className="grid gap-3 lg:grid-cols-[1fr_13rem_9rem_auto]">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="搜索用户名、IP、路径、消息"
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            />
+            <select
+              value={action}
+              onChange={(event) => {
+                setAction(event.target.value)
+                setPage(0)
+              }}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            >
+              <option value="">全部操作</option>
+              {actionOptions.map(item => <option key={item} value={item}>{ACTION_LABELS[item] || item}</option>)}
+            </select>
+            <select
+              value={size}
+              onChange={(event) => {
+                setSize(Number(event.target.value))
+                setPage(0)
+              }}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            >
+              {PAGE_SIZES.map(item => <option key={item} value={item}>{item} 条/页</option>)}
+            </select>
+            <button type="submit" className="rounded-xl bg-gray-900 px-4 py-2 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-900">筛选</button>
+          </form>
         </div>
 
         {loadingLogs ? (
@@ -225,6 +285,31 @@ export default function StabilityManager() {
             </table>
           </div>
         )}
+
+        <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-4 text-sm text-gray-500 dark:border-slate-800 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+          <span>共 {total} 条，当前 {from}-{to}</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 0}
+              onClick={() => setPage(value => Math.max(0, value - 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              上一页
+            </button>
+            <span className="rounded-lg bg-gray-100 px-3 py-2 text-gray-700 dark:bg-slate-800 dark:text-slate-200">{page + 1} / {totalPages}</span>
+            <button
+              type="button"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage(value => Math.min(totalPages - 1, value + 1))}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700"
+            >
+              下一页
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   )

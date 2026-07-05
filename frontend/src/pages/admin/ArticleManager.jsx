@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
 import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
@@ -10,6 +10,9 @@ const NEW_ARTICLE_DRAFT_KEY = 'article-draft-new'
 export default function ArticleManager() {
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(0)
+  const [size, setSize] = useState(20)
+  const [total, setTotal] = useState(0)
   const [saving, setSaving] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingArticle, setEditingArticle] = useState(null)
@@ -30,10 +33,11 @@ export default function ArticleManager() {
   })
 
   const token = localStorage.getItem('token')
+  const totalPages = Math.max(1, Math.ceil(total / size))
 
   useEffect(() => {
     fetchArticles()
-  }, [])
+  }, [page, size])
 
   useEffect(() => {
     if (!showModal) return undefined
@@ -54,7 +58,7 @@ export default function ArticleManager() {
         headers['Authorization'] = `Bearer ${tokenValue}`
       }
       
-      const res = await fetch(`${API_BASE}/api/admin/articles?page=0&size=100`, { headers })
+      const res = await fetch(`${API_BASE}/api/admin/articles?page=${page}&size=${size}`, { headers })
       
       if (!res.ok) {
         console.error('获取文章列表失败:', res.status)
@@ -75,6 +79,7 @@ export default function ArticleManager() {
       }
       
       setArticles(Array.isArray(data) ? data : (data.content || []))
+      setTotal(Number(data.totalElements || 0))
     } catch (err) {
       console.error('获取文章列表失败:', err)
       setArticles([])
@@ -343,6 +348,43 @@ export default function ArticleManager() {
             </tbody>
           </table>
         )}
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <span>共 {total} 篇</span>
+          <select
+            value={size}
+            onChange={(event) => {
+              setSize(Number(event.target.value))
+              setPage(0)
+            }}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1"
+          >
+            {[10, 20, 50, 100].map(item => <option key={item} value={item}>{item} 条/页</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={page <= 0}
+            onClick={() => setPage(value => Math.max(0, value - 1))}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:opacity-40"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            上一页
+          </button>
+          <span className="rounded-lg bg-gray-100 px-3 py-2 text-gray-700">{page + 1} / {totalPages}</span>
+          <button
+            type="button"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage(value => Math.min(totalPages - 1, value + 1))}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:opacity-40"
+          >
+            下一页
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {/* Modal - Full Screen Editor */}

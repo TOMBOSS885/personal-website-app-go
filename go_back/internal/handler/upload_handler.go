@@ -9,8 +9,11 @@ import (
 	"path/filepath"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/media"
+	"personal-website-go/internal/model"
+	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,6 +36,23 @@ type imageDTO struct {
 }
 
 func AdminListArticleImages(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "60"))
+	if total, err := repository.CountUploadAssets(repository.UploadAssetArticleImage); err == nil && total > 0 {
+		assets, total, err := repository.ListUploadAssets(repository.UploadAssetArticleImage, page, size)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "鑾峰彇鍥剧墖澶辫触")
+			return
+		}
+		dtos := uploadAssetsToImageDTOs(assets)
+		if c.Query("page") != "" || c.Query("size") != "" {
+			response.Page(c, dtos, total, size, page)
+			return
+		}
+		response.Success(c, dtos)
+		return
+	}
+
 	root := filepath.Join(config.AppConfig.UploadDir, "articles")
 	if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
 		response.Success(c, []imageDTO{})
@@ -64,6 +84,7 @@ func AdminListArticleImages(c *gin.Context) {
 			URL:  "/uploads/articles/" + filepath.ToSlash(rel),
 			Size: info.Size(),
 		})
+		recordUploadAsset(repository.UploadAssetArticleImage, images[len(images)-1], path, "", "")
 		return nil
 	})
 
@@ -123,11 +144,41 @@ func AdminUploadArticleImage(c *gin.Context) {
 		}
 	}
 
+	recordUploadAsset(repository.UploadAssetArticleImage, imageDTO{
+		Name: responseName,
+		URL:  "/uploads/articles/" + now.Format("2006") + "/" + now.Format("01") + "/" + responseName,
+		Size: responseSize,
+	}, filepath.Join(dir, responseName), baseName, "optimized")
+
 	response.Success(c, imageDTO{
 		Name: responseName,
 		URL:  "/uploads/articles/" + now.Format("2006") + "/" + now.Format("01") + "/" + responseName,
 		Size: responseSize,
 	})
+}
+
+func recordUploadAsset(kind string, image imageDTO, path, groupKey, variant string) {
+	_ = repository.UpsertUploadAsset(&model.UploadAsset{
+		Kind:     kind,
+		Name:     image.Name,
+		URL:      image.URL,
+		Path:     path,
+		Size:     image.Size,
+		GroupKey: groupKey,
+		Variant:  variant,
+	})
+}
+
+func uploadAssetsToImageDTOs(assets []model.UploadAsset) []imageDTO {
+	images := make([]imageDTO, 0, len(assets))
+	for _, asset := range assets {
+		images = append(images, imageDTO{
+			Name: asset.Name,
+			URL:  asset.URL,
+			Size: asset.Size,
+		})
+	}
+	return images
 }
 
 func saveUploadedFile(c *gin.Context, file *multipart.FileHeader, rootDir, target string) error {

@@ -13,6 +13,29 @@ func GetMusics() ([]model.Music, error) {
 	return musics, err
 }
 
+func GetMusicsPage(page, size int) ([]model.Music, int64, error) {
+	var musics []model.Music
+	var total int64
+	query := db.DB.Model(&model.Music{})
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if page < 0 {
+		page = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+	if size > 200 {
+		size = 200
+	}
+	err := query.Order("display_order ASC, created_at DESC").
+		Offset(page * size).
+		Limit(size).
+		Find(&musics).Error
+	return musics, total, err
+}
+
 func GetPublicMusics() ([]model.Music, error) {
 	var musics []model.Music
 	err := db.DB.Model(&model.Music{}).

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Eye, EyeOff, FileText, Loader, Music, Plus, Trash2, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Eye, EyeOff, FileText, Loader, Music, Plus, Trash2, Upload } from 'lucide-react'
 
 const API_BASE = ''
 
@@ -37,6 +37,9 @@ function isSongPublic(song) {
 export default function MusicManager() {
   const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(0)
+  const [size, setSize] = useState(20)
+  const [total, setTotal] = useState(0)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [selectedIds, setSelectedIds] = useState([])
@@ -47,27 +50,30 @@ export default function MusicManager() {
   const lyricsInputRef = useRef(null)
   const token = localStorage.getItem('token')
 
-  useEffect(() => { fetchSongs() }, [])
+  useEffect(() => { fetchSongs() }, [page, size])
 
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds])
   const allSelected = songs.length > 0 && selectedIds.length === songs.length
   const selectedCount = selectedIds.length
   const fileCount = form.files.length
+  const totalPages = Math.max(1, Math.ceil(total / size))
 
   const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` })
 
   const fetchSongs = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/admin/music`, {
+      const res = await fetch(`${API_BASE}/api/admin/music?page=${page}&size=${size}`, {
         headers: authHeaders(),
       })
-      const data = res.ok ? await res.json() : []
-      const list = Array.isArray(data) ? sortSongs(data) : []
+      const data = res.ok ? await res.json() : { content: [], totalElements: 0 }
+      const list = Array.isArray(data) ? sortSongs(data) : sortSongs(data.content || [])
       setSongs(list)
+      setTotal(Number(data.totalElements || list.length || 0))
       setSelectedIds(ids => ids.filter(id => list.some(song => song.id === id)))
     } catch {
       setSongs([])
+      setTotal(0)
       setSelectedIds([])
     } finally {
       if (showLoading) setLoading(false)
@@ -479,6 +485,43 @@ export default function MusicManager() {
             </table>
           </div>
         )}
+      </div>
+
+      <div className="mt-4 flex flex-col gap-3 text-sm text-gray-500 dark:text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          <span>共 {total} 首</span>
+          <select
+            value={size}
+            onChange={event => {
+              setSize(Number(event.target.value))
+              setPage(0)
+            }}
+            className="rounded-lg border border-gray-200 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+          >
+            {[10, 20, 50, 100].map(item => <option key={item} value={item}>{item} 条/页</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            disabled={page <= 0}
+            onClick={() => setPage(value => Math.max(0, value - 1))}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:opacity-40 dark:border-slate-700"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            上一页
+          </button>
+          <span className="rounded-lg bg-gray-100 px-3 py-2 text-gray-700 dark:bg-slate-800 dark:text-slate-200">{page + 1} / {totalPages}</span>
+          <button
+            type="button"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage(value => Math.min(totalPages - 1, value + 1))}
+            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:opacity-40 dark:border-slate-700"
+          >
+            下一页
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -12,6 +12,7 @@ import (
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -70,6 +71,23 @@ func AdminGetThemes(c *gin.Context) {
 }
 
 func AdminListThemeBackgrounds(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+	size, _ := strconv.Atoi(c.DefaultQuery("size", "60"))
+	if total, err := repository.CountUploadAssets(repository.UploadAssetThemeBackground); err == nil && total > 0 {
+		assets, total, err := repository.ListUploadAssets(repository.UploadAssetThemeBackground, page, size)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "鑾峰彇鑳屾櫙澶辫触")
+			return
+		}
+		dtos := uploadAssetsToImageDTOs(assets)
+		if c.Query("page") != "" || c.Query("size") != "" {
+			response.Page(c, dtos, total, size, page)
+			return
+		}
+		response.Success(c, dtos)
+		return
+	}
+
 	root := filepath.Join(config.AppConfig.UploadDir, "theme-backgrounds")
 	if _, err := os.Stat(root); errors.Is(err, os.ErrNotExist) {
 		response.Success(c, []imageDTO{})
@@ -101,6 +119,7 @@ func AdminListThemeBackgrounds(c *gin.Context) {
 			URL:  "/uploads/theme-backgrounds/" + name,
 			Size: info.Size(),
 		})
+		recordUploadAsset(repository.UploadAssetThemeBackground, images[len(images)-1], path, themeBackgroundGroupKey(name), themeBackgroundVariant(name))
 		return nil
 	})
 
@@ -164,6 +183,12 @@ func AdminUploadThemeBackground(c *gin.Context) {
 		}
 	}
 
+	recordUploadAsset(repository.UploadAssetThemeBackground, imageDTO{
+		Name: responseName,
+		URL:  "/uploads/theme-backgrounds/" + responseName,
+		Size: responseSize,
+	}, filepath.Join(dir, responseName), baseName, themeBackgroundVariant(responseName))
+
 	response.Success(c, imageDTO{
 		Name: responseName,
 		URL:  "/uploads/theme-backgrounds/" + responseName,
@@ -195,6 +220,7 @@ func AdminDeleteThemeBackground(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "删除失败")
 		return
 	}
+	_ = repository.DeleteUploadAssetsByGroup(repository.UploadAssetThemeBackground, themeBackgroundGroupKey(name))
 	response.Success(c, gin.H{"deleted": true})
 }
 
@@ -237,6 +263,22 @@ func deleteThemeBackgroundFiles(dirAbs, name string) error {
 		}
 	}
 	return nil
+}
+
+func themeBackgroundGroupKey(name string) string {
+	base := strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
+	if at := strings.Index(base, "@"); at >= 0 {
+		base = base[:at]
+	}
+	return base
+}
+
+func themeBackgroundVariant(name string) string {
+	base := strings.TrimSuffix(filepath.Base(name), filepath.Ext(name))
+	if at := strings.LastIndex(base, "@"); at >= 0 && at < len(base)-1 {
+		return base[at+1:]
+	}
+	return "original"
 }
 
 func writeThemeResponse(c *gin.Context, theme *model.Theme) {

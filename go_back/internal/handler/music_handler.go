@@ -63,6 +63,17 @@ func GetMusics(c *gin.Context) {
 }
 
 func AdminGetMusics(c *gin.Context) {
+	if c.Query("page") != "" || c.Query("size") != "" {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+		size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
+		musics, total, err := repository.GetMusicsPage(page, size)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "鑾峰彇闊充箰鍒楄〃澶辫触")
+			return
+		}
+		response.Page(c, signMusicList(musics, "admin"), total, size, page)
+		return
+	}
 	musics, err := repository.GetMusics()
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取音乐列表失败")

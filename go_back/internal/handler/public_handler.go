@@ -92,8 +92,11 @@ func GetArticle(c *gin.Context) {
 		response.Error(c, http.StatusNotFound, "文章不存在")
 		return
 	}
-	_ = repository.IncrementArticleViews(id)
-	article.Views++
+	if delta, err := repository.IncrementArticleViewsBuffered(id); err == nil {
+		article.Views += int(delta)
+	} else {
+		article.Views++
+	}
 	response.Success(c, article)
 }
 

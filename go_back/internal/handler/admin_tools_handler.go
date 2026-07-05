@@ -55,8 +55,14 @@ func AdminGetOperationLogs(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
 	action := strings.TrimSpace(c.Query("action"))
+	keyword := strings.TrimSpace(c.Query("keyword"))
 
-	logs, total, err := repository.GetOperationLogs(page, size, action)
+	logs, total, err := repository.SearchOperationLogs(repository.OperationLogQuery{
+		Page:    page,
+		Size:    size,
+		Action:  action,
+		Keyword: keyword,
+	})
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取操作日志失败")
 		return

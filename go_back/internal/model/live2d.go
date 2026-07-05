@@ -24,7 +24,7 @@ type Live2DModel struct {
 	Name            string    `gorm:"column:name;size:255;not null" json:"name"`
 	Directory       string    `gorm:"column:directory;size:255;not null;uniqueIndex" json:"-"`
 	ModelPath       string    `gorm:"column:model_path;size:1000;not null" json:"modelPath"`
-	ThumbnailPath   string    `gorm:"-" json:"thumbnailPath"`
+	ThumbnailPath   string    `gorm:"column:thumbnail_path;size:1000" json:"thumbnailPath"`
 	Active          bool      `gorm:"column:active;default:false" json:"active"`
 	Switchable      bool      `gorm:"column:switchable;default:true" json:"switchable"`
 	DisplayOrder    int       `gorm:"column:display_order;default:0" json:"displayOrder"`

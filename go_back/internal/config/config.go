@@ -38,6 +38,9 @@ type Config struct {
 	LoginLimitWindow     int
 	MediaSignSecret      string
 	MediaURLTTLSeconds   int
+	DBMaxIdleConns       int
+	DBMaxOpenConns       int
+	DBConnMaxLifetimeMin int
 }
 
 var AppConfig *Config
@@ -59,7 +62,7 @@ func InitConfig() {
 		JWTExpireMs:          jwtExpireMs,
 		UploadDir:            getEnv("APP_UPLOAD_DIR", "uploads"),
 		GinMode:              getEnv("GIN_MODE", "debug"),
-		CORSAllowedOrigins:   getEnv("CORS_ALLOWED_ORIGINS", "*"),
+		CORSAllowedOrigins:   getEnv("CORS_ALLOWED_ORIGINS", ""),
 		AutoMigrate:          boolEnv("AUTO_MIGRATE", true),
 		AdminUsername:        getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:        getEnv("ADMIN_PASSWORD", "admin123"),
@@ -79,6 +82,9 @@ func InitConfig() {
 		LoginLimitWindow:     intEnv("LOGIN_LIMIT_WINDOW_SECONDS", 600),
 		MediaSignSecret:      getEnv("MEDIA_SIGN_SECRET", ""),
 		MediaURLTTLSeconds:   intEnv("MEDIA_URL_TTL_SECONDS", 600),
+		DBMaxIdleConns:       intEnv("DB_MAX_IDLE_CONNS", 10),
+		DBMaxOpenConns:       intEnv("DB_MAX_OPEN_CONNS", 50),
+		DBConnMaxLifetimeMin: intEnv("DB_CONN_MAX_LIFETIME_MINUTES", 55),
 	}
 	validateProductionConfig(AppConfig)
 }

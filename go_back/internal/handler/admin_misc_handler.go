@@ -26,6 +26,17 @@ var avatarImageTypes = map[string]bool{
 }
 
 func AdminGetProjects(c *gin.Context) {
+	if c.Query("page") != "" || c.Query("size") != "" {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+		size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
+		projects, total, err := repository.GetProjectsPage(page, size, false)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "鑾峰彇椤圭洰澶辫触")
+			return
+		}
+		response.Page(c, projects, total, size, page)
+		return
+	}
 	projects, err := repository.GetProjects(false)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取项目失败")
@@ -83,6 +94,17 @@ func AdminDeleteProject(c *gin.Context) {
 }
 
 func AdminGetSkills(c *gin.Context) {
+	if c.Query("page") != "" || c.Query("size") != "" {
+		page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
+		size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
+		skills, total, err := repository.GetSkillsPage(page, size)
+		if err != nil {
+			response.Error(c, http.StatusInternalServerError, "鑾峰彇鎶€鑳藉け璐?")
+			return
+		}
+		response.Page(c, skills, total, size, page)
+		return
+	}
 	skills, err := repository.GetSkills()
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取技能失败")

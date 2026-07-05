@@ -30,9 +30,21 @@ func InitDB() {
 	if err != nil {
 		log.Fatalf("failed to get database handle: %v", err)
 	}
-	sqlDB.SetMaxIdleConns(5)
-	sqlDB.SetMaxOpenConns(20)
+	maxIdle := config.AppConfig.DBMaxIdleConns
+	if maxIdle <= 0 {
+		maxIdle = 10
+	}
+	maxOpen := config.AppConfig.DBMaxOpenConns
+	if maxOpen <= 0 {
+		maxOpen = 50
+	}
+	lifetimeMinutes := config.AppConfig.DBConnMaxLifetimeMin
+	if lifetimeMinutes <= 0 {
+		lifetimeMinutes = 55
+	}
+	sqlDB.SetMaxIdleConns(maxIdle)
+	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
-	sqlDB.SetConnMaxLifetime(55 * time.Minute)
+	sqlDB.SetConnMaxLifetime(time.Duration(lifetimeMinutes) * time.Minute)
 	log.Println("database connection established")
 }

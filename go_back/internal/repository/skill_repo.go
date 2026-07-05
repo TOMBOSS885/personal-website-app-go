@@ -11,6 +11,29 @@ func GetSkills() ([]model.Skill, error) {
 	return skills, err
 }
 
+func GetSkillsPage(page, size int) ([]model.Skill, int64, error) {
+	var skills []model.Skill
+	var total int64
+	query := db.DB.Model(&model.Skill{})
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if page < 0 {
+		page = 0
+	}
+	if size <= 0 {
+		size = 20
+	}
+	if size > 200 {
+		size = 200
+	}
+	err := query.Order("display_order ASC").
+		Offset(page * size).
+		Limit(size).
+		Find(&skills).Error
+	return skills, total, err
+}
+
 func GetSkillCount() (int64, error) {
 	var count int64
 	err := db.DB.Model(&model.Skill{}).Count(&count).Error

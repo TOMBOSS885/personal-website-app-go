@@ -10,6 +10,7 @@ import (
 	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
+	"personal-website-go/internal/tasks"
 	"strings"
 	"time"
 
@@ -37,6 +38,7 @@ func main() {
 			&model.RateLimitSettings{},
 			&model.SecurityAccessStat{},
 			&model.SecurityEvent{},
+			&model.UploadAsset{},
 		); err != nil {
 			log.Fatalf("database migration failed: %v", err)
 		}
@@ -45,10 +47,14 @@ func main() {
 	if _, err := repository.GetOrCreateRateLimitSettings(); err != nil {
 		log.Printf("rate limit settings init failed: %v", err)
 	}
-	repository.CleanupSecurityLogs()
+	tasks.RunStartupMaintenance()
+	tasks.StartMaintenanceTasks()
 
 	gin.SetMode(config.AppConfig.GinMode)
 	r := gin.New()
+	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
+		log.Printf("failed to set trusted proxies: %v", err)
+	}
 	r.MaxMultipartMemory = 256 << 20
 	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.CORS(), middleware.IPBanGuard())
 
