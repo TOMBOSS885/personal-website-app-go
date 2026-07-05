@@ -158,8 +158,11 @@ CACHE_TTL_SECONDS=60
 RATE_LIMIT_ENABLED=true
 PUBLIC_RATE_LIMIT_PER_MINUTE=180
 MUSIC_RATE_LIMIT_PER_MINUTE=90
+MUSIC_STREAM_RATE_LIMIT_PER_MINUTE=240
 LOGIN_LIMIT_MAX_FAILS=5
 LOGIN_LIMIT_WINDOW_SECONDS=600
+MEDIA_SIGN_SECRET=
+MEDIA_URL_TTL_SECONDS=600
 ```
 
 如果 Redis 没有设置密码：
@@ -182,14 +185,18 @@ REDIS_PASSWORD=
 | `RATE_LIMIT_ENABLED` | 是否启用限流 | `true` |
 | `PUBLIC_RATE_LIMIT_PER_MINUTE` | 普通公开接口每 IP 每分钟次数 | `180` |
 | `MUSIC_RATE_LIMIT_PER_MINUTE` | 音乐列表接口每 IP 每分钟次数 | `90` |
+| `MUSIC_STREAM_RATE_LIMIT_PER_MINUTE` | 音乐真实播放流每 IP 每分钟请求次数 | `240` |
 | `LOGIN_LIMIT_MAX_FAILS` | 登录最多失败次数 | `5` |
 | `LOGIN_LIMIT_WINDOW_SECONDS` | 登录失败锁定窗口 | `600` |
+| `MEDIA_SIGN_SECRET` | 音乐播放链接签名密钥，留空时复用 `JWT_SECRET` | 留空或随机长字符串 |
+| `MEDIA_URL_TTL_SECONDS` | 音乐签名播放链接有效期 | `600` |
 
 如果访问量更大，可以先调高：
 
 ```env
 PUBLIC_RATE_LIMIT_PER_MINUTE=300
 MUSIC_RATE_LIMIT_PER_MINUTE=180
+MUSIC_STREAM_RATE_LIMIT_PER_MINUTE=360
 ```
 
 不要一开始调得过低，否则正常用户刷新页面也可能被限流。
@@ -315,11 +322,27 @@ REDIS_ADDR=127.0.0.1:6379
 REDIS_ADDR=redis:6379
 ```
 
-### 9.3 后台修改后前台没有马上变化
+### 9.3 音乐直链打不开
+
+这是正常的。当前版本会拦截：
+
+```text
+/uploads/music/...
+```
+
+前台播放器会使用后端返回的签名地址：
+
+```text
+/api/public/music/:id/stream?scope=public&expires=...&sign=...
+```
+
+这样每次真实播放音乐都会经过 Go 后端、Redis 限流和签名校验，不能再长期复制固定 mp3 地址批量下载。
+
+### 9.4 后台修改后前台没有马上变化
 
 本次实现已经在后台增删改成功后自动清理公开缓存。若仍看到旧内容，通常是浏览器缓存、Nginx 静态资源缓存或 CDN 缓存，需要刷新浏览器或清 CDN。
 
-### 9.4 被限流了
+### 9.5 被限流了
 
 如果返回：
 
@@ -332,6 +355,7 @@ REDIS_ADDR=redis:6379
 ```env
 PUBLIC_RATE_LIMIT_PER_MINUTE=300
 MUSIC_RATE_LIMIT_PER_MINUTE=180
+MUSIC_STREAM_RATE_LIMIT_PER_MINUTE=360
 ```
 
 然后重启：
@@ -340,7 +364,7 @@ MUSIC_RATE_LIMIT_PER_MINUTE=180
 docker compose up -d
 ```
 
-### 9.5 新数据库首次后台登录
+### 9.6 新数据库首次后台登录
 
 新库首次启动时，Go 后端会根据 `.env` 创建管理员：
 

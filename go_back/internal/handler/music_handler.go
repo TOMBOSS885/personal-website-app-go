@@ -1,11 +1,17 @@
 package handler
 
 import (
+	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"personal-website-go/internal/cache"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
@@ -53,7 +59,7 @@ func GetMusics(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "获取音乐列表失败")
 		return
 	}
-	response.Success(c, musics)
+	response.Success(c, signMusicList(musics, "public"))
 }
 
 func AdminGetMusics(c *gin.Context) {
@@ -62,7 +68,67 @@ func AdminGetMusics(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "获取音乐列表失败")
 		return
 	}
-	response.Success(c, musics)
+	response.Success(c, signMusicList(musics, "admin"))
+}
+
+func StreamMusic(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		response.Error(c, http.StatusBadRequest, "invalid music id")
+		return
+	}
+
+	music, err := repository.GetMusicByID(id)
+	if err != nil || music == nil {
+		response.Error(c, http.StatusNotFound, "music not found")
+		return
+	}
+
+	scope := c.DefaultQuery("scope", "public")
+	expires, err := strconv.ParseInt(c.Query("expires"), 10, 64)
+	if err != nil || time.Now().Unix() > expires {
+		response.Error(c, http.StatusForbidden, "music link expired")
+		return
+	}
+	if scope != "public" && scope != "admin" {
+		response.Error(c, http.StatusForbidden, "invalid music link")
+		return
+	}
+	if scope == "public" && !music.IsPublic {
+		response.Error(c, http.StatusNotFound, "music not found")
+		return
+	}
+	if !validMusicSignature(music, scope, expires, c.Query("sign")) {
+		response.Error(c, http.StatusForbidden, "invalid music link")
+		return
+	}
+
+	path, err := uploadedMusicPath(music.FileURL)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "music file not found")
+		return
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "music file not found")
+		return
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil || stat.IsDir() {
+		response.Error(c, http.StatusNotFound, "music file not found")
+		return
+	}
+
+	recordMusicStreamRequest(c.ClientIP(), music.ID)
+	if music.ContentType != "" {
+		c.Header("Content-Type", music.ContentType)
+	}
+	c.Header("Accept-Ranges", "bytes")
+	c.Header("Cache-Control", "private, max-age=0, no-store")
+	http.ServeContent(c.Writer, c.Request, music.FileName, stat.ModTime(), file)
 }
 
 func AdminUploadMusic(c *gin.Context) {
@@ -137,10 +203,10 @@ func AdminUploadMusic(c *gin.Context) {
 	}
 
 	if singleUpload {
-		response.Success(c, uploaded[0])
+		response.Success(c, signMusicItem(uploaded[0], "admin"))
 		return
 	}
-	response.Success(c, uploaded)
+	response.Success(c, signMusicList(uploaded, "admin"))
 }
 
 func AdminUpdateMusic(c *gin.Context) {
@@ -164,7 +230,7 @@ func AdminUpdateMusic(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "save music settings failed")
 		return
 	}
-	response.Success(c, music)
+	response.Success(c, signMusicItem(*music, "admin"))
 }
 
 func AdminDeleteMusic(c *gin.Context) {
@@ -252,7 +318,7 @@ func AdminUploadMusicLyrics(c *gin.Context) {
 		_ = removeUploadedLyrics(oldLyricsURL)
 	}
 
-	response.Success(c, music)
+	response.Success(c, signMusicItem(*music, "admin"))
 }
 
 func AdminDeleteMusicLyrics(c *gin.Context) {
@@ -272,7 +338,7 @@ func AdminDeleteMusicLyrics(c *gin.Context) {
 		return
 	}
 	_ = removeUploadedLyrics(oldLyricsURL)
-	response.Success(c, music)
+	response.Success(c, signMusicItem(*music, "admin"))
 }
 
 func prepareMusicFile(file *multipart.FileHeader, settings *model.UploadSettings) (preparedMusicFile, error) {
@@ -330,6 +396,108 @@ func validateLyricsFile(file *multipart.FileHeader, settings *model.UploadSettin
 		return errors.New("lyrics file must be plain text")
 	}
 	return nil
+}
+
+func signMusicList(musics []model.Music, scope string) []model.Music {
+	signed := make([]model.Music, 0, len(musics))
+	for _, music := range musics {
+		signed = append(signed, signMusicItem(music, scope))
+	}
+	return signed
+}
+
+func signMusicItem(music model.Music, scope string) model.Music {
+	if music.ID == 0 || music.FileURL == "" {
+		return music
+	}
+	expires := time.Now().Add(mediaURLTTL()).Unix()
+	music.FileURL = signedMusicURL(&music, scope, expires)
+	return music
+}
+
+func signedMusicURL(music *model.Music, scope string, expires int64) string {
+	sign := signMediaValue(musicSignaturePayload(music.ID, scope, music.FileURL, expires))
+	return fmt.Sprintf("/api/public/music/%d/stream?scope=%s&expires=%d&sign=%s", music.ID, scope, expires, sign)
+}
+
+func validMusicSignature(music *model.Music, scope string, expires int64, signature string) bool {
+	if strings.TrimSpace(signature) == "" {
+		return false
+	}
+	expected := signMediaValue(musicSignaturePayload(music.ID, scope, music.FileURL, expires))
+	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
+func musicSignaturePayload(id uint64, scope, fileURL string, expires int64) string {
+	return fmt.Sprintf("%d|%s|%s|%d", id, scope, fileURL, expires)
+}
+
+func signMediaValue(value string) string {
+	mac := hmac.New(sha256.New, []byte(mediaSignSecret()))
+	_, _ = mac.Write([]byte(value))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func mediaSignSecret() string {
+	if config.AppConfig != nil && strings.TrimSpace(config.AppConfig.MediaSignSecret) != "" {
+		return config.AppConfig.MediaSignSecret
+	}
+	if config.AppConfig != nil {
+		return config.AppConfig.JWTSecret
+	}
+	return "please-change-this-secret-key-at-least-32-chars"
+}
+
+func mediaURLTTL() time.Duration {
+	if config.AppConfig != nil && config.AppConfig.MediaURLTTLSeconds > 0 {
+		return time.Duration(config.AppConfig.MediaURLTTLSeconds) * time.Second
+	}
+	return 10 * time.Minute
+}
+
+func uploadedMusicPath(fileURL string) (string, error) {
+	if !strings.HasPrefix(fileURL, "/uploads/music/") {
+		return "", errors.New("invalid music path")
+	}
+	rel := strings.TrimPrefix(fileURL, "/uploads/")
+	target := filepath.Join(config.AppConfig.UploadDir, filepath.FromSlash(rel))
+	uploadAbs, err := filepath.Abs(config.AppConfig.UploadDir)
+	if err != nil {
+		return "", err
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(targetAbs, uploadAbs+string(os.PathSeparator)) {
+		return "", errors.New("invalid music path")
+	}
+	return targetAbs, nil
+}
+
+func recordMusicStreamRequest(ip string, id uint64) {
+	if !cache.Ready() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	day := time.Now().Format("20060102")
+	pipe := cache.Client.Pipeline()
+	pipe.Incr(ctx, "music:stream:total")
+	pipe.Incr(ctx, "music:stream:day:"+day)
+	pipe.Expire(ctx, "music:stream:day:"+day, 32*24*time.Hour)
+	pipe.Incr(ctx, fmt.Sprintf("music:stream:song:%d:total", id))
+	songDayKey := fmt.Sprintf("music:stream:song:%d:day:%s", id, day)
+	pipe.Incr(ctx, songDayKey)
+	pipe.Expire(ctx, songDayKey, 32*24*time.Hour)
+	if strings.TrimSpace(ip) != "" {
+		ipDayKey := fmt.Sprintf("music:stream:ip:%s:day:%s", strings.TrimSpace(ip), day)
+		pipe.Incr(ctx, ipDayKey)
+		pipe.Expire(ctx, ipDayKey, 7*24*time.Hour)
+	}
+	_, _ = pipe.Exec(ctx)
 }
 
 func cleanupUploadedMusic(musics []model.Music) {

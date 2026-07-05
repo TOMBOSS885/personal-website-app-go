@@ -9,6 +9,7 @@ import (
 	"personal-website-go/internal/handler"
 	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/model"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -45,6 +46,10 @@ func main() {
 
 	uploads := r.Group("/uploads")
 	uploads.Use(func(c *gin.Context) {
+		if c.Request.URL.Path == "/uploads/music" || strings.HasPrefix(c.Request.URL.Path, "/uploads/music/") {
+			c.AbortWithStatus(404)
+			return
+		}
 		c.Header("Cache-Control", "public, max-age=604800, immutable")
 		c.Next()
 	})
@@ -75,6 +80,7 @@ func main() {
 			public.GET("/theme/background-images", publicCache, handler.AdminListThemeBackgrounds)
 			public.GET("/live2d-model", publicCache, handler.GetLive2DModel)
 			public.GET("/music", middleware.RateLimit("music", config.AppConfig.MusicRateLimit, time.Minute), publicCache, handler.GetMusics)
+			public.GET("/music/:id/stream", middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusic)
 			public.GET("/search", handler.PublicSearch)
 		}
 
