@@ -204,11 +204,15 @@ func GetHighAccessStatsByRateLimit(date string, settings model.RateLimitSettings
 
 func FindActiveBan(ip string) (*model.SecurityEvent, error) {
 	var event model.SecurityEvent
-	err := db.DB.Where("type = ? AND ip = ? AND expires_at > ?", "ban", ip, time.Now()).
+	result := db.DB.Where("type = ? AND ip = ? AND expires_at > ?", "ban", ip, time.Now()).
 		Order("created_at DESC").
-		First(&event).Error
-	if err != nil {
-		return nil, err
+		Limit(1).
+		Find(&event)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return nil, gorm.ErrRecordNotFound
 	}
 	return &event, nil
 }
