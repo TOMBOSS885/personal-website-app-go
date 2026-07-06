@@ -764,6 +764,9 @@ function LyricsModule({
   const dragRef = useRef(null)
   const resizeRef = useRef(null)
   const resizeFrameRef = useRef(null)
+  const positionRef = useRef(null)
+  const lyricsSizeRef = useRef(null)
+  const onSettingsChangeRef = useRef(onSettingsChange)
   const [panelOpen, setPanelOpen] = useState(false)
   const [position, setPosition] = useState(() => readLyricsPosition())
   const [liveSize, setLiveSize] = useState(null)
@@ -778,6 +781,21 @@ function LyricsModule({
     : 424
   const settingsHeight = hasBilingualLyrics ? 424 : 326
   const shellHeight = panelOpen ? Math.min(maxShellHeight, Math.max(moduleHeight, settingsHeight)) : moduleHeight
+
+  useEffect(() => {
+    positionRef.current = position
+  }, [position])
+
+  useEffect(() => {
+    lyricsSizeRef.current = {
+      width: moduleWidth,
+      height: shellHeight,
+    }
+  }, [moduleWidth, shellHeight])
+
+  useEffect(() => {
+    onSettingsChangeRef.current = onSettingsChange
+  }, [onSettingsChange])
 
   const moveLyricsResize = useCallback((event) => {
     const resize = resizeRef.current
@@ -817,15 +835,24 @@ function LyricsModule({
       resizeFrameRef.current = null
       const current = resizeRef.current
       if (!current) return
-      setLiveSize({
-        width: current.nextWidth ?? current.startWidth,
-        height: current.nextHeight ?? current.startHeight,
-      })
-      setPosition(current.nextPosition ?? clampLyricsPosition(
+      const nextWidth = current.nextWidth ?? current.startWidth
+      const nextHeight = current.nextHeight ?? current.startHeight
+      const nextPosition = current.nextPosition ?? clampLyricsPosition(
         { x: current.startLeft, y: current.startTop },
         current.startWidth,
         current.startHeight,
-      ))
+      )
+      if (moduleRef.current) {
+        moduleRef.current.style.left = `${nextPosition.x}px`
+        moduleRef.current.style.top = `${nextPosition.y}px`
+        moduleRef.current.style.width = `${nextWidth}px`
+        moduleRef.current.style.height = `${nextHeight}px`
+      }
+      setLiveSize({
+        width: nextWidth,
+        height: nextHeight,
+      })
+      setPosition(nextPosition)
     }
     if (typeof window !== 'undefined' && window.requestAnimationFrame) {
       resizeFrameRef.current = window.requestAnimationFrame(applyResize)
@@ -849,7 +876,7 @@ function LyricsModule({
         finalHeight,
       )
       setPosition(finalPosition)
-      onSettingsChange({
+      onSettingsChangeRef.current({
         width: Math.round(finalWidth),
         height: Math.round(finalHeight),
       })
@@ -859,16 +886,17 @@ function LyricsModule({
     window.removeEventListener('pointermove', moveLyricsResize)
     window.removeEventListener('pointerup', endLyricsResize)
     window.removeEventListener('pointercancel', endLyricsResize)
-  }, [moveLyricsResize, onSettingsChange])
+  }, [moveLyricsResize])
 
   const moveLyricsDrag = useCallback((event) => {
     const drag = dragRef.current
     if (!drag) return
+    const size = lyricsSizeRef.current || { width: DEFAULT_LYRICS_SETTINGS.width, height: DEFAULT_LYRICS_SETTINGS.height }
     setPosition(clampLyricsPosition({
       x: event.clientX - drag.offsetX,
       y: event.clientY - drag.offsetY,
-    }, moduleWidth, shellHeight))
-  }, [moduleWidth, shellHeight])
+    }, size.width, size.height))
+  }, [])
 
   const endLyricsDrag = useCallback(() => {
     dragRef.current = null
@@ -914,9 +942,10 @@ function LyricsModule({
     event.preventDefault()
     event.currentTarget.setPointerCapture?.(event.pointerId)
     const rect = moduleRef.current?.getBoundingClientRect()
+    const currentPosition = positionRef.current || position
     dragRef.current = {
-      offsetX: event.clientX - (rect?.left || position.x),
-      offsetY: event.clientY - (rect?.top || position.y),
+      offsetX: event.clientX - (rect?.left || currentPosition.x),
+      offsetY: event.clientY - (rect?.top || currentPosition.y),
     }
     window.addEventListener('pointermove', moveLyricsDrag)
     window.addEventListener('pointerup', endLyricsDrag)
@@ -929,14 +958,16 @@ function LyricsModule({
     event.stopPropagation()
     event.currentTarget.setPointerCapture?.(event.pointerId)
     const rect = moduleRef.current?.getBoundingClientRect()
+    const currentPosition = positionRef.current || position
+    const currentSize = lyricsSizeRef.current || { width: moduleWidth, height: shellHeight }
     resizeRef.current = {
       edge,
       startX: event.clientX,
       startY: event.clientY,
-      startLeft: rect?.left || position.x,
-      startTop: rect?.top || position.y,
-      startWidth: rect?.width || moduleWidth,
-      startHeight: rect?.height || moduleHeight,
+      startLeft: rect?.left || currentPosition.x,
+      startTop: rect?.top || currentPosition.y,
+      startWidth: rect?.width || currentSize.width,
+      startHeight: rect?.height || currentSize.height,
     }
     window.addEventListener('pointermove', moveLyricsResize)
     window.addEventListener('pointerup', endLyricsResize)
