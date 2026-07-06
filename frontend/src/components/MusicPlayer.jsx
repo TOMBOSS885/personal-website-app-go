@@ -763,11 +763,15 @@ function LyricsModule({
   const moduleRef = useRef(null)
   const dragRef = useRef(null)
   const resizeRef = useRef(null)
+  const resizeFrameRef = useRef(null)
   const [panelOpen, setPanelOpen] = useState(false)
   const [position, setPosition] = useState(() => readLyricsPosition())
+  const [liveSize, setLiveSize] = useState(null)
   const visibleLines = getVisibleLyrics(lines, activeIndex, settings.lineCount)
-  const moduleWidth = lyricsModuleWidth(settings.width)
-  const moduleHeight = lyricsModuleHeight(settings.height)
+  const savedModuleWidth = lyricsModuleWidth(settings.width)
+  const savedModuleHeight = lyricsModuleHeight(settings.height)
+  const moduleWidth = liveSize?.width ?? savedModuleWidth
+  const moduleHeight = liveSize?.height ?? savedModuleHeight
   const hasBilingualLyrics = lines.some(line => Array.isArray(line.parts) && line.parts.length > 1)
   const maxShellHeight = typeof window !== 'undefined'
     ? Math.max(260, window.innerHeight - edgeGap() * 2)
@@ -778,6 +782,7 @@ function LyricsModule({
   const moveLyricsResize = useCallback((event) => {
     const resize = resizeRef.current
     if (!resize) return
+    event.preventDefault()
 
     const dx = event.clientX - resize.startX
     const dy = event.clientY - resize.startY
@@ -803,19 +808,58 @@ function LyricsModule({
     }
 
     const nextPosition = clampLyricsPosition({ x: nextX, y: nextY }, nextWidth, nextHeight)
-    setPosition(nextPosition)
-    onSettingsChange({
-      width: Math.round(nextWidth),
-      height: Math.round(nextHeight),
-    })
-  }, [onSettingsChange])
+    resize.nextWidth = nextWidth
+    resize.nextHeight = nextHeight
+    resize.nextPosition = nextPosition
+
+    if (resizeFrameRef.current !== null) return
+    const applyResize = () => {
+      resizeFrameRef.current = null
+      const current = resizeRef.current
+      if (!current) return
+      setLiveSize({
+        width: current.nextWidth ?? current.startWidth,
+        height: current.nextHeight ?? current.startHeight,
+      })
+      setPosition(current.nextPosition ?? clampLyricsPosition(
+        { x: current.startLeft, y: current.startTop },
+        current.startWidth,
+        current.startHeight,
+      ))
+    }
+    if (typeof window !== 'undefined' && window.requestAnimationFrame) {
+      resizeFrameRef.current = window.requestAnimationFrame(applyResize)
+    } else {
+      applyResize()
+    }
+  }, [])
 
   const endLyricsResize = useCallback(() => {
+    const resize = resizeRef.current
+    if (resizeFrameRef.current !== null && typeof window !== 'undefined' && window.cancelAnimationFrame) {
+      window.cancelAnimationFrame(resizeFrameRef.current)
+      resizeFrameRef.current = null
+    }
+    if (resize) {
+      const finalWidth = resize.nextWidth ?? resize.startWidth
+      const finalHeight = resize.nextHeight ?? resize.startHeight
+      const finalPosition = resize.nextPosition ?? clampLyricsPosition(
+        { x: resize.startLeft, y: resize.startTop },
+        finalWidth,
+        finalHeight,
+      )
+      setPosition(finalPosition)
+      onSettingsChange({
+        width: Math.round(finalWidth),
+        height: Math.round(finalHeight),
+      })
+      setLiveSize(null)
+    }
     resizeRef.current = null
     window.removeEventListener('pointermove', moveLyricsResize)
     window.removeEventListener('pointerup', endLyricsResize)
     window.removeEventListener('pointercancel', endLyricsResize)
-  }, [moveLyricsResize])
+  }, [moveLyricsResize, onSettingsChange])
 
   const moveLyricsDrag = useCallback((event) => {
     const drag = dragRef.current
@@ -855,6 +899,10 @@ function LyricsModule({
       window.removeEventListener('pointermove', moveLyricsResize)
       window.removeEventListener('pointerup', endLyricsResize)
       window.removeEventListener('pointercancel', endLyricsResize)
+      if (resizeFrameRef.current !== null && typeof window !== 'undefined' && window.cancelAnimationFrame) {
+        window.cancelAnimationFrame(resizeFrameRef.current)
+        resizeFrameRef.current = null
+      }
     }
   }, [endLyricsDrag, endLyricsResize, moveLyricsDrag, moveLyricsResize])
 
