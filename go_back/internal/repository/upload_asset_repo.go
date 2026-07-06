@@ -2,6 +2,8 @@ package repository
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/model"
 	"strings"
@@ -48,6 +50,8 @@ func ListUploadAssets(kind string, page, size int) ([]model.UploadAsset, int64, 
 }
 
 func CountUploadAssets(kind string) (int64, error) {
+	_, _ = CleanupMissingUploadAssets(kind)
+
 	var total int64
 	err := db.DB.Model(&model.UploadAsset{}).Where("kind = ?", strings.TrimSpace(kind)).Count(&total).Error
 	return total, err
@@ -67,4 +71,48 @@ func DeleteUploadAssetsByGroup(kind, groupKey string) error {
 	}
 	return db.DB.Where("kind = ? AND group_key = ?", strings.TrimSpace(kind), strings.TrimSpace(groupKey)).
 		Delete(&model.UploadAsset{}).Error
+}
+
+func CleanupMissingUploadAssets(kind string) (int64, error) {
+	var assets []model.UploadAsset
+	query := db.DB.Model(&model.UploadAsset{})
+	if kind = strings.TrimSpace(kind); kind != "" {
+		query = query.Where("kind = ?", kind)
+	}
+	if err := query.Find(&assets).Error; err != nil {
+		return 0, err
+	}
+
+	var missingIDs []uint64
+	for _, asset := range assets {
+		if uploadAssetExists(asset) {
+			continue
+		}
+		missingIDs = append(missingIDs, asset.ID)
+	}
+	if len(missingIDs) == 0 {
+		return 0, nil
+	}
+	if err := db.DB.Where("id IN ?", missingIDs).Delete(&model.UploadAsset{}).Error; err != nil {
+		return 0, err
+	}
+	return int64(len(missingIDs)), nil
+}
+
+func uploadAssetExists(asset model.UploadAsset) bool {
+	path := strings.TrimSpace(asset.Path)
+	if path == "" {
+		return false
+	}
+	if !filepath.IsAbs(path) {
+		abs, err := filepath.Abs(path)
+		if err == nil {
+			path = abs
+		}
+	}
+	info, err := os.Stat(path)
+	if err == nil {
+		return !info.IsDir()
+	}
+	return !errors.Is(err, os.ErrNotExist)
 }

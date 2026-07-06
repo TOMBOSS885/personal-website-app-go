@@ -20,6 +20,7 @@ export default function ArticleManager() {
   const [coverImages, setCoverImages] = useState([])
   const [loadingCoverImages, setLoadingCoverImages] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
+  const [cleaningCoverImages, setCleaningCoverImages] = useState(false)
   const [draftNotice, setDraftNotice] = useState('')
   const coverFileInputRef = useRef(null)
   const [form, setForm] = useState({ 
@@ -140,6 +141,28 @@ export default function ArticleManager() {
       if (coverFileInputRef.current) {
         coverFileInputRef.current.value = ''
       }
+    }
+  }
+
+  const cleanupCoverImages = async () => {
+    setCleaningCoverImages(true)
+    try {
+      const tokenValue = localStorage.getItem('token')
+      const res = await fetch(`${API_BASE}/api/admin/upload-assets/cleanup?kind=article_image`, {
+        method: 'POST',
+        headers: tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {},
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      await fetchCoverImages()
+      alert(`已清理 ${data.removed || 0} 条失效图片记录`)
+    } catch (err) {
+      alert(`清理失效图片失败: ${err.message}`)
+    } finally {
+      setCleaningCoverImages(false)
     }
   }
 
@@ -594,6 +617,15 @@ export default function ArticleManager() {
               >
                 <RefreshCw className={`w-4 h-4 ${loadingCoverImages ? 'animate-spin' : ''}`} />
                 刷新图库
+              </button>
+              <button
+                type="button"
+                onClick={cleanupCoverImages}
+                disabled={cleaningCoverImages}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium disabled:opacity-50"
+              >
+                {cleaningCoverImages ? <Loader className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                清理失效
               </button>
               <span className="text-xs text-gray-500">选择后会立即显示在封面预览中</span>
             </div>

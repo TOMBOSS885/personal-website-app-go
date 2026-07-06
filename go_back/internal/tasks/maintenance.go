@@ -17,6 +17,7 @@ func RunStartupMaintenance() {
 	middleware.CleanupExpiredLocalRateLimits(time.Now())
 	repository.CleanupSecurityLogs()
 	repository.CleanupOperationLogs()
+	repository.CleanupMissingUploadAssets("")
 	repository.FlushPendingArticleViews()
 }
 
@@ -44,6 +45,11 @@ func runDailyCleanupLoop() {
 		log.Println("running scheduled log cleanup")
 		repository.CleanupSecurityLogs()
 		repository.CleanupOperationLogs()
+		if removed, err := repository.CleanupMissingUploadAssets(""); err != nil {
+			log.Printf("upload asset cleanup failed: %v", err)
+		} else if removed > 0 {
+			log.Printf("cleaned %d missing upload asset records", removed)
+		}
 	}
 }
 

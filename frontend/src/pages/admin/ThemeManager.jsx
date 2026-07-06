@@ -36,6 +36,7 @@ export default function ThemeManager() {
   const [uploading, setUploading] = useState(false)
   const [loadingBackgrounds, setLoadingBackgrounds] = useState(false)
   const [backgroundImages, setBackgroundImages] = useState([])
+  const [cleaningBackgrounds, setCleaningBackgrounds] = useState(false)
   const [previewTheme, setPreviewTheme] = useState(null)
 
   const activeTheme = previewTheme || getActiveTheme()
@@ -157,6 +158,27 @@ export default function ThemeManager() {
       }
     } catch (err) {
       alert(`删除背景图片失败: ${err.message}`)
+    }
+  }
+
+  const handleCleanupBackgroundImages = async () => {
+    setCleaningBackgrounds(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/upload-assets/cleanup?kind=theme_background`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        const error = await res.text()
+        throw new Error(error || '清理失败')
+      }
+      const data = await res.json()
+      await fetchBackgroundImages()
+      alert(`已清理 ${data.removed || 0} 条失效背景记录`)
+    } catch (err) {
+      alert(`清理失效背景失败: ${err.message}`)
+    } finally {
+      setCleaningBackgrounds(false)
     }
   }
 
@@ -446,15 +468,26 @@ export default function ThemeManager() {
             <div className="mt-5">
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-800">已上传背景</h3>
-                <button
-                  type="button"
-                  onClick={fetchBackgroundImages}
-                  disabled={loadingBackgrounds}
-                  className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${loadingBackgrounds ? 'animate-spin' : ''}`} />
-                  刷新
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={fetchBackgroundImages}
+                    disabled={loadingBackgrounds}
+                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${loadingBackgrounds ? 'animate-spin' : ''}`} />
+                    刷新
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCleanupBackgroundImages}
+                    disabled={cleaningBackgrounds}
+                    className="inline-flex items-center gap-1 rounded-lg border border-red-100 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {cleaningBackgrounds ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    清理失效
+                  </button>
+                </div>
               </div>
 
               {loadingBackgrounds ? (

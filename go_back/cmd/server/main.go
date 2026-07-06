@@ -131,6 +131,7 @@ func main() {
 			admin.PUT("/account/password", handler.AdminChangePassword)
 			admin.GET("/upload-settings", handler.AdminGetUploadSettings)
 			admin.PUT("/upload-settings", handler.AdminUpdateUploadSettings)
+			admin.POST("/upload-assets/cleanup", handler.AdminCleanupUploadAssets)
 			admin.GET("/dashboard-stats", handler.AdminDashboardStats)
 			admin.GET("/operation-logs", handler.AdminGetOperationLogs)
 			admin.GET("/export", handler.AdminExportData)

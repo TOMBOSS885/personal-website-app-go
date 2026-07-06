@@ -6,7 +6,7 @@ import {
   Bold, Italic, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Link2,
   Image, Table, Minus, Eye, EyeOff, Maximize2, Minimize2,
-  UploadCloud, Loader, RefreshCw, X
+  UploadCloud, Loader, RefreshCw, Trash2, X
 } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
 
@@ -21,6 +21,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const [images, setImages] = useState([])
   const [loadingImages, setLoadingImages] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [cleaningImages, setCleaningImages] = useState(false)
 
   const focusAt = (position) => {
     window.setTimeout(() => {
@@ -178,6 +179,28 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
     }
   }
 
+  const cleanupImages = async () => {
+    setCleaningImages(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API_BASE}/api/admin/upload-assets/cleanup?kind=article_image`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      await fetchImages()
+      alert(`已清理 ${data.removed || 0} 条失效图片记录`)
+    } catch (err) {
+      alert(`清理失效图片失败: ${err.message}`)
+    } finally {
+      setCleaningImages(false)
+    }
+  }
+
   const insertImage = (url, name = '图片') => {
     const alt = name.replace(/\.[^.]+$/, '') || '图片'
     insertText(`![${alt}](${url})`)
@@ -323,6 +346,15 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
               >
                 <RefreshCw className={`w-4 h-4 ${loadingImages ? 'animate-spin' : ''}`} />
                 刷新图库
+              </button>
+              <button
+                type="button"
+                onClick={cleanupImages}
+                disabled={cleaningImages}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium disabled:opacity-50"
+              >
+                {cleaningImages ? <Loader className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                清理失效
               </button>
               <span className="text-xs text-gray-500">支持 jpg、png、gif、webp，单张不超过 10MB</span>
             </div>
