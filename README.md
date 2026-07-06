@@ -59,6 +59,9 @@ MYSQL_PORT=3306
 MYSQL_DATABASE=personal_website
 MYSQL_USERNAME=root
 MYSQL_PASSWORD=replace_with_mysql_password
+MYSQL_TIMEOUT=10s
+MYSQL_READ_TIMEOUT=30s
+MYSQL_WRITE_TIMEOUT=30s
 
 JWT_SECRET=replace_with_a_random_secret_at_least_32_chars
 JWT_EXPIRATION=86400000

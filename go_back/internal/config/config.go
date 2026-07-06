@@ -41,6 +41,8 @@ type Config struct {
 	DBMaxIdleConns       int
 	DBMaxOpenConns       int
 	DBConnMaxLifetimeMin int
+	DBConnectRetries     int
+	DBConnectRetryDelay  int
 }
 
 var AppConfig *Config
@@ -85,6 +87,8 @@ func InitConfig() {
 		DBMaxIdleConns:       intEnv("DB_MAX_IDLE_CONNS", 10),
 		DBMaxOpenConns:       intEnv("DB_MAX_OPEN_CONNS", 50),
 		DBConnMaxLifetimeMin: intEnv("DB_CONN_MAX_LIFETIME_MINUTES", 55),
+		DBConnectRetries:     intEnv("DB_CONNECT_RETRIES", 10),
+		DBConnectRetryDelay:  intEnv("DB_CONNECT_RETRY_DELAY_SECONDS", 3),
 	}
 	validateProductionConfig(AppConfig)
 }
@@ -143,10 +147,15 @@ func buildMySQLDSN() string {
 	host := getEnv("MYSQL_HOST", "127.0.0.1")
 	port := getEnv("MYSQL_PORT", "3306")
 	database := getEnv("MYSQL_DATABASE", "personal_website")
-	loc := url.QueryEscape(getEnv("MYSQL_LOC", "Asia/Shanghai"))
+	params := url.Values{}
+	params.Set("charset", "utf8mb4")
+	params.Set("parseTime", "true")
+	params.Set("loc", getEnv("MYSQL_LOC", "Asia/Shanghai"))
+	params.Set("timeout", durationEnv("MYSQL_TIMEOUT", "10s"))
+	params.Set("readTimeout", durationEnv("MYSQL_READ_TIMEOUT", "30s"))
+	params.Set("writeTimeout", durationEnv("MYSQL_WRITE_TIMEOUT", "30s"))
 
-	return username + ":" + password + "@tcp(" + host + ":" + port + ")/" + database +
-		"?charset=utf8mb4&parseTime=true&loc=" + loc
+	return username + ":" + password + "@tcp(" + host + ":" + port + ")/" + database + "?" + params.Encode()
 }
 
 func getEnv(key, fallback string) string {
@@ -183,4 +192,15 @@ func intEnv(key string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func durationEnv(key, fallback string) string {
+	value := strings.TrimSpace(getEnv(key, fallback))
+	if value == "" {
+		return fallback
+	}
+	if _, err := strconv.Atoi(value); err == nil {
+		return value + "s"
+	}
+	return value
 }

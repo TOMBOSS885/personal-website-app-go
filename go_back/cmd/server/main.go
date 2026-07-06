@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"personal-website-go/internal/bootstrap"
 	"personal-website-go/internal/cache"
@@ -23,23 +24,7 @@ func main() {
 	cache.InitRedis()
 
 	if config.AppConfig.AutoMigrate {
-		if err := db.DB.AutoMigrate(
-			&model.User{},
-			&model.Article{},
-			&model.Project{},
-			&model.Skill{},
-			&model.FeatureCard{},
-			&model.Theme{},
-			&model.Live2DModel{},
-			&model.Live2DSettings{},
-			&model.Music{},
-			&model.UploadSettings{},
-			&model.OperationLog{},
-			&model.RateLimitSettings{},
-			&model.SecurityAccessStat{},
-			&model.SecurityEvent{},
-			&model.UploadAsset{},
-		); err != nil {
+		if err := autoMigrateModels(); err != nil {
 			log.Fatalf("database migration failed: %v", err)
 		}
 	}
@@ -176,4 +161,35 @@ func main() {
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("server failed to start: %v", err)
 	}
+}
+
+type migrationTarget struct {
+	name  string
+	model any
+}
+
+func autoMigrateModels() error {
+	targets := []migrationTarget{
+		{"users", &model.User{}},
+		{"articles", &model.Article{}},
+		{"projects", &model.Project{}},
+		{"skills", &model.Skill{}},
+		{"feature_cards", &model.FeatureCard{}},
+		{"themes", &model.Theme{}},
+		{"live2d_models", &model.Live2DModel{}},
+		{"live2d_settings", &model.Live2DSettings{}},
+		{"music", &model.Music{}},
+		{"upload_settings", &model.UploadSettings{}},
+		{"operation_logs", &model.OperationLog{}},
+		{"rate_limit_settings", &model.RateLimitSettings{}},
+		{"security_access_stats", &model.SecurityAccessStat{}},
+		{"security_events", &model.SecurityEvent{}},
+		{"upload_assets", &model.UploadAsset{}},
+	}
+	for _, target := range targets {
+		if err := db.DB.AutoMigrate(target.model); err != nil {
+			return fmt.Errorf("%s: %w", target.name, err)
+		}
+	}
+	return nil
 }

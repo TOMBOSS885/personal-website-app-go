@@ -1,6 +1,8 @@
 package db
 
 import (
+	"database/sql"
+	"fmt"
 	"log"
 	"personal-website-go/internal/config"
 	"time"
@@ -20,16 +22,49 @@ func InitDB() {
 		gormConfig.Logger = logger.Default.LogMode(logger.Info)
 	}
 
-	var err error
-	DB, err = gorm.Open(mysql.Open(config.AppConfig.MySQLDSN), gormConfig)
-	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+	retries := config.AppConfig.DBConnectRetries
+	if retries <= 0 {
+		retries = 1
+	}
+	retryDelay := time.Duration(config.AppConfig.DBConnectRetryDelay) * time.Second
+	if retryDelay <= 0 {
+		retryDelay = 3 * time.Second
 	}
 
-	sqlDB, err := DB.DB()
-	if err != nil {
-		log.Fatalf("failed to get database handle: %v", err)
+	var sqlDB *sql.DB
+	var err error
+	for attempt := 1; attempt <= retries; attempt++ {
+		DB, sqlDB, err = openDatabase(gormConfig)
+		if err == nil {
+			configurePool(sqlDB)
+			log.Println("database connection established")
+			return
+		}
+		if attempt < retries {
+			log.Printf("database connection attempt %d/%d failed: %v; retrying in %s", attempt, retries, err, retryDelay)
+			time.Sleep(retryDelay)
+		}
 	}
+	log.Fatalf("failed to connect to database after %d attempt(s): %v", retries, err)
+}
+
+func openDatabase(gormConfig *gorm.Config) (*gorm.DB, *sql.DB, error) {
+	gormDB, err := gorm.Open(mysql.Open(config.AppConfig.MySQLDSN), gormConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := sqlDB.Ping(); err != nil {
+		_ = sqlDB.Close()
+		return nil, nil, fmt.Errorf("database ping failed: %w", err)
+	}
+	return gormDB, sqlDB, nil
+}
+
+func configurePool(sqlDB *sql.DB) {
 	maxIdle := config.AppConfig.DBMaxIdleConns
 	if maxIdle <= 0 {
 		maxIdle = 10
@@ -46,5 +81,4 @@ func InitDB() {
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 	sqlDB.SetConnMaxLifetime(time.Duration(lifetimeMinutes) * time.Minute)
-	log.Println("database connection established")
 }
