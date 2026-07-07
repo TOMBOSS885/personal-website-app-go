@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	securityCategoryPublic      = "public"
-	securityCategoryMusic       = "music"
-	securityCategoryMusicStream = "music-stream"
-	securityCategoryLogin       = "login"
+	securityCategoryPublic        = "public"
+	securityCategoryMusic         = "music"
+	securityCategoryMusicStream   = "music-stream"
+	securityCategoryLogin         = "login"
+	securityCategoryArticleUnlock = "article-unlock"
 )
 
 var settingsCache = struct {
@@ -58,14 +59,17 @@ func currentRateLimitSettings() model.RateLimitSettings {
 
 func defaultRateLimitSettings() model.RateLimitSettings {
 	settings := model.RateLimitSettings{
-		Enabled:                    true,
-		PublicPerMinute:            180,
-		MusicPerMinute:             90,
-		MusicStreamPerMinute:       240,
-		LoginMaxFailures:           5,
-		LoginWindowSeconds:         600,
-		DailyLimitTriggerThreshold: 5,
-		BanDays:                    30,
+		Enabled:                     true,
+		PublicPerMinute:             180,
+		MusicPerMinute:              90,
+		MusicStreamPerMinute:        240,
+		ArticleUnlockPerMinute:      30,
+		ArticleUnlockMaxFailures:    5,
+		ArticleUnlockPenaltySeconds: 600,
+		LoginMaxFailures:            5,
+		LoginWindowSeconds:          600,
+		DailyLimitTriggerThreshold:  5,
+		BanDays:                     30,
 	}
 	if config.AppConfig != nil {
 		settings.Enabled = config.AppConfig.RateLimitEnabled
@@ -241,6 +245,9 @@ func limitResponse(c *gin.Context, category string, remaining int64) {
 }
 
 func limitMessage(category string) string {
+	if category == securityCategoryArticleUnlock {
+		return "文章解锁尝试次数过多，请稍后重试"
+	}
 	if category == securityCategoryMusic || category == securityCategoryMusicStream {
 		return "音乐访问次数过多，请稍后重试"
 	}
@@ -249,6 +256,8 @@ func limitMessage(category string) string {
 
 func severityForCategory(category string) string {
 	switch category {
+	case securityCategoryArticleUnlock:
+		return "high"
 	case securityCategoryMusicStream:
 		return "high"
 	case securityCategoryMusic:

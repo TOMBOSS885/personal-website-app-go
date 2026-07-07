@@ -87,6 +87,9 @@ func AdminUpdateRateLimitSettings(c *gin.Context) {
 	existing.PublicPerMinute = payload.PublicPerMinute
 	existing.MusicPerMinute = payload.MusicPerMinute
 	existing.MusicStreamPerMinute = payload.MusicStreamPerMinute
+	existing.ArticleUnlockPerMinute = payload.ArticleUnlockPerMinute
+	existing.ArticleUnlockMaxFailures = payload.ArticleUnlockMaxFailures
+	existing.ArticleUnlockPenaltySeconds = payload.ArticleUnlockPenaltySeconds
 	existing.LoginMaxFailures = payload.LoginMaxFailures
 	existing.LoginWindowSeconds = payload.LoginWindowSeconds
 	existing.DailyLimitTriggerThreshold = payload.DailyLimitTriggerThreshold
@@ -130,7 +133,7 @@ func listActiveRestrictions() []activeRestriction {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	for _, prefix := range []string{"limit:*", "ban:ip:*"} {
+	for _, prefix := range []string{"limit:*", "article:unlock:block:*", "ban:ip:*"} {
 		var cursor uint64
 		for {
 			keys, next, err := cache.Client.Scan(ctx, cursor, prefix, 100).Result()
@@ -187,6 +190,16 @@ func restrictionFromKey(key, value string, ttl time.Duration) activeRestriction 
 		}
 		if item.Category == "music-stream" {
 			item.Severity = "high"
+		}
+	}
+	if strings.HasPrefix(key, "article:unlock:block:") {
+		item.Type = "limit"
+		item.Category = "article-unlock"
+		item.Severity = "high"
+		raw := strings.TrimPrefix(key, "article:unlock:block:")
+		parts := strings.LastIndex(raw, ":")
+		if parts > 0 {
+			item.IP = raw[:parts]
 		}
 	}
 	return item

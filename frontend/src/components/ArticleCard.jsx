@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Calendar, Eye, Clock, ArrowRight } from 'lucide-react'
+import { Calendar, Eye, Clock, ArrowRight, Lock } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
 
 export default function ArticleCard({ article, index = 0 }) {
@@ -59,6 +59,12 @@ export default function ArticleCard({ article, index = 0 }) {
                 >
                   {article.category}
                 </motion.span>
+              </div>
+            )}
+            {article.isLocked && (
+              <div className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
+                <Lock className="h-3.5 w-3.5" />
+                加锁
               </div>
             )}
           </div>

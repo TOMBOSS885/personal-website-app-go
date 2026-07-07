@@ -18,6 +18,8 @@ type cachedResponseWriter struct {
 	body *bytes.Buffer
 }
 
+const publicCacheSchemaVersion = "v2"
+
 func (w cachedResponseWriter) Write(data []byte) (int, error) {
 	w.body.Write(data)
 	return w.ResponseWriter.Write(data)
@@ -95,7 +97,7 @@ func shouldCacheRequest(c *gin.Context) bool {
 }
 
 func cacheKey(prefix, uri string) string {
-	return "cache:" + strings.Trim(prefix, ":") + ":" + uri
+	return "cache:" + strings.Trim(prefix, ":") + ":" + publicCacheSchemaVersion + ":" + uri
 }
 
 func isMutation(method string) bool {

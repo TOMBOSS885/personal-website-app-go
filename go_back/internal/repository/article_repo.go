@@ -43,7 +43,7 @@ func GetArticleSummaries(page, size int, tag string) ([]model.Article, int64, er
 
 	offset := page * size
 	err := query.
-		Select("id", "title", "summary", "cover_image", "category", "tags", "views", "published", "created_at", "updated_at").
+		Select("id", "title", "summary", "cover_image", "category", "tags", "views", "published", "is_locked", "created_at", "updated_at").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(size).

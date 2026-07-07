@@ -3,16 +3,19 @@ package model
 import "time"
 
 type RateLimitSettings struct {
-	ID                         uint64    `gorm:"primaryKey" json:"id"`
-	Enabled                    bool      `gorm:"column:enabled;default:true;not null" json:"enabled"`
-	PublicPerMinute            int       `gorm:"column:public_per_minute;default:180;not null" json:"publicPerMinute"`
-	MusicPerMinute             int       `gorm:"column:music_per_minute;default:90;not null" json:"musicPerMinute"`
-	MusicStreamPerMinute       int       `gorm:"column:music_stream_per_minute;default:240;not null" json:"musicStreamPerMinute"`
-	LoginMaxFailures           int       `gorm:"column:login_max_failures;default:5;not null" json:"loginMaxFailures"`
-	LoginWindowSeconds         int       `gorm:"column:login_window_seconds;default:600;not null" json:"loginWindowSeconds"`
-	DailyLimitTriggerThreshold int       `gorm:"column:daily_limit_trigger_threshold;default:5;not null" json:"dailyLimitTriggerThreshold"`
-	BanDays                    int       `gorm:"column:ban_days;default:30;not null" json:"banDays"`
-	UpdatedAt                  time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
+	ID                          uint64    `gorm:"primaryKey" json:"id"`
+	Enabled                     bool      `gorm:"column:enabled;default:true;not null" json:"enabled"`
+	PublicPerMinute             int       `gorm:"column:public_per_minute;default:180;not null" json:"publicPerMinute"`
+	MusicPerMinute              int       `gorm:"column:music_per_minute;default:90;not null" json:"musicPerMinute"`
+	MusicStreamPerMinute        int       `gorm:"column:music_stream_per_minute;default:240;not null" json:"musicStreamPerMinute"`
+	ArticleUnlockPerMinute      int       `gorm:"column:article_unlock_per_minute;default:30;not null" json:"articleUnlockPerMinute"`
+	ArticleUnlockMaxFailures    int       `gorm:"column:article_unlock_max_failures;default:5;not null" json:"articleUnlockMaxFailures"`
+	ArticleUnlockPenaltySeconds int       `gorm:"column:article_unlock_penalty_seconds;default:600;not null" json:"articleUnlockPenaltySeconds"`
+	LoginMaxFailures            int       `gorm:"column:login_max_failures;default:5;not null" json:"loginMaxFailures"`
+	LoginWindowSeconds          int       `gorm:"column:login_window_seconds;default:600;not null" json:"loginWindowSeconds"`
+	DailyLimitTriggerThreshold  int       `gorm:"column:daily_limit_trigger_threshold;default:5;not null" json:"dailyLimitTriggerThreshold"`
+	BanDays                     int       `gorm:"column:ban_days;default:30;not null" json:"banDays"`
+	UpdatedAt                   time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }
 
 func (RateLimitSettings) TableName() string {

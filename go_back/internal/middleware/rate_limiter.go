@@ -128,6 +128,8 @@ func limitForCategory(settings model.RateLimitSettings, name string, fallback in
 		return settings.MusicPerMinute
 	case securityCategoryMusicStream:
 		return settings.MusicStreamPerMinute
+	case securityCategoryArticleUnlock:
+		return settings.ArticleUnlockPerMinute
 	default:
 		return fallback
 	}

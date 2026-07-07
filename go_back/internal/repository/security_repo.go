@@ -24,14 +24,17 @@ func GetOrCreateRateLimitSettings() (*model.RateLimitSettings, error) {
 	}
 
 	settings = model.RateLimitSettings{
-		Enabled:                    true,
-		PublicPerMinute:            config.AppConfig.PublicRateLimit,
-		MusicPerMinute:             config.AppConfig.MusicRateLimit,
-		MusicStreamPerMinute:       config.AppConfig.MusicStreamRateLimit,
-		LoginMaxFailures:           config.AppConfig.LoginLimitMaxFails,
-		LoginWindowSeconds:         config.AppConfig.LoginLimitWindow,
-		DailyLimitTriggerThreshold: 5,
-		BanDays:                    30,
+		Enabled:                     true,
+		PublicPerMinute:             config.AppConfig.PublicRateLimit,
+		MusicPerMinute:              config.AppConfig.MusicRateLimit,
+		MusicStreamPerMinute:        config.AppConfig.MusicStreamRateLimit,
+		ArticleUnlockPerMinute:      30,
+		ArticleUnlockMaxFailures:    5,
+		ArticleUnlockPenaltySeconds: 600,
+		LoginMaxFailures:            config.AppConfig.LoginLimitMaxFails,
+		LoginWindowSeconds:          config.AppConfig.LoginLimitWindow,
+		DailyLimitTriggerThreshold:  5,
+		BanDays:                     30,
 	}
 	normalizeRateLimitSettings(&settings)
 	if err := db.DB.Create(&settings).Error; err != nil {
@@ -170,6 +173,7 @@ type HighAccessThresholds struct {
 	Music           int `json:"music"`
 	MusicStream     int `json:"musicStream"`
 	MusicStreamSong int `json:"musicStreamSong"`
+	ArticleUnlock   int `json:"articleUnlock"`
 }
 
 func BuildHighAccessThresholds(settings model.RateLimitSettings) HighAccessThresholds {
@@ -179,6 +183,7 @@ func BuildHighAccessThresholds(settings model.RateLimitSettings) HighAccessThres
 		Music:           settings.MusicPerMinute * 10,
 		MusicStream:     settings.MusicStreamPerMinute * 10,
 		MusicStreamSong: settings.MusicStreamPerMinute * 10,
+		ArticleUnlock:   settings.ArticleUnlockPerMinute * 10,
 	}
 }
 
@@ -190,11 +195,12 @@ func GetHighAccessStatsByRateLimit(date string, settings model.RateLimitSettings
 	var stats []model.SecurityAccessStat
 	err := db.DB.Where("date = ?", date).
 		Where(
-			"(category = ? AND count > ?) OR (category = ? AND count > ?) OR (category = ? AND count > ?) OR (category = ? AND count > ?)",
+			"(category = ? AND count > ?) OR (category = ? AND count > ?) OR (category = ? AND count > ?) OR (category = ? AND count > ?) OR (category = ? AND count > ?)",
 			"public", thresholds.Public,
 			"music", thresholds.Music,
 			"music-stream", thresholds.MusicStream,
 			"music-stream-song", thresholds.MusicStreamSong,
+			"article-unlock", thresholds.ArticleUnlock,
 		).
 		Order("count DESC").
 		Limit(20).
@@ -242,6 +248,15 @@ func normalizeRateLimitSettings(settings *model.RateLimitSettings) {
 	}
 	if settings.MusicStreamPerMinute <= 0 {
 		settings.MusicStreamPerMinute = 240
+	}
+	if settings.ArticleUnlockPerMinute <= 0 {
+		settings.ArticleUnlockPerMinute = 30
+	}
+	if settings.ArticleUnlockMaxFailures <= 0 {
+		settings.ArticleUnlockMaxFailures = 5
+	}
+	if settings.ArticleUnlockPenaltySeconds <= 0 {
+		settings.ArticleUnlockPenaltySeconds = 600
 	}
 	if settings.LoginMaxFailures <= 0 {
 		settings.LoginMaxFailures = 5

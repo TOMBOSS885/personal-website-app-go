@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, Share2, Tag } from 'lucide-react'
+import { ArrowLeft, Check, Lock, Share2, Tag } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -12,10 +12,15 @@ export default function ArticleDetailPage() {
   const [article, setArticle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [shareStatus, setShareStatus] = useState('idle')
+  const [password, setPassword] = useState('')
+  const [unlocking, setUnlocking] = useState(false)
+  const [unlockError, setUnlockError] = useState('')
   const tocItems = useMemo(() => buildToc(article?.content || ''), [article?.content])
 
   useEffect(() => {
     setLoading(true)
+    setPassword('')
+    setUnlockError('')
     fetch(`/api/public/articles/${id}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -56,6 +61,31 @@ export default function ArticleDetailPage() {
     }
   }
 
+  const handleUnlock = async (event) => {
+    event.preventDefault()
+    if (!password.trim() || unlocking) return
+    setUnlocking(true)
+    setUnlockError('')
+    try {
+      const res = await fetch(`/api/public/articles/${id}/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.message || '密码错误，请重试')
+      }
+      const data = await res.json()
+      setArticle(data)
+      setPassword('')
+    } catch (err) {
+      setUnlockError(err.message || '解锁失败，请重试')
+    } finally {
+      setUnlocking(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -85,6 +115,60 @@ export default function ArticleDetailPage() {
             <ArrowLeft className="h-4 w-4" />
             返回博客
           </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (article.requiresPassword) {
+    return (
+      <div className="min-h-screen bg-transparent px-4 pb-12 pt-28">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-white/60 bg-white/80 p-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/70 md:p-8">
+          <Link to="/blog" className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-100">
+            <ArrowLeft className="h-4 w-4" />
+            返回
+          </Link>
+          <div className="mb-6 flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300">
+              <Lock className="h-6 w-6" />
+            </div>
+            <div>
+              {article.category && (
+                <span className="mb-3 inline-block rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-200">
+                  {article.category}
+                </span>
+              )}
+              <h1 className="text-3xl font-bold leading-tight text-gray-900 dark:text-slate-100 md:text-4xl">{article.title}</h1>
+              {article.summary && <p className="mt-3 text-gray-600 dark:text-slate-300">{article.summary}</p>}
+              <div className="mt-4 flex items-center gap-4 text-sm text-gray-400 dark:text-slate-500">
+                <span>{new Date(article.createdAt).toLocaleDateString('zh-CN')}</span>
+                <span>·</span>
+                <span>{article.views || 0} 阅读</span>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleUnlock} className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
+            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-200">这篇文章已加锁，请输入访问密码</label>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={event => setPassword(event.target.value)}
+                className="min-w-0 flex-1 rounded-xl border border-white bg-white px-4 py-3 text-gray-900 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-300 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                placeholder="输入文章密码"
+              />
+              <button
+                type="submit"
+                disabled={unlocking || !password.trim()}
+                className="rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 px-5 py-3 font-medium text-white shadow-lg shadow-amber-500/20 transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {unlocking ? '验证中...' : '解锁阅读'}
+              </button>
+            </div>
+            {unlockError && <p className="mt-3 text-sm text-red-600 dark:text-red-300">{unlockError}</p>}
+          </form>
         </div>
       </div>
     )

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw, ChevronLeft, ChevronRight, Lock } from 'lucide-react'
 import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
@@ -30,7 +30,9 @@ export default function ArticleManager() {
     category: '', 
     tags: [], 
     published: true,
-    coverImage: ''
+    coverImage: '',
+    isLocked: false,
+    accessPassword: ''
   })
 
   const token = localStorage.getItem('token')
@@ -44,7 +46,7 @@ export default function ArticleManager() {
     if (!showModal) return undefined
     const key = getDraftKey(editingArticle)
     const timer = window.setTimeout(() => {
-      localStorage.setItem(key, JSON.stringify({ ...form, savedAt: Date.now() }))
+      localStorage.setItem(key, JSON.stringify({ ...draftSafeForm(form), savedAt: Date.now() }))
       setDraftNotice(`已自动保存 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`)
     }, 700)
     return () => window.clearTimeout(timer)
@@ -173,6 +175,10 @@ export default function ArticleManager() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (form.isLocked && !form.accessPassword && !editingArticle?.isLocked) {
+      alert('请先设置文章访问密码')
+      return
+    }
     setSaving(true)
     
     const url = editingArticle
@@ -202,7 +208,9 @@ export default function ArticleManager() {
           category: '', 
           tags: [], 
           published: true,
-          coverImage: '' 
+          coverImage: '',
+          isLocked: false,
+          accessPassword: ''
         })
         fetchArticles()
       } else {
@@ -226,7 +234,9 @@ export default function ArticleManager() {
       category: draft?.category ?? article.category ?? '',
       tags: draft?.tags ?? (article.tags ? article.tags.split(',').map(t => t.trim()).filter(Boolean) : []),
       published: draft?.published ?? article.published,
-      coverImage: draft?.coverImage ?? article.coverImage ?? ''
+      coverImage: draft?.coverImage ?? article.coverImage ?? '',
+      isLocked: draft?.isLocked ?? article.isLocked ?? false,
+      accessPassword: draft?.accessPassword ?? ''
     })
     setDraftNotice(draft ? '已恢复本地自动保存草稿' : '')
     setShowModal(true)
@@ -272,7 +282,9 @@ export default function ArticleManager() {
               category: '', 
               tags: [], 
               published: true,
-              coverImage: '' 
+              coverImage: '',
+              isLocked: false,
+              accessPassword: ''
             })
             setDraftNotice(draft ? '已恢复本地自动保存草稿' : '')
             setShowModal(true)
@@ -311,7 +323,15 @@ export default function ArticleManager() {
               {articles.map(article => (
                 <tr key={article.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-gray-900">{article.title}</div>
+                    <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                      <span>{article.title}</span>
+                      {article.isLocked && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                          <Lock className="h-3 w-3" />
+                          加锁
+                        </span>
+                      )}
+                    </div>
                     {article.summary && (
                       <div className="text-xs text-gray-500 mt-1 line-clamp-1">{article.summary}</div>
                     )}
@@ -562,6 +582,34 @@ export default function ArticleManager() {
                       )}
                     </span>
                   </label>
+
+                  <div className="rounded-xl border border-amber-100 bg-white p-3">
+                    <label className="flex cursor-pointer items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form.isLocked)}
+                        onChange={e => setForm({ ...form, isLocked: e.target.checked, accessPassword: e.target.checked ? form.accessPassword : '' })}
+                        className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                        <Lock className="h-4 w-4 text-amber-500" />
+                        访问密码保护
+                      </span>
+                    </label>
+                    {form.isLocked && (
+                      <div className="mt-3 space-y-1.5">
+                        <input
+                          type="password"
+                          autoComplete="new-password"
+                          placeholder={editingArticle?.isLocked ? '留空表示保留原密码' : '设置文章访问密码'}
+                          value={form.accessPassword}
+                          onChange={e => setForm({ ...form, accessPassword: e.target.value })}
+                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500"
+                        />
+                        <p className="text-xs text-gray-500">读者需要输入该密码才能查看正文。密码不会明文保存。</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -696,6 +744,11 @@ function loadDraft(key) {
 }
 
 // ========== TagInput 组件 ==========
+function draftSafeForm(form) {
+  const { accessPassword, ...safeForm } = form
+  return safeForm
+}
+
 function TagInput({ tags, onChange }) {
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef(null)

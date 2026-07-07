@@ -154,6 +154,9 @@ export default function SecurityManager() {
             <NumberField label="网站公开接口 / 分钟" value={settings.publicPerMinute} onChange={publicPerMinute => setSettings({ ...settings, publicPerMinute })} />
             <NumberField label="音乐列表 / 分钟" value={settings.musicPerMinute} onChange={musicPerMinute => setSettings({ ...settings, musicPerMinute })} />
             <NumberField label="音乐流 / 分钟" value={settings.musicStreamPerMinute} onChange={musicStreamPerMinute => setSettings({ ...settings, musicStreamPerMinute })} />
+            <NumberField label="文章解锁请求 / 分钟" value={settings.articleUnlockPerMinute} onChange={articleUnlockPerMinute => setSettings({ ...settings, articleUnlockPerMinute })} />
+            <NumberField label="文章密码错误次数" value={settings.articleUnlockMaxFailures} onChange={articleUnlockMaxFailures => setSettings({ ...settings, articleUnlockMaxFailures })} />
+            <NumberField label="文章错误锁定秒数" value={settings.articleUnlockPenaltySeconds} onChange={articleUnlockPenaltySeconds => setSettings({ ...settings, articleUnlockPenaltySeconds })} />
             <NumberField label="登录失败次数" value={settings.loginMaxFailures} onChange={loginMaxFailures => setSettings({ ...settings, loginMaxFailures })} />
             <NumberField label="登录窗口秒数" value={settings.loginWindowSeconds} onChange={loginWindowSeconds => setSettings({ ...settings, loginWindowSeconds })} />
             <NumberField label="每日触发封禁次数" value={settings.dailyLimitTriggerThreshold} onChange={dailyLimitTriggerThreshold => setSettings({ ...settings, dailyLimitTriggerThreshold })} />
@@ -237,7 +240,7 @@ export default function SecurityManager() {
 
       <Section title="高访问用户">
         <p className="mb-3 text-sm text-gray-500 dark:text-slate-400">
-          动态规则：当天访问次数大于当前每分钟限流的 10 倍后标记。公开接口 &gt; {highAccessRules.public || '-'}，音乐列表 &gt; {highAccessRules.music || '-'}，音乐流 &gt; {highAccessRules.musicStream || '-'}，单曲流 &gt; {highAccessRules.musicStreamSong || '-'}。
+          动态规则：当天访问次数大于当前每分钟限流的 10 倍后标记。公开接口 &gt; {highAccessRules.public || '-'}，音乐列表 &gt; {highAccessRules.music || '-'}，音乐流 &gt; {highAccessRules.musicStream || '-'}，单曲流 &gt; {highAccessRules.musicStreamSong || '-'}，文章解锁 &gt; {highAccessRules.articleUnlock || '-'}。
         </p>
         <DataTable columns={['日期', 'IP', '类型', '歌曲', '次数']} rows={highAccess.map(item => [
           item.date,

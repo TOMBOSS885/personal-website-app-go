@@ -141,7 +141,7 @@ func searchAll(keyword string, includeDrafts bool) ([]SearchResult, error) {
 		Select("id", "title", "summary", "category", "tags", "published", "updated_at").
 		Where("title LIKE ? OR summary LIKE ? OR category LIKE ? OR tags LIKE ? OR content LIKE ?", like, like, like, like, like)
 	if !includeDrafts {
-		articleQuery = articleQuery.Where("published = ?", true)
+		articleQuery = articleQuery.Where("published = ? AND is_locked = ?", true, false)
 	}
 	if err := articleQuery.Order("updated_at DESC").Limit(12).Find(&articles).Error; err != nil {
 		return nil, err

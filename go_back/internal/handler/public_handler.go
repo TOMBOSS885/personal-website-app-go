@@ -69,7 +69,7 @@ func GetArticles(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "获取文章失败")
 		return
 	}
-	response.Page(c, articles, total, size, page)
+	response.Page(c, sanitizePublicArticleSummaries(articles), total, size, page)
 }
 
 func normalizePagination(page, size, maxSize int) (int, int) {
