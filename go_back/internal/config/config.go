@@ -11,38 +11,39 @@ import (
 )
 
 type Config struct {
-	ServerHost           string
-	ServerPort           string
-	MySQLDSN             string
-	JWTSecret            string
-	JWTExpireMs          int64
-	UploadDir            string
-	GinMode              string
-	CORSAllowedOrigins   string
-	AutoMigrate          bool
-	AdminUsername        string
-	AdminPassword        string
-	AdminEmail           string
-	AdminResetPassword   bool
-	RedisEnabled         bool
-	RedisAddr            string
-	RedisPassword        string
-	RedisDB              int
-	CacheEnabled         bool
-	CacheTTLSeconds      int
-	RateLimitEnabled     bool
-	PublicRateLimit      int
-	MusicRateLimit       int
-	MusicStreamRateLimit int
-	LoginLimitMaxFails   int
-	LoginLimitWindow     int
-	MediaSignSecret      string
-	MediaURLTTLSeconds   int
-	DBMaxIdleConns       int
-	DBMaxOpenConns       int
-	DBConnMaxLifetimeMin int
-	DBConnectRetries     int
-	DBConnectRetryDelay  int
+	ServerHost               string
+	ServerPort               string
+	MySQLDSN                 string
+	JWTSecret                string
+	JWTExpireMs              int64
+	UploadDir                string
+	GinMode                  string
+	CORSAllowedOrigins       string
+	AutoMigrate              bool
+	AdminUsername            string
+	AdminPassword            string
+	AdminEmail               string
+	AdminResetPassword       bool
+	RedisEnabled             bool
+	RedisAddr                string
+	RedisPassword            string
+	RedisDB                  int
+	CacheEnabled             bool
+	CacheTTLSeconds          int
+	RateLimitEnabled         bool
+	PublicRateLimit          int
+	MusicRateLimit           int
+	MusicStreamRateLimit     int
+	LoginLimitMaxFails       int
+	LoginLimitWindow         int
+	MediaSignSecret          string
+	MediaURLTTLSeconds       int
+	ArticleSiteURLTTLSeconds int
+	DBMaxIdleConns           int
+	DBMaxOpenConns           int
+	DBConnMaxLifetimeMin     int
+	DBConnectRetries         int
+	DBConnectRetryDelay      int
 }
 
 var AppConfig *Config
@@ -57,38 +58,39 @@ func InitConfig() {
 	}
 
 	AppConfig = &Config{
-		ServerPort:           getEnv("SERVER_PORT", "8080"),
-		ServerHost:           getEnv("SERVER_HOST", "0.0.0.0"),
-		MySQLDSN:             buildMySQLDSN(),
-		JWTSecret:            getEnv("JWT_SECRET", "please-change-this-secret-key-at-least-32-chars"),
-		JWTExpireMs:          jwtExpireMs,
-		UploadDir:            getEnv("APP_UPLOAD_DIR", "uploads"),
-		GinMode:              getEnv("GIN_MODE", "debug"),
-		CORSAllowedOrigins:   getEnv("CORS_ALLOWED_ORIGINS", ""),
-		AutoMigrate:          boolEnv("AUTO_MIGRATE", true),
-		AdminUsername:        getEnv("ADMIN_USERNAME", "admin"),
-		AdminPassword:        getEnv("ADMIN_PASSWORD", "admin123"),
-		AdminEmail:           getEnv("ADMIN_EMAIL", "admin@example.com"),
-		AdminResetPassword:   boolEnv("ADMIN_RESET_PASSWORD", false),
-		RedisEnabled:         boolEnv("REDIS_ENABLED", false),
-		RedisAddr:            getEnv("REDIS_ADDR", "127.0.0.1:6379"),
-		RedisPassword:        getEnv("REDIS_PASSWORD", ""),
-		RedisDB:              intEnv("REDIS_DB", 0),
-		CacheEnabled:         boolEnv("CACHE_ENABLED", true),
-		CacheTTLSeconds:      intEnv("CACHE_TTL_SECONDS", 60),
-		RateLimitEnabled:     boolEnv("RATE_LIMIT_ENABLED", true),
-		PublicRateLimit:      intEnv("PUBLIC_RATE_LIMIT_PER_MINUTE", 180),
-		MusicRateLimit:       intEnv("MUSIC_RATE_LIMIT_PER_MINUTE", 90),
-		MusicStreamRateLimit: intEnv("MUSIC_STREAM_RATE_LIMIT_PER_MINUTE", 240),
-		LoginLimitMaxFails:   intEnv("LOGIN_LIMIT_MAX_FAILS", 5),
-		LoginLimitWindow:     intEnv("LOGIN_LIMIT_WINDOW_SECONDS", 600),
-		MediaSignSecret:      getEnv("MEDIA_SIGN_SECRET", ""),
-		MediaURLTTLSeconds:   intEnv("MEDIA_URL_TTL_SECONDS", 600),
-		DBMaxIdleConns:       intEnv("DB_MAX_IDLE_CONNS", 10),
-		DBMaxOpenConns:       intEnv("DB_MAX_OPEN_CONNS", 50),
-		DBConnMaxLifetimeMin: intEnv("DB_CONN_MAX_LIFETIME_MINUTES", 55),
-		DBConnectRetries:     intEnv("DB_CONNECT_RETRIES", 10),
-		DBConnectRetryDelay:  intEnv("DB_CONNECT_RETRY_DELAY_SECONDS", 3),
+		ServerPort:               getEnv("SERVER_PORT", "8080"),
+		ServerHost:               getEnv("SERVER_HOST", "0.0.0.0"),
+		MySQLDSN:                 buildMySQLDSN(),
+		JWTSecret:                getEnv("JWT_SECRET", "please-change-this-secret-key-at-least-32-chars"),
+		JWTExpireMs:              jwtExpireMs,
+		UploadDir:                getEnv("APP_UPLOAD_DIR", "uploads"),
+		GinMode:                  getEnv("GIN_MODE", "debug"),
+		CORSAllowedOrigins:       getEnv("CORS_ALLOWED_ORIGINS", ""),
+		AutoMigrate:              boolEnv("AUTO_MIGRATE", true),
+		AdminUsername:            getEnv("ADMIN_USERNAME", "admin"),
+		AdminPassword:            getEnv("ADMIN_PASSWORD", "admin123"),
+		AdminEmail:               getEnv("ADMIN_EMAIL", "admin@example.com"),
+		AdminResetPassword:       boolEnv("ADMIN_RESET_PASSWORD", false),
+		RedisEnabled:             boolEnv("REDIS_ENABLED", false),
+		RedisAddr:                getEnv("REDIS_ADDR", "127.0.0.1:6379"),
+		RedisPassword:            getEnv("REDIS_PASSWORD", ""),
+		RedisDB:                  intEnv("REDIS_DB", 0),
+		CacheEnabled:             boolEnv("CACHE_ENABLED", true),
+		CacheTTLSeconds:          intEnv("CACHE_TTL_SECONDS", 60),
+		RateLimitEnabled:         boolEnv("RATE_LIMIT_ENABLED", true),
+		PublicRateLimit:          intEnv("PUBLIC_RATE_LIMIT_PER_MINUTE", 180),
+		MusicRateLimit:           intEnv("MUSIC_RATE_LIMIT_PER_MINUTE", 90),
+		MusicStreamRateLimit:     intEnv("MUSIC_STREAM_RATE_LIMIT_PER_MINUTE", 240),
+		LoginLimitMaxFails:       intEnv("LOGIN_LIMIT_MAX_FAILS", 5),
+		LoginLimitWindow:         intEnv("LOGIN_LIMIT_WINDOW_SECONDS", 600),
+		MediaSignSecret:          getEnv("MEDIA_SIGN_SECRET", ""),
+		MediaURLTTLSeconds:       intEnv("MEDIA_URL_TTL_SECONDS", 600),
+		ArticleSiteURLTTLSeconds: intEnv("ARTICLE_SITE_URL_TTL_SECONDS", 3600),
+		DBMaxIdleConns:           intEnv("DB_MAX_IDLE_CONNS", 10),
+		DBMaxOpenConns:           intEnv("DB_MAX_OPEN_CONNS", 50),
+		DBConnMaxLifetimeMin:     intEnv("DB_CONN_MAX_LIFETIME_MINUTES", 55),
+		DBConnectRetries:         intEnv("DB_CONNECT_RETRIES", 10),
+		DBConnectRetryDelay:      intEnv("DB_CONNECT_RETRY_DELAY_SECONDS", 3),
 	}
 	validateProductionConfig(AppConfig)
 }

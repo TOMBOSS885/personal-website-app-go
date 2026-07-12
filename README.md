@@ -11,8 +11,8 @@
 
 ## 主要功能
 
-- 公开页面：个人简介、统计数据、技能、项目、文章、主题、Live2D 展示
-- 管理后台：文章、项目、技能、功能卡片、个人信息、主题、Live2D 模型、账号密码管理
+- 公开页面：个人简介、统计数据、技能、项目、Markdown/静态前端文章、主题、Live2D 展示
+- 管理后台：文章、静态 HTML/CSS/JS 前端包、项目、技能、功能卡片、个人信息、主题、Live2D 模型、账号密码管理
 - 文件上传：文章图片、主题背景图、Live2D 模型文件
 - 数据初始化：首次启动时可自动创建管理员账号
 
@@ -219,6 +219,7 @@ client_max_body_size 200m;
 - `docs/baota-go-vue-deploy.md`
 - `docs/docker-go-vue-deploy.md`
 - `docs/baota-docker-deploy.md`
+- `docs/static-frontend-article-guide.md`
 
 ## 数据库
 

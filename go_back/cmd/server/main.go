@@ -49,6 +49,10 @@ func main() {
 			c.AbortWithStatus(404)
 			return
 		}
+		if c.Request.URL.Path == "/uploads/article-sites" || strings.HasPrefix(c.Request.URL.Path, "/uploads/article-sites/") {
+			c.AbortWithStatus(404)
+			return
+		}
 		c.Header("Cache-Control", "public, max-age=604800, immutable")
 		c.Next()
 	})
@@ -61,6 +65,7 @@ func main() {
 
 		auth := api.Group("/auth")
 		auth.POST("/login", handler.Login)
+		api.GET("/public/article-sites/:id/:siteKey/:version/:expires/:sign/*filepath", handler.ServeArticleSiteFile)
 
 		public := api.Group("/public")
 		public.Use(middleware.RateLimit("public", config.AppConfig.PublicRateLimit, time.Minute))
@@ -92,7 +97,8 @@ func main() {
 			admin.GET("/articles", handler.AdminGetArticles)
 			admin.POST("/articles", handler.AdminCreateArticleSecure)
 			admin.PUT("/articles/:id", handler.AdminUpdateArticleSecure)
-			admin.DELETE("/articles/:id", handler.AdminDeleteArticle)
+			admin.DELETE("/articles/:id", handler.AdminDeleteArticleSecure)
+			admin.POST("/article-sites", handler.AdminUploadArticleSite)
 			admin.GET("/article-images", handler.AdminListArticleImages)
 			admin.POST("/article-images", handler.AdminUploadArticleImage)
 

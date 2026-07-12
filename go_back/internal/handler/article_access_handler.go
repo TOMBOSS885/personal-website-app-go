@@ -112,9 +112,14 @@ func incrementArticleViews(article *model.Article) {
 
 func publicArticlePayload(article *model.Article, includeContent bool) gin.H {
 	content := ""
+	staticSiteURL := ""
 	summary := article.Summary
 	if includeContent {
-		content = article.Content
+		if normalizeArticleContentType(article.ContentType) == "static" {
+			staticSiteURL = signedArticleSiteURL(article)
+		} else {
+			content = article.Content
+		}
 	} else if article.IsLocked {
 		summary = ""
 	}
@@ -123,6 +128,9 @@ func publicArticlePayload(article *model.Article, includeContent bool) gin.H {
 		"title":            article.Title,
 		"summary":          summary,
 		"content":          content,
+		"contentType":      normalizeArticleContentType(article.ContentType),
+		"staticSiteUrl":    staticSiteURL,
+		"staticSiteName":   article.StaticSiteName,
 		"coverImage":       article.CoverImage,
 		"category":         article.Category,
 		"tags":             article.Tags,

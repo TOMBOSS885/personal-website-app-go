@@ -5,6 +5,9 @@ const API_BASE = ''
 
 const DEFAULT_SETTINGS = {
   articleImageMaxMB: 10,
+  articleSiteZipMaxMB: 30,
+  articleSiteTotalMB: 100,
+  articleSiteFileCount: 1000,
   themeBackgroundMaxMB: 10,
   avatarImageMaxMB: 5,
   musicFileMaxMB: 50,
@@ -20,6 +23,15 @@ const DEFAULT_SETTINGS = {
 }
 
 const FIELD_GROUPS = [
+  {
+    title: '静态前端包',
+    desc: '控制文章静态 HTML/CSS/JS ZIP 的上传和解压限制。',
+    fields: [
+      { key: 'articleSiteZipMaxMB', label: 'ZIP 最大大小', unit: 'MB', min: 1, max: 200, hint: '上传压缩包的大小上限。' },
+      { key: 'articleSiteTotalMB', label: '解压总大小', unit: 'MB', min: 1, max: 1000, hint: '防止 ZIP 解压后异常膨胀。' },
+      { key: 'articleSiteFileCount', label: '解压文件数量', unit: '个', min: 1, max: 5000, hint: 'ZIP 解压后最多允许包含的文件数。' },
+    ],
+  },
   {
     title: '文件大小',
     desc: '控制不同上传入口允许的单文件或总包大小。',
@@ -54,6 +66,7 @@ const FIELD_GROUPS = [
 ]
 
 const FIXED_RULES = [
+  { label: '静态前端入口', value: 'ZIP 中必须包含 index.html，支持单一 dist/build 外层目录' },
   { label: '文章图片格式', value: 'jpg, jpeg, png, gif, webp' },
   { label: '背景图片格式', value: 'jpg, jpeg, png, gif, webp, avif' },
   { label: '头像格式', value: 'jpg, jpeg, png, webp' },

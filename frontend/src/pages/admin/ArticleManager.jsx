@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw, ChevronLeft, ChevronRight, Lock } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw, ChevronLeft, ChevronRight, Lock, Code2, FileArchive } from 'lucide-react'
 import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
@@ -22,7 +22,9 @@ export default function ArticleManager() {
   const [uploadingCover, setUploadingCover] = useState(false)
   const [cleaningCoverImages, setCleaningCoverImages] = useState(false)
   const [draftNotice, setDraftNotice] = useState('')
+  const [uploadingSite, setUploadingSite] = useState(false)
   const coverFileInputRef = useRef(null)
+  const siteFileInputRef = useRef(null)
   const [form, setForm] = useState({ 
     title: '', 
     summary: '', 
@@ -31,6 +33,9 @@ export default function ArticleManager() {
     tags: [], 
     published: true,
     coverImage: '',
+    contentType: 'markdown',
+    staticSiteKey: '',
+    staticSiteName: '',
     isLocked: false,
     accessPassword: ''
   })
@@ -173,10 +178,41 @@ export default function ArticleManager() {
     setShowCoverPicker(false)
   }
 
+  const uploadArticleSite = async (file) => {
+    if (!file) return
+    setUploadingSite(true)
+    try {
+      const body = new FormData()
+      body.append('file', file)
+      const res = await fetch(`${API_BASE}/api/admin/article-sites`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body,
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || '静态前端上传失败')
+      setForm(current => ({
+        ...current,
+        contentType: 'static',
+        staticSiteKey: data.siteKey,
+        staticSiteName: data.name || file.name,
+      }))
+    } catch (err) {
+      alert(err.message || '静态前端上传失败')
+    } finally {
+      setUploadingSite(false)
+      if (siteFileInputRef.current) siteFileInputRef.current.value = ''
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (form.isLocked && !form.accessPassword && !editingArticle?.isLocked) {
       alert('请先设置文章访问密码')
+      return
+    }
+    if (form.contentType === 'static' && !form.staticSiteKey) {
+      alert('请先上传静态前端 ZIP')
       return
     }
     setSaving(true)
@@ -209,6 +245,9 @@ export default function ArticleManager() {
           tags: [], 
           published: true,
           coverImage: '',
+          contentType: 'markdown',
+          staticSiteKey: '',
+          staticSiteName: '',
           isLocked: false,
           accessPassword: ''
         })
@@ -235,6 +274,9 @@ export default function ArticleManager() {
       tags: draft?.tags ?? (article.tags ? article.tags.split(',').map(t => t.trim()).filter(Boolean) : []),
       published: draft?.published ?? article.published,
       coverImage: draft?.coverImage ?? article.coverImage ?? '',
+      contentType: draft?.contentType ?? article.contentType ?? 'markdown',
+      staticSiteKey: draft?.staticSiteKey ?? article.staticSiteKey ?? '',
+      staticSiteName: draft?.staticSiteName ?? article.staticSiteName ?? '',
       isLocked: draft?.isLocked ?? article.isLocked ?? false,
       accessPassword: draft?.accessPassword ?? ''
     })
@@ -283,6 +325,9 @@ export default function ArticleManager() {
               tags: [], 
               published: true,
               coverImage: '',
+              contentType: 'markdown',
+              staticSiteKey: '',
+              staticSiteName: '',
               isLocked: false,
               accessPassword: ''
             })
@@ -325,6 +370,12 @@ export default function ArticleManager() {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
                       <span>{article.title}</span>
+                      {article.contentType === 'static' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
+                          <Code2 className="h-3 w-3" />
+                          静态前端
+                        </span>
+                      )}
                       {article.isLocked && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                           <Lock className="h-3 w-3" />
@@ -615,18 +666,88 @@ export default function ArticleManager() {
 
               {/* Right: Editor */}
               <div className="flex-1 p-4 overflow-hidden">
-                <div className="h-full">
-                  <Suspense fallback={
-                    <div className="flex h-full items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
-                      <Loader className="w-5 h-5 animate-spin text-purple-500" />
+                <div className="flex h-full flex-col gap-3">
+                  <div className="inline-flex w-fit rounded-lg border border-gray-200 bg-gray-100 p-1">
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, contentType: 'markdown' })}
+                      className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${form.contentType !== 'static' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                    >
+                      <FileText className="h-4 w-4" />
+                      Markdown
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, contentType: 'static' })}
+                      className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${form.contentType === 'static' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
+                    >
+                      <Code2 className="h-4 w-4" />
+                      静态前端
+                    </button>
+                  </div>
+
+                  {form.contentType === 'static' ? (
+                    <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-cyan-300 bg-cyan-50/60 p-6">
+                      <input
+                        ref={siteFileInputRef}
+                        type="file"
+                        accept=".zip,application/zip"
+                        className="hidden"
+                        onChange={event => uploadArticleSite(event.target.files?.[0])}
+                      />
+                      <div className="max-w-lg text-center">
+                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700">
+                          {uploadingSite ? <Loader className="h-6 w-6 animate-spin" /> : <FileArchive className="h-6 w-6" />}
+                        </div>
+                        <h3 className="mt-4 text-lg font-semibold text-gray-900">
+                          {form.staticSiteKey ? '静态前端已就绪' : '上传静态前端 ZIP'}
+                        </h3>
+                        <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                          ZIP 根目录需要有 index.html，也支持把整个 dist 或 build 文件夹直接压缩上传。
+                        </p>
+                        {form.staticSiteKey && (
+                          <div className="mt-3 rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm text-cyan-800">
+                            {form.staticSiteName || form.staticSiteKey}
+                          </div>
+                        )}
+                        <div className="mt-5 flex flex-wrap justify-center gap-2">
+                          <button
+                            type="button"
+                            disabled={uploadingSite}
+                            onClick={() => siteFileInputRef.current?.click()}
+                            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-50"
+                          >
+                            <UploadCloud className="h-4 w-4" />
+                            {uploadingSite ? '上传并检查中...' : form.staticSiteKey ? '替换 ZIP' : '选择 ZIP'}
+                          </button>
+                          {form.staticSiteKey && (
+                            <button
+                              type="button"
+                              onClick={() => setForm({ ...form, staticSiteKey: '', staticSiteName: '' })}
+                              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              移除
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  }>
-                    <RichTextEditor
-                      value={form.content}
-                      onChange={(val) => setForm({ ...form, content: val })}
-                      height={600}
-                    />
-                  </Suspense>
+                  ) : (
+                    <div className="min-h-0 flex-1">
+                      <Suspense fallback={
+                        <div className="flex h-full items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
+                          <Loader className="w-5 h-5 animate-spin text-purple-500" />
+                        </div>
+                      }>
+                        <RichTextEditor
+                          value={form.content}
+                          onChange={(val) => setForm({ ...form, content: val })}
+                          height={600}
+                        />
+                      </Suspense>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -736,7 +857,7 @@ function loadDraft(key) {
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
     const { savedAt, ...draft } = parsed
-    const hasContent = draft.title || draft.summary || draft.content || draft.coverImage || draft.category || draft.tags?.length
+    const hasContent = draft.title || draft.summary || draft.content || draft.coverImage || draft.category || draft.tags?.length || draft.staticSiteKey
     return hasContent ? draft : null
   } catch {
     return null

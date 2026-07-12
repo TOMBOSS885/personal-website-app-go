@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"path/filepath"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
@@ -21,6 +22,9 @@ type articleRequest struct {
 	Category       string `json:"category"`
 	Tags           string `json:"tags"`
 	Published      bool   `json:"published"`
+	ContentType    string `json:"contentType"`
+	StaticSiteKey  string `json:"staticSiteKey"`
+	StaticSiteName string `json:"staticSiteName"`
 	IsLocked       bool   `json:"isLocked"`
 	AccessPassword string `json:"accessPassword"`
 }
@@ -41,14 +45,26 @@ func AdminCreateArticleSecure(c *gin.Context) {
 		return
 	}
 
+	contentType, siteKey, siteName, err := validateArticleContent(payload.ContentType, payload.StaticSiteKey, payload.StaticSiteName)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	content := payload.Content
+	if contentType == "static" {
+		content = ""
+	}
 	article := model.Article{
 		Title:              payload.Title,
 		Summary:            payload.Summary,
-		Content:            payload.Content,
+		Content:            content,
 		CoverImage:         payload.CoverImage,
 		Category:           payload.Category,
 		Tags:               payload.Tags,
 		Published:          payload.Published,
+		ContentType:        contentType,
+		StaticSiteKey:      siteKey,
+		StaticSiteName:     siteName,
 		IsLocked:           payload.IsLocked,
 		AccessPasswordHash: hash,
 	}
@@ -82,13 +98,26 @@ func AdminUpdateArticleSecure(c *gin.Context) {
 		return
 	}
 
+	contentType, siteKey, siteName, err := validateArticleContent(payload.ContentType, payload.StaticSiteKey, payload.StaticSiteName)
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	oldSiteKey := existing.StaticSiteKey
+	content := payload.Content
+	if contentType == "static" {
+		content = ""
+	}
 	existing.Title = payload.Title
 	existing.Summary = payload.Summary
-	existing.Content = payload.Content
+	existing.Content = content
 	existing.CoverImage = payload.CoverImage
 	existing.Category = payload.Category
 	existing.Tags = payload.Tags
 	existing.Published = payload.Published
+	existing.ContentType = contentType
+	existing.StaticSiteKey = siteKey
+	existing.StaticSiteName = siteName
 	existing.IsLocked = payload.IsLocked
 	existing.AccessPasswordHash = hash
 
@@ -96,7 +125,46 @@ func AdminUpdateArticleSecure(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "更新文章失败")
 		return
 	}
+	invalidateArticleSiteAccess(existing.ID)
+	if oldSiteKey != "" && oldSiteKey != siteKey {
+		_ = removeArticleSite(oldSiteKey)
+	}
 	response.Success(c, existing)
+}
+
+func AdminDeleteArticleSecure(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	article, err := repository.GetArticleByID(id)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "文章不存在")
+		return
+	}
+	if err := repository.DeleteArticle(id); err != nil {
+		response.Error(c, http.StatusInternalServerError, "删除文章失败")
+		return
+	}
+	invalidateArticleSiteAccess(article.ID)
+	_ = removeArticleSite(article.StaticSiteKey)
+	response.Success(c, nil)
+}
+
+func validateArticleContent(contentType, siteKey, siteName string) (string, string, string, error) {
+	contentType = normalizeArticleContentType(contentType)
+	if contentType == "markdown" {
+		return contentType, "", "", nil
+	}
+	siteKey = strings.TrimSpace(siteKey)
+	if !articleSiteExists(siteKey) {
+		return "", "", "", errors.New("请先上传包含 index.html 的静态前端 ZIP")
+	}
+	return contentType, siteKey, strings.TrimSpace(filepath.Base(siteName)), nil
+}
+
+func normalizeArticleContentType(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), "static") {
+		return "static"
+	}
+	return "markdown"
 }
 
 func articlePasswordHash(locked bool, plainPassword, currentHash string) (string, error) {

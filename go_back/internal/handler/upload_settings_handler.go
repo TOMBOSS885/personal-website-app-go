@@ -15,6 +15,9 @@ const mb = 1024 * 1024
 func defaultUploadSettings() *model.UploadSettings {
 	return &model.UploadSettings{
 		ArticleImageMaxMB:    10,
+		ArticleSiteZipMaxMB:  30,
+		ArticleSiteTotalMB:   100,
+		ArticleSiteFileCount: 1000,
 		ThemeBackgroundMaxMB: 10,
 		AvatarImageMaxMB:     5,
 		MusicFileMaxMB:       50,
@@ -47,6 +50,15 @@ func applyUploadSettingsDefaults(settings *model.UploadSettings) {
 	defaults := defaultUploadSettings()
 	if settings.ArticleImageMaxMB <= 0 {
 		settings.ArticleImageMaxMB = defaults.ArticleImageMaxMB
+	}
+	if settings.ArticleSiteZipMaxMB <= 0 {
+		settings.ArticleSiteZipMaxMB = defaults.ArticleSiteZipMaxMB
+	}
+	if settings.ArticleSiteTotalMB <= 0 {
+		settings.ArticleSiteTotalMB = defaults.ArticleSiteTotalMB
+	}
+	if settings.ArticleSiteFileCount <= 0 {
+		settings.ArticleSiteFileCount = defaults.ArticleSiteFileCount
 	}
 	if settings.ThemeBackgroundMaxMB <= 0 {
 		settings.ThemeBackgroundMaxMB = defaults.ThemeBackgroundMaxMB
@@ -99,6 +111,9 @@ func AdminUpdateUploadSettings(c *gin.Context) {
 
 	settings := getOrCreateUploadSettings()
 	settings.ArticleImageMaxMB = clampInt(payload.ArticleImageMaxMB, 1, 100)
+	settings.ArticleSiteZipMaxMB = clampInt(payload.ArticleSiteZipMaxMB, 1, 200)
+	settings.ArticleSiteTotalMB = clampInt(payload.ArticleSiteTotalMB, 1, 1000)
+	settings.ArticleSiteFileCount = clampInt(payload.ArticleSiteFileCount, 1, 5000)
 	settings.ThemeBackgroundMaxMB = clampInt(payload.ThemeBackgroundMaxMB, 1, 100)
 	settings.AvatarImageMaxMB = clampInt(payload.AvatarImageMaxMB, 1, 50)
 	settings.MusicFileMaxMB = clampInt(payload.MusicFileMaxMB, 1, 500)

@@ -52,6 +52,8 @@ func actionFromRequest(method, path string) string {
 	switch {
 	case strings.Contains(path, "article-images"):
 		return "upload_article_image"
+	case strings.Contains(path, "article-sites"):
+		return "upload_article_site"
 	case strings.Contains(path, "theme/background-image"):
 		if method == "DELETE" {
 			return "delete_background_image"

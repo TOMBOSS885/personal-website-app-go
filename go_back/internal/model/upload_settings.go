@@ -3,6 +3,9 @@ package model
 type UploadSettings struct {
 	ID                   uint64 `gorm:"primaryKey" json:"id"`
 	ArticleImageMaxMB    int    `gorm:"column:article_image_max_mb;default:10" json:"articleImageMaxMB"`
+	ArticleSiteZipMaxMB  int    `gorm:"column:article_site_zip_max_mb;default:30" json:"articleSiteZipMaxMB"`
+	ArticleSiteTotalMB   int    `gorm:"column:article_site_total_mb;default:100" json:"articleSiteTotalMB"`
+	ArticleSiteFileCount int    `gorm:"column:article_site_file_count;default:1000" json:"articleSiteFileCount"`
 	ThemeBackgroundMaxMB int    `gorm:"column:theme_background_max_mb;default:10" json:"themeBackgroundMaxMB"`
 	AvatarImageMaxMB     int    `gorm:"column:avatar_image_max_mb;default:5" json:"avatarImageMaxMB"`
 	MusicFileMaxMB       int    `gorm:"column:music_file_max_mb;default:50" json:"musicFileMaxMB"`

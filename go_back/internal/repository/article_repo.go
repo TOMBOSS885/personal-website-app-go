@@ -43,7 +43,7 @@ func GetArticleSummaries(page, size int, tag string) ([]model.Article, int64, er
 
 	offset := page * size
 	err := query.
-		Select("id", "title", "summary", "cover_image", "category", "tags", "views", "published", "is_locked", "created_at", "updated_at").
+		Select("id", "title", "summary", "cover_image", "category", "tags", "views", "published", "content_type", "is_locked", "created_at", "updated_at").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(size).
@@ -54,6 +54,17 @@ func GetArticleSummaries(page, size int, tag string) ([]model.Article, int64, er
 func GetArticleByID(id uint64) (*model.Article, error) {
 	var article model.Article
 	err := db.DB.First(&article, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &article, nil
+}
+
+func GetArticleSiteAccessByID(id uint64) (*model.Article, error) {
+	var article model.Article
+	err := db.DB.
+		Select("id", "published", "content_type", "static_site_key", "updated_at").
+		First(&article, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -92,4 +103,12 @@ func GetTotalArticleViews() (int64, error) {
 	var total int64
 	err := db.DB.Model(&model.Article{}).Select("COALESCE(SUM(views), 0)").Scan(&total).Error
 	return total, err
+}
+
+func GetReferencedArticleSiteKeys() ([]string, error) {
+	var keys []string
+	err := db.DB.Model(&model.Article{}).
+		Where("content_type = ? AND static_site_key <> ?", "static", "").
+		Pluck("static_site_key", &keys).Error
+	return keys, err
 }

@@ -212,8 +212,24 @@ export default function ArticleDetailPage() {
         transition={{ delay: 0.2 }}
         className="mx-auto max-w-[92rem] px-4 pb-12 pt-8"
       >
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem]">
-          <div className="rounded-3xl border border-white/60 bg-white/75 px-5 py-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:px-8 md:py-8 lg:col-start-2">
+        <div className={article.contentType === 'static' ? '' : 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem]'}>
+          <div className={`rounded-3xl border border-white/60 bg-white/75 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 ${article.contentType === 'static' ? 'mx-auto max-w-[80rem] p-2 md:p-3' : 'px-5 py-6 md:px-8 md:py-8 lg:col-start-2'}`}>
+            {article.contentType === 'static' ? (
+              article.staticSiteUrl ? (
+                <iframe
+                  title={article.title}
+                  src={article.staticSiteUrl}
+                  sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock allow-popups allow-downloads allow-presentation"
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  referrerPolicy="no-referrer"
+                  className="h-[75vh] min-h-[480px] w-full rounded-2xl border-0 bg-white md:min-h-[620px]"
+                />
+              ) : (
+                <div className="flex min-h-[420px] items-center justify-center rounded-2xl bg-gray-50 px-6 text-center text-gray-500 dark:bg-slate-900 dark:text-slate-400">
+                  静态前端资源暂时不可用，请稍后重试。
+                </div>
+              )
+            ) : (
             <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="article-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -245,9 +261,10 @@ export default function ArticleDetailPage() {
                 {article.content}
               </ReactMarkdown>
             </motion.article>
+            )}
           </div>
 
-          {tocItems.length > 0 && (
+          {article.contentType !== 'static' && tocItems.length > 0 && (
             <aside className="hidden lg:col-start-3 lg:block">
               <div className="sticky top-28 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60">
                 <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">文章目录</div>

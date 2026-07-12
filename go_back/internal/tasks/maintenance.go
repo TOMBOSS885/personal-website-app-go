@@ -2,8 +2,12 @@ package tasks
 
 import (
 	"log"
+	"os"
+	"path/filepath"
+	"personal-website-go/internal/config"
 	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/repository"
+	"strings"
 	"time"
 )
 
@@ -19,6 +23,7 @@ func RunStartupMaintenance() {
 	repository.CleanupOperationLogs()
 	repository.CleanupMissingUploadAssets("")
 	repository.FlushPendingArticleViews()
+	cleanupOrphanedArticleSites(time.Now())
 }
 
 func runArticleViewFlushLoop() {
@@ -50,7 +55,59 @@ func runDailyCleanupLoop() {
 		} else if removed > 0 {
 			log.Printf("cleaned %d missing upload asset records", removed)
 		}
+		cleanupOrphanedArticleSites(time.Now())
 	}
+}
+
+func cleanupOrphanedArticleSites(now time.Time) {
+	keys, err := repository.GetReferencedArticleSiteKeys()
+	if err != nil {
+		log.Printf("article site cleanup skipped: %v", err)
+		return
+	}
+	referenced := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		referenced[strings.TrimSpace(key)] = true
+	}
+	root := filepath.Join(config.AppConfig.UploadDir, "article-sites")
+	entries, err := os.ReadDir(root)
+	if errorsIsNotExist(err) {
+		return
+	}
+	if err != nil {
+		log.Printf("article site cleanup failed: %v", err)
+		return
+	}
+	removed := 0
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		name := entry.Name()
+		maxAge := 24 * time.Hour
+		if strings.HasPrefix(name, ".tmp-") {
+			maxAge = time.Hour
+		} else if referenced[name] {
+			continue
+		}
+		if now.Sub(info.ModTime()) < maxAge {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(root, name)); err == nil {
+			removed++
+		}
+	}
+	if removed > 0 {
+		log.Printf("cleaned %d orphaned article site directories", removed)
+	}
+}
+
+func errorsIsNotExist(err error) bool {
+	return err != nil && os.IsNotExist(err)
 }
 
 func durationUntilNextCleanup() time.Duration {
