@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronDown, FileText, Loader, Move, Music, Pause, Play, Settings, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
-import { fetchWithTimeout } from '../utils/network'
+import { useUserAuth } from '../contexts/UserAuthContext'
 
 const DEFAULT_TOP = 96
 const PLAYER_HEIGHT = 56
@@ -54,6 +54,7 @@ function isPlayableSong(song) {
 }
 
 export default function MusicPlayer() {
+	const { user, loading: authLoading, openLogin, authFetch } = useUserAuth()
   const audioRef = useRef(null)
   const rootRef = useRef(null)
   const playerRef = useRef(null)
@@ -65,9 +66,11 @@ export default function MusicPlayer() {
   const songsRef = useRef([])
   const playlistFetchedAtRef = useRef(0)
   const playlistRefreshPromiseRef = useRef(null)
+  const userRef = useRef(user)
   const [songs, setSongs] = useState([])
   const [loading, setLoading] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [playlistError, setPlaylistError] = useState('')
   const [open, setOpen] = useState(false)
   const [currentSong, setCurrentSong] = useState(null)
   const [playing, setPlaying] = useState(false)
@@ -88,6 +91,7 @@ export default function MusicPlayer() {
     setSongs(list)
     setLoaded(true)
     playlistFetchedAtRef.current = Date.now()
+		setPlaylistError('')
   }, [])
 
   const getCachedPublicSongs = useCallback(() => songsRef.current.filter(isPlayableSong), [])
@@ -97,6 +101,7 @@ export default function MusicPlayer() {
   ), [])
 
   const loadPublicSongs = useCallback(async ({ force = false } = {}) => {
+    if (!user) return []
     const cached = getCachedPublicSongs()
     if (!force && playlistFetchedAtRef.current > 0 && isPlaylistFresh()) {
       return cached
@@ -105,19 +110,45 @@ export default function MusicPlayer() {
       return playlistRefreshPromiseRef.current
     }
 
-    playlistRefreshPromiseRef.current = fetchWithTimeout('/api/public/music', {}, 6000)
-      .then(async res => {
-        const data = res.ok ? await res.json() : []
-        const list = Array.isArray(data) ? data.filter(isPlayableSong) : []
-        setPublicSongs(list)
-        return list
-      })
-      .finally(() => {
-        playlistRefreshPromiseRef.current = null
-      })
+		const controller = new AbortController()
+		const timeout = window.setTimeout(() => controller.abort(), 6000)
+		playlistRefreshPromiseRef.current = authFetch('/api/public/music', { signal: controller.signal })
+			.then(async res => {
+				if (!res.ok) {
+					throw new Error(res.status === 401 || res.status === 403 ? '登录状态已失效' : '歌曲加载失败，请稍后重试')
+				}
+				const data = await res.json()
+				const list = Array.isArray(data) ? data.filter(isPlayableSong) : []
+				if (!userRef.current) return []
+				setPublicSongs(list)
+				return list
+			})
+			.finally(() => {
+				window.clearTimeout(timeout)
+				playlistRefreshPromiseRef.current = null
+			})
 
     return playlistRefreshPromiseRef.current
-  }, [getCachedPublicSongs, isPlaylistFresh, setPublicSongs])
+	}, [authFetch, getCachedPublicSongs, isPlaylistFresh, setPublicSongs, user])
+
+	useEffect(() => {
+		userRef.current = user
+	}, [user])
+
+  useEffect(() => {
+    if (user) return
+    setSongs([])
+    setLoaded(false)
+    setCurrentSong(null)
+    setPlaying(false)
+		setCurrentTime(0)
+		setPlaylistError('')
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.removeAttribute('src')
+      audioRef.current.load()
+    }
+  }, [user])
 
   useEffect(() => {
     songsRef.current = songs
@@ -141,9 +172,9 @@ export default function MusicPlayer() {
     setLoading(true)
     try {
       return await loadPublicSongs()
-    } catch {
-      setSongs([])
-      return []
+		} catch (error) {
+			if (userRef.current) setPlaylistError(error.message || '歌曲加载失败，请稍后重试')
+			return []
     } finally {
       setLoading(false)
     }
@@ -343,6 +374,10 @@ export default function MusicPlayer() {
   const cancelDrag = (event) => finishDrag(event, false)
 
   const playNextSong = useCallback(async () => {
+    if (!user) {
+      setOpen(true)
+      return
+    }
     let playableSongs = songs.filter(isPlayableSong)
     try {
       playableSongs = await loadPublicSongs()
@@ -364,9 +399,13 @@ export default function MusicPlayer() {
     }
     setCurrentSong(playableSongs[nextIndex])
     setCurrentTime(0)
-  }, [currentSong, loadPublicSongs, songs])
+  }, [currentSong, loadPublicSongs, songs, user])
 
   const playPreviousSong = useCallback(async () => {
+    if (!user) {
+      setOpen(true)
+      return
+    }
     let playableSongs = songs.filter(isPlayableSong)
     try {
       playableSongs = await loadPublicSongs()
@@ -390,9 +429,13 @@ export default function MusicPlayer() {
     }
     setCurrentSong(playableSongs[previousIndex])
     setCurrentTime(0)
-  }, [currentSong, loadPublicSongs, songs])
+  }, [currentSong, loadPublicSongs, songs, user])
 
   const selectSong = (song) => {
+    if (!user) {
+      setOpen(true)
+      return
+    }
     if (!isPlayableSong(song)) return
     markPlayerActivity()
     setCurrentSong(song)
@@ -403,6 +446,10 @@ export default function MusicPlayer() {
   const togglePlay = async () => {
     if (suppressClickRef.current) return
     markPlayerActivity()
+    if (!user) {
+      setOpen(true)
+      return
+    }
     if (!currentSong) {
       fetchSongs()
       setOpen(value => !value)
@@ -425,6 +472,10 @@ export default function MusicPlayer() {
   const toggleList = () => {
     if (suppressClickRef.current) return
     markPlayerActivity()
+    if (!user) {
+      setOpen(value => !value)
+      return
+    }
     fetchSongs()
     setOpen(value => !value)
   }
@@ -657,10 +708,27 @@ export default function MusicPlayer() {
             exit={{ opacity: 0, y: panelDropsUp ? 8 : -8, scale: 0.98 }}
             className={`absolute ${listHorizontalClass} ${listVerticalClass} w-[min(23rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-900/95`}
           >
-            {songs.length === 0 ? (
-              <div className="px-4 py-5 text-center text-sm text-gray-500 dark:text-slate-400">
-                {loading ? '加载中...' : '暂无可播放歌曲'}
+            {!user ? (
+              <div className="px-5 py-5 text-center">
+                <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">登录后收听音乐</div>
+                <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-slate-400">使用邮箱验证码登录，即可访问歌曲和歌词。</p>
+                <button
+                  type="button"
+                  onClick={() => openLogin(`${window.location.pathname}${window.location.search}`)}
+                  disabled={authLoading}
+                  className="mt-3 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {authLoading ? '检查登录状态...' : '立即登录'}
+                </button>
               </div>
+			) : songs.length === 0 ? (
+			  <div className="px-4 py-5 text-center text-sm text-gray-500 dark:text-slate-400">
+				{loading ? '加载中...' : playlistError ? (
+				  <button type="button" onClick={() => fetchSongs()} className="font-medium text-rose-600 hover:text-rose-700 dark:text-rose-300">
+					{playlistError}，点击重试
+				  </button>
+				) : '暂无可播放歌曲'}
+			  </div>
             ) : (
               <div className="max-h-72 overflow-y-auto p-2">
                 {songs.map(song => (

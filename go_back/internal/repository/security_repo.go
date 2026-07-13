@@ -87,6 +87,11 @@ func RecordSecurityAccess(stat model.SecurityAccessStat) {
 	current.IP = stat.IP
 	current.Category = stat.Category
 	current.MusicID = stat.MusicID
+	if !exists {
+		current.UserID = stat.UserID
+	} else if current.UserID != stat.UserID {
+		current.UserID = 0
+	}
 	if stat.MusicTitle != "" {
 		current.MusicTitle = stat.MusicTitle
 	}
@@ -125,8 +130,13 @@ func FlushPendingSecurityAccess() int {
 }
 
 func mergePendingSecurityStat(key securityAccessKey, stat model.SecurityAccessStat) {
-	current := pendingSecurityAccess.entries[key]
+	current, exists := pendingSecurityAccess.entries[key]
 	current.Date, current.IP, current.Category, current.MusicID = stat.Date, stat.IP, stat.Category, stat.MusicID
+	if !exists {
+		current.UserID = stat.UserID
+	} else if current.UserID != stat.UserID {
+		current.UserID = 0
+	}
 	if current.MusicTitle == "" {
 		current.MusicTitle = stat.MusicTitle
 	}
@@ -156,6 +166,7 @@ func persistSecurityAccess(stat model.SecurityAccessStat) error {
 			"login_attempts": gorm.Expr("login_attempts + ?", stat.LoginAttempts),
 			"login_failures": gorm.Expr("login_failures + ?", stat.LoginFailures),
 			"music_title":    stat.MusicTitle,
+			"user_id":        gorm.Expr("CASE WHEN user_id = ? THEN user_id ELSE 0 END", stat.UserID),
 			"last_seen_at":   stat.LastSeenAt,
 			"updated_at":     time.Now(),
 		}),

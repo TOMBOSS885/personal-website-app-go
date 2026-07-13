@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"personal-website-go/internal/cache"
 	"personal-website-go/internal/config"
+	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
@@ -58,6 +59,9 @@ func GetMusics(c *gin.Context) {
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取音乐列表失败")
 		return
+	}
+	if user, ok := middleware.CurrentUser(c); ok {
+		recordUserActivity(c, user, "view_music_list", "music", fmt.Sprintf("%d songs", len(musics)))
 	}
 	response.Success(c, signMusicList(musics, "public"))
 }
@@ -134,7 +138,12 @@ func StreamMusic(c *gin.Context) {
 	}
 
 	if rangeHeader := c.GetHeader("Range"); rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-") {
-		recordMusicStreamRequest(c.ClientIP(), music.ID, music.Title)
+		userID := uint64(0)
+		if user, ok := middleware.CurrentUser(c); ok {
+			userID = user.ID
+			recordUserActivity(c, user, "play_music", "music", fmt.Sprintf("%d:%s", music.ID, music.Title))
+		}
+		recordMusicStreamRequest(c.ClientIP(), userID, music.ID, music.Title)
 	}
 	if music.ContentType != "" {
 		c.Header("Content-Type", music.ContentType)
@@ -572,13 +581,14 @@ func uploadedLyricsPath(fileURL string) (string, error) {
 	return targetAbs, nil
 }
 
-func recordMusicStreamRequest(ip string, id uint64, title string) {
+func recordMusicStreamRequest(ip string, userID, id uint64, title string) {
 	repository.RecordSecurityAccess(model.SecurityAccessStat{
 		Date:       time.Now().Format("20060102"),
 		IP:         strings.TrimSpace(ip),
 		Category:   "music-stream-song",
 		MusicID:    id,
 		MusicTitle: title,
+		UserID:     userID,
 		Count:      1,
 	})
 	if !cache.Ready() {

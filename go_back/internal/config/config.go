@@ -48,6 +48,14 @@ type Config struct {
 	DBConnMaxLifetimeMin     int
 	DBConnectRetries         int
 	DBConnectRetryDelay      int
+	SMTPHost                 string
+	SMTPPort                 int
+	SMTPUsername             string
+	SMTPPassword             string
+	SMTPFrom                 string
+	SMTPFromName             string
+	SMTPTLSMode              string
+	EmailCodeTTLSeconds      int
 }
 
 var AppConfig *Config
@@ -103,6 +111,26 @@ func InitConfig() {
 		DBConnMaxLifetimeMin:     intEnv("DB_CONN_MAX_LIFETIME_MINUTES", 55),
 		DBConnectRetries:         intEnv("DB_CONNECT_RETRIES", 10),
 		DBConnectRetryDelay:      intEnv("DB_CONNECT_RETRY_DELAY_SECONDS", 3),
+		SMTPHost:                 strings.TrimSpace(getEnv("SMTP_HOST", "")),
+		SMTPPort:                 intEnv("SMTP_PORT", 587),
+		SMTPUsername:             strings.TrimSpace(getEnv("SMTP_USERNAME", "")),
+		SMTPPassword:             getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:                 strings.TrimSpace(getEnv("SMTP_FROM", "")),
+		SMTPFromName:             strings.TrimSpace(getEnv("SMTP_FROM_NAME", "Personal Website")),
+		SMTPTLSMode:              strings.ToLower(strings.TrimSpace(getEnv("SMTP_TLS_MODE", "starttls"))),
+		EmailCodeTTLSeconds:      intEnv("EMAIL_CODE_TTL_SECONDS", 600),
+	}
+	if AppConfig.EmailCodeTTLSeconds < 300 || AppConfig.EmailCodeTTLSeconds > 1800 {
+		AppConfig.EmailCodeTTLSeconds = 600
+	}
+	switch AppConfig.SMTPTLSMode {
+	case "tls", "starttls", "none":
+	default:
+		log.Printf("invalid SMTP_TLS_MODE=%q, using starttls", AppConfig.SMTPTLSMode)
+		AppConfig.SMTPTLSMode = "starttls"
+	}
+	if AppConfig.SMTPTLSMode == "none" && AppConfig.SMTPUsername != "" {
+		log.Println("warning: SMTP credentials will not be used while SMTP_TLS_MODE=none")
 	}
 	resolveRuntimeJWTSecret(AppConfig)
 	validateProductionConfig(AppConfig)

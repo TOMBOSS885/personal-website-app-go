@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './contexts/LanguageContext'
+import { UserAuthProvider } from './contexts/UserAuthContext'
 import Navbar from './components/Navbar'
 import CursorEffects from './components/CursorEffects'
 import DeferredMount from './components/DeferredMount'
@@ -25,6 +26,8 @@ const ArticleDetailPage = lazy(() => import('./pages/ArticleDetailPage'))
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
 const SearchPage = lazy(() => import('./pages/SearchPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
+const UserLoginPage = lazy(() => import('./pages/UserLoginPage'))
+const UserAccountPage = lazy(() => import('./pages/UserAccountPage'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
 const ArticleManager = lazy(() => import('./pages/admin/ArticleManager'))
@@ -39,6 +42,7 @@ const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsMan
 const StabilityManager = lazy(() => import('./pages/admin/StabilityManager'))
 const SecurityManager = lazy(() => import('./pages/admin/SecurityManager'))
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
+const UserMonitor = lazy(() => import('./pages/admin/UserMonitor'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Footer = lazy(() => import('./components/Footer'))
 const MusicPlayer = lazy(() => import('./components/MusicPlayer'))
@@ -138,9 +142,9 @@ function App() {
 
   return (
     <ThemeProvider>
-      <LanguageProvider>
-        <div className="theme-page-background" aria-hidden="true" />
-        <Router>
+	  <LanguageProvider>
+		<div className="theme-page-background" aria-hidden="true" />
+		  <Router>
           <div className="theme-app-shell min-h-screen flex flex-col">
             <CursorEffects />
             <Suspense fallback={null}>
@@ -167,9 +171,10 @@ function App() {
                   <Route path="upload-settings" element={<UploadSettingsManager />} />
                   <Route path="stability" element={<StabilityManager />} />
                   <Route path="security" element={<SecurityManager />} />
+                  <Route path="users" element={<UserMonitor />} />
                 </Route>
-                <Route path="/*" element={
-                  <>
+				<Route path="/*" element={
+				  <UserAuthProvider>
                     <Navbar profile={profile} />
                     <main className="flex-1">
                       <Routes>
@@ -178,6 +183,8 @@ function App() {
                         <Route path="/blog/:id" element={<ArticleDetailPage />} />
                         <Route path="/projects" element={<ProjectsPage />} />
                         <Route path="/search" element={<SearchPage />} />
+                        <Route path="/login" element={<UserLoginPage />} />
+                        <Route path="/account" element={<UserAccountPage />} />
                         <Route path="*" element={<NotFoundPage />} />
                       </Routes>
                     </main>
@@ -201,13 +208,13 @@ function App() {
                         <Live2DWidget />
                       </Suspense>
                     </DeferredMount>
-                  </>
-                } />
+				  </UserAuthProvider>
+				} />
               </Routes>
             </Suspense>
-          </div>
-        </Router>
-      </LanguageProvider>
+		  </div>
+		  </Router>
+	  </LanguageProvider>
     </ThemeProvider>
   )
 }

@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import OptimizedImage from '../components/OptimizedImage'
+import CommentSection from '../components/CommentSection'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
@@ -283,6 +284,8 @@ export default function ArticleDetailPage() {
             </aside>
           )}
         </div>
+
+        {article.contentType !== 'static' && <CommentSection articleId={article.id || id} />}
 
         {article.tags && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="mt-12 border-t border-gray-100 pt-8 dark:border-slate-800">

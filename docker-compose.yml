@@ -53,6 +53,14 @@ services:
       DB_CONN_MAX_LIFETIME_MINUTES: "${DB_CONN_MAX_LIFETIME_MINUTES:-55}"
       DB_CONNECT_RETRIES: "${DB_CONNECT_RETRIES:-10}"
       DB_CONNECT_RETRY_DELAY_SECONDS: "${DB_CONNECT_RETRY_DELAY_SECONDS:-3}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USERNAME: "${SMTP_USERNAME:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      SMTP_FROM_NAME: "${SMTP_FROM_NAME:-Personal Website}"
+      SMTP_TLS_MODE: "${SMTP_TLS_MODE:-starttls}"
+      EMAIL_CODE_TTL_SECONDS: "${EMAIL_CODE_TTL_SECONDS:-600}"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3718/api/health"]
       interval: 30s

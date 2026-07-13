@@ -4,6 +4,7 @@ import (
 	"context"
 	"personal-website-go/internal/cache"
 	"personal-website-go/internal/model"
+	"strconv"
 	"sync"
 	"time"
 
@@ -48,8 +49,9 @@ func RateLimit(name string, limit int, window time.Duration) gin.HandlerFunc {
 			window = time.Minute
 		}
 
-		recordAccess(c.ClientIP(), name)
-		ok, count, remaining := allowRequest(name, c.ClientIP(), limit, window)
+		identity := requestRateIdentity(c)
+		recordAccess(c, name)
+		ok, count, remaining := allowRequest(name, identity, limit, window)
 		if !ok {
 			recordLimit(c, name, count, limit, remaining)
 			limitResponse(c, name, int64(remaining.Seconds()))
@@ -59,13 +61,13 @@ func RateLimit(name string, limit int, window time.Duration) gin.HandlerFunc {
 	}
 }
 
-func allowRequest(name, ip string, limit int, window time.Duration) (bool, int64, time.Duration) {
+func allowRequest(name, identity string, limit int, window time.Duration) (bool, int64, time.Duration) {
 	if cache.Ready() {
-		if ok, err := allowRequestRedis(name, ip, limit, window); err == nil {
+		if ok, err := allowRequestRedis(name, identity, limit, window); err == nil {
 			return ok.allowed, ok.count, ok.remaining
 		}
 	}
-	return allowRequestLocal(name, ip, limit, window)
+	return allowRequestLocal(name, identity, limit, window)
 }
 
 type rateDecision struct {
@@ -74,11 +76,11 @@ type rateDecision struct {
 	remaining time.Duration
 }
 
-func allowRequestRedis(name, ip string, limit int, window time.Duration) (rateDecision, error) {
+func allowRequestRedis(name, identity string, limit int, window time.Duration) (rateDecision, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
-	key := "rl:" + name + ":" + ip
+	key := "rl:" + name + ":" + identity
 	result, err := rateLimitScript.Run(ctx, cache.Client, []string{key}, window.Milliseconds()).Int64Slice()
 	if err != nil {
 		cache.MarkFailure(err)
@@ -96,8 +98,8 @@ func allowRequestRedis(name, ip string, limit int, window time.Duration) (rateDe
 	return rateDecision{allowed: count <= int64(limit), count: count, remaining: ttl}, nil
 }
 
-func allowRequestLocal(name, ip string, limit int, window time.Duration) (bool, int64, time.Duration) {
-	key := "rl:" + name + ":" + ip
+func allowRequestLocal(name, identity string, limit int, window time.Duration) (bool, int64, time.Duration) {
+	key := "rl:" + name + ":" + identity
 	now := time.Now()
 
 	localRateStore.Lock()
@@ -112,6 +114,22 @@ func allowRequestLocal(name, ip string, limit int, window time.Duration) (bool, 
 	entry.Count++
 	localRateStore.entries[key] = entry
 	return entry.Count <= limit, int64(entry.Count), time.Until(entry.ResetAt)
+}
+
+func requestRateIdentity(c *gin.Context) string {
+	if userID, ok := c.Get("userID"); ok {
+		switch value := userID.(type) {
+		case uint64:
+			if value > 0 {
+				return "user:" + strconv.FormatUint(value, 10)
+			}
+		case uint:
+			if value > 0 {
+				return "user:" + strconv.FormatUint(uint64(value), 10)
+			}
+		}
+	}
+	return "ip:" + c.ClientIP()
 }
 
 func CleanupExpiredLocalRateLimits(now time.Time) int {

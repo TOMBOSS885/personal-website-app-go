@@ -195,22 +195,25 @@ func forgetNegativeBan(ip string) {
 	negativeBanCache.Unlock()
 }
 
-func recordAccess(ip, category string) {
+func recordAccess(c *gin.Context, category string) {
+	userID := currentUserID(c)
 	repository.RecordSecurityAccess(model.SecurityAccessStat{
 		Date:     time.Now().Format("20060102"),
-		IP:       ip,
+		IP:       c.ClientIP(),
 		Category: category,
+		UserID:   userID,
 		Count:    1,
 	})
 }
 
 func recordLimit(c *gin.Context, category string, count int64, limit int, window time.Duration) {
 	ip := c.ClientIP()
+	userID := currentUserID(c)
 	remaining := int64(window.Seconds())
 	if cache.Ready() {
 		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 		defer cancel()
-		key := limitKey(category, ip)
+		key := "limit:" + category + ":" + requestRateIdentity(c)
 		_ = cache.Client.Set(ctx, key, fmt.Sprintf("%d/%d", count, limit), window).Err()
 		if ttl, err := cache.Client.TTL(ctx, key).Result(); err == nil && ttl > 0 {
 			remaining = int64(ttl.Seconds())
@@ -221,12 +224,14 @@ func recordLimit(c *gin.Context, category string, count int64, limit int, window
 		Date:         time.Now().Format("20060102"),
 		IP:           ip,
 		Category:     category,
+		UserID:       userID,
 		LimitedCount: 1,
 	})
 	repository.CreateSecurityEvent(&model.SecurityEvent{
 		Type:             "limit",
 		Severity:         severityForCategory(category),
 		IP:               ip,
+		UserID:           userID,
 		Category:         category,
 		Path:             c.Request.URL.RequestURI(),
 		Method:           c.Request.Method,
@@ -236,12 +241,38 @@ func recordLimit(c *gin.Context, category string, count int64, limit int, window
 		Limit:            limit,
 		RemainingSeconds: remaining,
 	})
+	if userID > 0 {
+		_ = repository.CreateUserActivity(&model.UserActivity{
+			UserID: userID, Action: "rate_limited", Resource: category,
+			Detail: fmt.Sprintf("%d/%d", count, limit), IP: ip, UserAgent: c.Request.UserAgent(),
+		})
+	}
 	recordLimitTrigger(c, category)
+}
+
+func currentUserID(c *gin.Context) uint64 {
+	value, ok := c.Get("userID")
+	if !ok {
+		return 0
+	}
+	switch id := value.(type) {
+	case uint64:
+		return id
+	case uint:
+		return uint64(id)
+	default:
+		return 0
+	}
 }
 
 func recordLimitTrigger(c *gin.Context, category string) {
 	settings := currentRateLimitSettings()
 	if settings.DailyLimitTriggerThreshold <= 0 || settings.BanDays <= 0 {
+		return
+	}
+	// Authenticated requests are limited by user ID. Do not let one account ban
+	// a shared NAT address used by unrelated visitors.
+	if currentUserID(c) > 0 {
 		return
 	}
 	ip := c.ClientIP()

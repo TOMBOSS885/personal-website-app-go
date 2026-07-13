@@ -1,11 +1,14 @@
 package middleware
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/model"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -34,5 +37,39 @@ func TestGenerateTokenUsesStrictAdminClaims(t *testing.T) {
 	}
 	if claims.PasswordFingerprint != passwordFingerprint(user.Password) {
 		t.Fatal("password fingerprint is missing")
+	}
+}
+
+func TestSameOriginMutationRejectsCookieRequestWithoutOrigin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	request := httptest.NewRequest(http.MethodPost, "https://example.com/api/account/logout", nil)
+	request.Host = "example.com"
+	request.AddCookie(&http.Cookie{Name: UserSessionCookie, Value: "session"})
+	context.Request = request
+
+	if isSameOriginMutation(context) {
+		t.Fatal("cookie mutation without Origin, Referer, or Sec-Fetch-Site must be rejected")
+	}
+	request.Header.Set("Origin", "https://example.com")
+	if !isSameOriginMutation(context) {
+		t.Fatal("same-origin cookie mutation should be accepted")
+	}
+	request.Header.Set("Origin", "https://evil.example")
+	if isSameOriginMutation(context) {
+		t.Fatal("cross-origin cookie mutation must be rejected")
+	}
+}
+
+func TestSameOriginMutationAllowsBearerClientWithoutBrowserHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	request := httptest.NewRequest(http.MethodPut, "https://example.com/api/account/username", nil)
+	request.Host = "example.com"
+	request.Header.Set("Authorization", "Bearer token")
+	context.Request = request
+
+	if !isSameOriginMutation(context) {
+		t.Fatal("non-browser bearer client should be accepted without browser origin headers")
 	}
 }

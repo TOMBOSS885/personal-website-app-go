@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search } from 'lucide-react'
+import { Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, LogIn, UserRound } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
@@ -8,6 +8,31 @@ import LanguageSwitcher from './LanguageSwitcher'
 import { safeExternalHref } from '../utils/safeUrl'
 import { useTheme } from '../context/ThemeContext'
 import ProfileAvatar from './ProfileAvatar'
+import { useUserAuth } from '../contexts/UserAuthContext'
+
+function NavbarAvatar({ user, profile }) {
+  const avatar = typeof user?.avatar === 'string' && user.avatar.startsWith('/uploads/user-avatars/')
+    ? user.avatar
+    : ''
+  const sharedClass = 'relative z-10 h-12 w-12 overflow-hidden rounded-full bg-white shadow-lg ring-2 ring-white/80 transition-shadow group-hover:shadow-xl dark:bg-slate-900 dark:ring-slate-800/80'
+
+  if (user && avatar) {
+    return (
+      <div className={sharedClass}>
+        <img src={avatar} alt={`${user.username} 的头像`} className="h-full w-full object-cover" />
+      </div>
+    )
+  }
+
+  return (
+    <ProfileAvatar
+      profile={user ? { nickname: user.username } : profile}
+      sizeClass="h-12 w-12"
+      textClass="text-xl"
+      className={sharedClass}
+    />
+  )
+}
 
 export default function Navbar({ profile }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -16,7 +41,9 @@ export default function Navbar({ profile }) {
   const { language } = useLanguage()
   const { t } = useTranslation()
   const { colorMode, toggleColorMode } = useTheme()
+  const { user, loading: userLoading } = useUserAuth()
   const githubHref = safeExternalHref(profile?.github || 'https://github.com')
+  const identityName = user?.username || profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')
 
   useEffect(() => {
     const handleScroll = () => {
@@ -51,7 +78,11 @@ export default function Navbar({ profile }) {
               : 'bg-transparent px-2'
           }`}>
             {/* Logo */}
-            <Link to="/" className="flex items-center space-x-3 group">
+            <Link
+              to={user ? '/account' : '/'}
+              className="flex min-w-0 items-center space-x-3 group"
+              aria-label={user ? '打开账号设置' : '返回首页'}
+            >
               <motion.div 
                 className="relative isolate"
                 whileHover={{ scale: 1.1, rotate: 5 }}
@@ -61,19 +92,15 @@ export default function Navbar({ profile }) {
                   className="pointer-events-none absolute -inset-1 -z-10 rounded-full opacity-30 blur transition-opacity group-hover:opacity-50"
                   style={{ background: 'var(--theme-gradient)' }}
                 />
-                <ProfileAvatar
-                  profile={profile}
-                  sizeClass="h-12 w-12"
-                  textClass="text-xl"
-                  className="relative z-10 bg-white shadow-lg ring-2 ring-white/80 transition-shadow group-hover:shadow-xl dark:bg-slate-900 dark:ring-slate-800/80"
-                />
+                <NavbarAvatar user={user} profile={profile} />
               </motion.div>
-              <div className="hidden sm:block">
+              <div className="hidden min-w-0 sm:block">
                 <span 
-                className="text-xl font-bold bg-clip-text text-transparent"
+                className="block max-w-32 truncate text-xl font-bold text-transparent bg-clip-text lg:max-w-44"
                 style={{ backgroundImage: 'var(--theme-gradient-text)' }}
+                title={identityName}
               >
-                  {profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')}
+                  {identityName}
                 </span>
               </div>
             </Link>
@@ -120,6 +147,17 @@ export default function Navbar({ profile }) {
             <div className="flex items-center space-x-3">
               {/* Language Switcher */}
               <LanguageSwitcher />
+
+              {!userLoading && !user && (
+                <Link
+                  to={`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 transition-colors hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/70"
+                  title="登录"
+                  aria-label="登录"
+                >
+                  <LogIn className="h-5 w-5" />
+                </Link>
+              )}
 
               <motion.button
                 type="button"
@@ -223,7 +261,7 @@ export default function Navbar({ profile }) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 bottom-0 w-80 max-w-full bg-white/95 backdrop-blur-xl shadow-2xl z-50 md:hidden"
+              className="fixed top-0 right-0 bottom-0 w-80 max-w-full bg-white/95 backdrop-blur-xl shadow-2xl z-50 md:hidden dark:bg-gray-900/95"
             >
               <div className="p-6">
                 {/* Close button */}
@@ -232,7 +270,7 @@ export default function Navbar({ profile }) {
                     whileHover={{ scale: 1.1, rotate: 90 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={() => setIsOpen(false)}
-                    className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600"
+                    className="p-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
                   >
                     <X className="w-6 h-6" />
                   </motion.button>
@@ -262,6 +300,20 @@ export default function Navbar({ profile }) {
                       </Link>
                     </motion.div>
                   ))}
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: navLinks.length * 0.1 }}
+                  >
+                    <Link
+                      to={user ? '/account' : `/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
+                      onClick={() => setIsOpen(false)}
+                      className="flex items-center space-x-4 rounded-xl px-5 py-4 text-gray-700 transition-all duration-300 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
+                    >
+                      {user ? <UserRound className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
+                      <span className="font-medium">{user ? '账号设置' : '登录'}</span>
+                    </Link>
+                  </motion.div>
                 </div>
 
                 {/* Divider */}

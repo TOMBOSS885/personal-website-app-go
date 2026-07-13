@@ -29,6 +29,7 @@ type SecurityAccessStat struct {
 	Category      string    `gorm:"column:category;size:50;index:idx_security_stat_unique,unique;index;index:idx_security_stats_category_date,priority:1" json:"category"`
 	MusicID       uint64    `gorm:"column:music_id;default:0;index:idx_security_stat_unique,unique;index" json:"musicId"`
 	MusicTitle    string    `gorm:"column:music_title;size:255" json:"musicTitle"`
+	UserID        uint64    `gorm:"column:user_id;default:0;index" json:"userId"`
 	Count         int64     `gorm:"column:count;default:0;index:idx_security_stats_date_count,priority:2" json:"count"`
 	LimitedCount  int64     `gorm:"column:limited_count;default:0" json:"limitedCount"`
 	BlockedCount  int64     `gorm:"column:blocked_count;default:0" json:"blockedCount"`
@@ -50,6 +51,7 @@ type SecurityEvent struct {
 	IP               string     `gorm:"column:ip;size:100;index;index:idx_security_events_ip_type_time,priority:1;index:idx_security_events_active_ban,priority:2" json:"ip"`
 	Category         string     `gorm:"column:category;size:50;index" json:"category"`
 	Username         string     `gorm:"column:username;size:100;index" json:"username"`
+	UserID           uint64     `gorm:"column:user_id;default:0;index" json:"userId"`
 	MusicID          uint64     `gorm:"column:music_id;default:0;index" json:"musicId"`
 	MusicTitle       string     `gorm:"column:music_title;size:255" json:"musicTitle"`
 	Path             string     `gorm:"column:path;size:500" json:"path"`

@@ -55,20 +55,23 @@ func SeedDefaultData() {
 	}
 
 	user := &model.User{
-		Username:    config.AppConfig.AdminUsername,
-		Password:    string(hash),
-		Email:       config.AppConfig.AdminEmail,
-		Role:        "ADMIN",
-		Nickname:    "站长",
-		Bio:         "全栈开发者，热爱技术与开源。",
-		Location:    "中国",
-		Github:      "https://github.com",
-		Tags:        "全栈开发,技术爱好者",
-		WelcomeText: "Hello, I'm",
-		CtaTitle:    "Let's Work Together",
-		CtaDesc:     "欢迎联系我。",
-		CoffeeCount: 1000,
-		StarsCount:  1000,
+		Username:      config.AppConfig.AdminUsername,
+		Password:      string(hash),
+		Email:         config.AppConfig.AdminEmail,
+		Role:          "ADMIN",
+		Status:        "active",
+		TokenVersion:  1,
+		EmailVerified: true,
+		Nickname:      "站长",
+		Bio:           "全栈开发者，热爱技术与开源。",
+		Location:      "中国",
+		Github:        "https://github.com",
+		Tags:          "全栈开发,技术爱好者",
+		WelcomeText:   "Hello, I'm",
+		CtaTitle:      "Let's Work Together",
+		CtaDesc:       "欢迎联系我。",
+		CoffeeCount:   1000,
+		StarsCount:    1000,
 	}
 	if err := repository.CreateUser(user); err != nil {
 		log.Printf("failed to create default admin: %v", err)

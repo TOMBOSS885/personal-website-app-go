@@ -2,6 +2,8 @@ package media
 
 import (
 	"image"
+	"image/color"
+	"image/draw"
 	"math"
 	"os"
 	"path/filepath"
@@ -79,6 +81,46 @@ func GenerateSquarePNG(srcPath, destPath string, size int) (ImageResult, error) 
 	out := imaging.Fill(img, size, size, imaging.Center, imaging.Lanczos)
 	if err := imaging.Save(out, destPath); err != nil {
 		return ImageResult{}, err
+	}
+	info, err := os.Stat(destPath)
+	if err != nil {
+		return ImageResult{}, err
+	}
+	return ImageResult{Name: filepath.Base(destPath), Path: destPath, Size: info.Size()}, nil
+}
+
+func GenerateSquareJPEGUnderLimit(srcPath, destPath string, size int, maxBytes int64) (ImageResult, error) {
+	release := acquireImageProcessingSlot()
+	defer release()
+	if size <= 0 {
+		size = 512
+	}
+	if maxBytes <= 0 {
+		maxBytes = 500 * 1024
+	}
+	img, err := openImage(srcPath)
+	if err != nil {
+		return ImageResult{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(destPath), 0755); err != nil {
+		return ImageResult{}, err
+	}
+	resized := imaging.Fill(img, size, size, imaging.Center, imaging.Lanczos)
+	background := image.NewRGBA(resized.Bounds())
+	draw.Draw(background, background.Bounds(), &image.Uniform{C: color.White}, image.Point{}, draw.Src)
+	draw.Draw(background, background.Bounds(), resized, resized.Bounds().Min, draw.Over)
+
+	for _, quality := range []int{88, 80, 72, 64, 56, 48} {
+		if err := saveJPEG(destPath, background, quality); err != nil {
+			return ImageResult{}, err
+		}
+		info, err := os.Stat(destPath)
+		if err != nil {
+			return ImageResult{}, err
+		}
+		if info.Size() <= maxBytes {
+			return ImageResult{Name: filepath.Base(destPath), Path: destPath, Size: info.Size()}, nil
+		}
 	}
 	info, err := os.Stat(destPath)
 	if err != nil {

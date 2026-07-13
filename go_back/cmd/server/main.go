@@ -80,9 +80,18 @@ func main() {
 			c.Next()
 		})
 		auth.POST("/login", handler.Login)
+		userAuth := api.Group("/user-auth")
+		userAuth.Use(func(c *gin.Context) {
+			c.Header("Cache-Control", "no-store")
+			c.Header("Pragma", "no-cache")
+			c.Next()
+		})
+		userAuth.POST("/code", middleware.RateLimit("email-code", 10, time.Minute), handler.RequestUserEmailCode)
+		userAuth.POST("/login", middleware.RateLimit("email-login", 20, time.Minute), handler.LoginUserByEmailCode)
 		api.GET("/public/article-sites/:id/:siteKey/:version/:expires/:sign/*filepath", handler.ServeArticleSiteFile)
 
 		public := api.Group("/public")
+		public.Use(middleware.OptionalUserAuth())
 		public.Use(middleware.RateLimit("public", config.AppConfig.PublicRateLimit, time.Minute))
 		{
 			publicCache := middleware.CacheGET("public")
@@ -91,6 +100,7 @@ func main() {
 			public.GET("/stats", publicCache, handler.GetStats)
 			public.GET("/articles", publicCache, handler.GetArticles)
 			public.GET("/articles/:id", handler.GetProtectedArticle)
+			public.GET("/articles/:id/comments", handler.GetArticleComments)
 			public.POST("/articles/:id/unlock", middleware.RateLimit("article-unlock", 10, time.Minute), handler.UnlockArticle)
 			public.GET("/tags", publicCache, handler.GetTags)
 			public.GET("/categories", publicCache, handler.GetCategories)
@@ -101,10 +111,27 @@ func main() {
 			public.GET("/theme", publicCache, handler.GetTheme)
 			public.GET("/theme/background-images", publicCache, handler.AdminListThemeBackgrounds)
 			public.GET("/live2d-model", publicCache, handler.GetLive2DModel)
-			public.GET("/music", middleware.RateLimit("music", config.AppConfig.MusicRateLimit, time.Minute), publicCache, handler.GetMusics)
-			public.GET("/music/:id/stream", middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusic)
-			public.GET("/music/:id/lyrics", middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusicLyrics)
+			public.GET("/music", middleware.UserAuthRequired(), middleware.RateLimit("music", config.AppConfig.MusicRateLimit, time.Minute), publicCache, handler.GetMusics)
+			public.GET("/music/:id/stream", middleware.PublicMediaAuth(), middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusic)
+			public.GET("/music/:id/lyrics", middleware.PublicMediaAuth(), middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusicLyrics)
 			public.GET("/search", handler.PublicSearch)
+		}
+
+		api.POST("/account/logout", middleware.SameOriginMutation(), middleware.OptionalUserAuth(), handler.LogoutUser)
+		account := api.Group("/account")
+		account.Use(middleware.UserAuthRequired())
+		{
+			account.GET("/me", handler.GetCurrentUser)
+			account.PUT("/username", middleware.RateLimit("account-update", 20, time.Hour), handler.UpdateCurrentUsername)
+			account.POST("/avatar", middleware.RateLimit("avatar-upload", 10, time.Hour), handler.UploadCurrentUserAvatar)
+		}
+
+		member := api.Group("/user")
+		member.Use(middleware.UserAuthRequired())
+		{
+			member.POST("/comments", middleware.RateLimit("comment", 20, time.Minute), handler.CreateArticleComment)
+			member.PUT("/comments/:id", middleware.RateLimit("comment", 20, time.Minute), handler.UpdateOwnComment)
+			member.DELETE("/comments/:id", middleware.RateLimit("comment", 20, time.Minute), handler.DeleteOwnComment)
 		}
 
 		admin := api.Group("/admin")
@@ -149,6 +176,13 @@ func main() {
 			admin.GET("/security", handler.AdminSecurityDashboard)
 			admin.GET("/security/rate-limit-settings", handler.AdminGetRateLimitSettings)
 			admin.PUT("/security/rate-limit-settings", handler.AdminUpdateRateLimitSettings)
+			admin.GET("/users/summary", handler.AdminUserSummary)
+			admin.GET("/users", handler.AdminListUsers)
+			admin.PATCH("/users/:id/status", handler.AdminUpdateUserStatus)
+			admin.GET("/user-activities", handler.AdminListUserActivities)
+			admin.GET("/comments", handler.AdminListComments)
+			admin.PATCH("/comments/:id/status", handler.AdminUpdateCommentStatus)
+			admin.DELETE("/comments/:id", handler.AdminDeleteComment)
 
 			admin.POST("/theme", handler.AdminSaveTheme)
 			admin.GET("/theme/background-images", handler.AdminListThemeBackgrounds)
@@ -249,6 +283,8 @@ func autoMigrateModels() error {
 		{"security_access_stats", &model.SecurityAccessStat{}},
 		{"security_events", &model.SecurityEvent{}},
 		{"upload_assets", &model.UploadAsset{}},
+		{"comments", &model.Comment{}},
+		{"user_activities", &model.UserActivity{}},
 	}
 	for _, target := range targets {
 		if err := db.DB.AutoMigrate(target.model); err != nil {
