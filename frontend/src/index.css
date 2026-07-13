@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  color-scheme: light;
+}
+
+html.theme-dark {
+  color-scheme: dark;
+}
+
 :root {
   --theme-primary: #6366f1;
   --theme-secondary: #8b5cf6;
