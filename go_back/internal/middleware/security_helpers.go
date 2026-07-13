@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"personal-website-go/internal/cache"
@@ -14,6 +15,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 )
 
 const (
@@ -29,6 +32,11 @@ var settingsCache = struct {
 	value     *model.RateLimitSettings
 	expiresAt time.Time
 }{}
+
+var negativeBanCache = struct {
+	sync.Mutex
+	entries map[string]time.Time
+}{entries: make(map[string]time.Time)}
 
 func currentRateLimitSettings() model.RateLimitSettings {
 	now := time.Now()
@@ -112,21 +120,31 @@ func IPBanGuard() gin.HandlerFunc {
 }
 
 func isIPBanned(ip string) (bool, time.Duration) {
-	if strings.TrimSpace(ip) == "" {
+	ip = strings.TrimSpace(ip)
+	if ip == "" {
 		return false, 0
 	}
 	if cache.Ready() {
-		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-		defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 		ttl, err := cache.Client.TTL(ctx, banKey(ip)).Result()
+		cancel()
 		if err == nil && ttl > 0 {
+			cache.MarkSuccess()
+			forgetNegativeBan(ip)
 			return true, ttl
 		}
+		if err != nil && err != redis.Nil {
+			cache.MarkFailure(err)
+		}
+	}
+	if isKnownNotBanned(ip, time.Now()) {
+		return false, 0
 	}
 	event, err := repository.FindActiveBan(ip)
 	if err == nil && event != nil && event.ExpiresAt != nil {
 		remaining := time.Until(*event.ExpiresAt)
 		if remaining > 0 {
+			forgetNegativeBan(ip)
 			if cache.Ready() {
 				ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 				defer cancel()
@@ -135,7 +153,46 @@ func isIPBanned(ip string) (bool, time.Duration) {
 			return true, remaining
 		}
 	}
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		rememberNegativeBan(ip, time.Now().Add(30*time.Second))
+	}
 	return false, 0
+}
+
+func isKnownNotBanned(ip string, now time.Time) bool {
+	negativeBanCache.Lock()
+	defer negativeBanCache.Unlock()
+	expiresAt, ok := negativeBanCache.entries[ip]
+	if !ok {
+		return false
+	}
+	if !now.Before(expiresAt) {
+		delete(negativeBanCache.entries, ip)
+		return false
+	}
+	return true
+}
+
+func rememberNegativeBan(ip string, expiresAt time.Time) {
+	negativeBanCache.Lock()
+	defer negativeBanCache.Unlock()
+	if len(negativeBanCache.entries) >= 20000 {
+		now := time.Now()
+		for key, expiry := range negativeBanCache.entries {
+			if !now.Before(expiry) {
+				delete(negativeBanCache.entries, key)
+			}
+		}
+	}
+	if len(negativeBanCache.entries) < 20000 {
+		negativeBanCache.entries[ip] = expiresAt
+	}
+}
+
+func forgetNegativeBan(ip string) {
+	negativeBanCache.Lock()
+	delete(negativeBanCache.entries, ip)
+	negativeBanCache.Unlock()
 }
 
 func recordAccess(ip, category string) {
@@ -212,6 +269,7 @@ func recordLimitTrigger(c *gin.Context, category string) {
 	}
 
 	expiresAt := time.Now().Add(time.Duration(settings.BanDays) * 24 * time.Hour)
+	forgetNegativeBan(ip)
 	if cache.Ready() {
 		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 		defer cancel()

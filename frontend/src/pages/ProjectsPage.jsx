@@ -11,6 +11,7 @@ export default function ProjectsPage() {
   const [filteredProjects, setFilteredProjects] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTech, setSelectedTech] = useState('')
+  const [featuredFirst, setFeaturedFirst] = useState(false)
   const [techStacks, setTechStacks] = useState([])
   const [profile, setProfile] = useState(null)
   const { language } = useLanguage()
@@ -78,9 +79,12 @@ export default function ProjectsPage() {
         project.techStack?.includes(selectedTech)
       )
     }
+	if (featuredFirst) {
+	  result = [...result].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)))
+	}
 
     setFilteredProjects(result)
-  }, [searchTerm, selectedTech, projects, language])
+  }, [searchTerm, selectedTech, projects, language, featuredFirst])
 
   // 统计信息
   const stats = [
@@ -207,7 +211,10 @@ export default function ProjectsPage() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="flex items-center space-x-2 px-4 py-2 bg-white rounded-lg shadow-sm hover:shadow-md transition-all"
+			  type="button"
+			  aria-pressed={featuredFirst}
+			  onClick={() => setFeaturedFirst(value => !value)}
+			  className={`flex items-center space-x-2 px-4 py-2 rounded-lg shadow-sm hover:shadow-md transition-all ${featuredFirst ? 'bg-amber-50 ring-1 ring-amber-300' : 'bg-white'}`}
             >
               <Sparkles className="w-4 h-4 text-amber-500" />
               <span className="text-sm text-gray-600">{t('projects.sortFeatured')}</span>

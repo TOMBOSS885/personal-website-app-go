@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
 	"personal-website-go/internal/bootstrap"
 	"personal-website-go/internal/cache"
 	"personal-website-go/internal/config"
@@ -13,6 +18,7 @@ import (
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/tasks"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -40,11 +46,15 @@ func main() {
 	if err := r.SetTrustedProxies([]string{"127.0.0.1", "::1"}); err != nil {
 		log.Printf("failed to set trusted proxies: %v", err)
 	}
-	r.MaxMultipartMemory = 256 << 20
-	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.CORS(), middleware.IPBanGuard())
+	r.MaxMultipartMemory = 32 << 20
+	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.RequestBodyLimit(), middleware.CORS(), middleware.IPBanGuard())
 
 	uploads := r.Group("/uploads")
 	uploads.Use(func(c *gin.Context) {
+		if strings.HasPrefix(c.Request.URL.Path, "/uploads/.") || strings.Contains(c.Request.URL.Path, "/.") {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
 		if c.Request.URL.Path == "/uploads/music" || strings.HasPrefix(c.Request.URL.Path, "/uploads/music/") {
 			c.AbortWithStatus(404)
 			return
@@ -64,6 +74,11 @@ func main() {
 		api.GET("/health/full", handler.FullHealth)
 
 		auth := api.Group("/auth")
+		auth.Use(func(c *gin.Context) {
+			c.Header("Cache-Control", "no-store")
+			c.Header("Pragma", "no-cache")
+			c.Next()
+		})
 		auth.POST("/login", handler.Login)
 		api.GET("/public/article-sites/:id/:siteKey/:version/:expires/:sign/*filepath", handler.ServeArticleSiteFile)
 
@@ -72,11 +87,13 @@ func main() {
 		{
 			publicCache := middleware.CacheGET("public")
 			public.GET("/profile", publicCache, handler.GetProfile)
+			public.GET("/home", publicCache, handler.GetHome)
 			public.GET("/stats", publicCache, handler.GetStats)
 			public.GET("/articles", publicCache, handler.GetArticles)
 			public.GET("/articles/:id", handler.GetProtectedArticle)
 			public.POST("/articles/:id/unlock", middleware.RateLimit("article-unlock", 10, time.Minute), handler.UnlockArticle)
 			public.GET("/tags", publicCache, handler.GetTags)
+			public.GET("/categories", publicCache, handler.GetCategories)
 			public.GET("/projects", publicCache, handler.GetProjects)
 			public.GET("/projects/featured", publicCache, handler.GetFeaturedProjects)
 			public.GET("/skills", publicCache, handler.GetSkills)
@@ -86,6 +103,7 @@ func main() {
 			public.GET("/live2d-model", publicCache, handler.GetLive2DModel)
 			public.GET("/music", middleware.RateLimit("music", config.AppConfig.MusicRateLimit, time.Minute), publicCache, handler.GetMusics)
 			public.GET("/music/:id/stream", middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusic)
+			public.GET("/music/:id/lyrics", middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusicLyrics)
 			public.GET("/search", handler.PublicSearch)
 		}
 
@@ -165,8 +183,47 @@ func main() {
 	}
 	addr := host + ":" + port
 	log.Printf("starting server on %s", addr)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("server failed to start: %v", err)
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       10 * time.Minute,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
+	}
+	serverErrors := make(chan error, 1)
+	go func() {
+		serverErrors <- server.ListenAndServe()
+	}()
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+	var unexpectedServerError error
+	select {
+	case sig := <-stop:
+		log.Printf("received %s, shutting down", sig)
+	case err := <-serverErrors:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("server stopped unexpectedly: %v", err)
+			unexpectedServerError = err
+		}
+	}
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown failed: %v", err)
+	}
+	repository.FlushPendingArticleViews()
+	repository.FlushPendingSecurityAccess()
+	if err := cache.Close(); err != nil {
+		log.Printf("redis close failed: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		log.Printf("database close failed: %v", err)
+	}
+	if unexpectedServerError != nil {
+		log.Fatalf("server failed: %v", unexpectedServerError)
 	}
 }
 

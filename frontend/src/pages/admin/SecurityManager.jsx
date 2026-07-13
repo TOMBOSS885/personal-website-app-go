@@ -6,7 +6,7 @@ const PAGE_SIZES = [20, 30, 50, 100]
 
 function authHeaders() {
   return {
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Authorization': `Bearer ${sessionStorage.getItem('token')}`,
     'Content-Type': 'application/json',
   }
 }

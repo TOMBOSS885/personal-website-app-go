@@ -15,10 +15,10 @@ export default function ProfileManager() {
   const [form, setForm] = useState({})
   const [avatarFile, setAvatarFile] = useState(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   useEffect(() => {
-    const tokenValue = localStorage.getItem('token')
+    const tokenValue = sessionStorage.getItem('token')
     fetch(`${API_BASE}/api/admin/profile`, {
       headers: { 'Authorization': `Bearer ${tokenValue}` }
     })

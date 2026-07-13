@@ -37,75 +37,27 @@ export default function HomePage() {
     }
 
     async function loadHomeData() {
-      const [articlesResult, projectsResult, skillsResult, featureCardsResult, statsResult] = await Promise.allSettled([
-        readJson('/api/public/articles?page=0&size=3'),
-        readJson('/api/public/projects/featured'),
-        readJson('/api/public/skills'),
-        readJson('/api/public/feature-cards'),
-        readJson('/api/public/stats'),
-      ])
+      const result = await readJson(`/api/public/home?lang=${language}`)
 
       if (cancelled) return
-
-      if (articlesResult.status === 'fulfilled') {
-        setArticles(articlesResult.value.content || [])
-      } else {
-        import('../api/mockApi').then(module => {
-          if (!cancelled) setArticles(module.default.getArticles().slice(0, 3))
-        })
-      }
-
-      if (projectsResult.status === 'fulfilled') {
-        setProjects(Array.isArray(projectsResult.value) ? projectsResult.value : [])
-      } else {
-        import('../api/mockApi').then(module => {
-          if (!cancelled) setProjects(module.default.getProjects().filter(p => p.featured))
-        })
-      }
-
-      if (skillsResult.status === 'fulfilled') {
-        setSkills(Array.isArray(skillsResult.value) ? skillsResult.value : [])
-      } else {
-        import('../api/mockApi').then(module => {
-          if (!cancelled) setSkills(module.default.getSkills())
-        })
-      }
-
-      setFeatureCards(
-        featureCardsResult.status === 'fulfilled' && Array.isArray(featureCardsResult.value)
-          ? featureCardsResult.value
-          : []
-      )
-
-      if (statsResult.status === 'fulfilled') {
-        setStats(statsResult.value)
-      }
+	  setArticles(Array.isArray(result.articles) ? result.articles : [])
+	  setProjects(Array.isArray(result.projects) ? result.projects : [])
+	  setSkills(Array.isArray(result.skills) ? result.skills : [])
+	  setFeatureCards(Array.isArray(result.featureCards) ? result.featureCards : [])
+	  setStats(result.stats || null)
+	  setProfile(result.profile || null)
     }
 
-    void loadHomeData()
-
-    return () => {
-      cancelled = true
-      controller.abort()
-    }
-  }, [])
-
-  // 语言切换时重新获取 profile
-  useEffect(() => {
-    const controller = new AbortController()
-    let cancelled = false
-
-    fetch(`/api/public/profile?lang=${language}`, { signal: controller.signal })
-      .then(res => res.json())
-      .then(data => {
-        if (!cancelled) setProfile(data)
-      })
-      .catch((err) => {
-        if (err.name === 'AbortError') return
-        import('../api/mockApi').then(module => {
-          if (!cancelled) setProfile(module.default.getProfile(language))
-        })
-      })
+	loadHomeData().catch((err) => {
+	  if (err.name === 'AbortError') return
+	  import('../api/mockApi').then(module => {
+		if (cancelled) return
+		setArticles(module.default.getArticles().slice(0, 3))
+		setProjects(module.default.getProjects().filter(p => p.featured))
+		setSkills(module.default.getSkills())
+		setProfile(module.default.getProfile(language))
+	  })
+	})
 
     return () => {
       cancelled = true
@@ -135,10 +87,10 @@ export default function HomePage() {
 
   // 统计数据：优先使用 API 数据
   const displayStats = [
-    { icon: Coffee, value: stats?.coffeeCount || 1000, label: t('home.stats.coffee'), color: 'from-amber-500 to-orange-500' },
-    { icon: Code, value: stats?.projectCount || 50, label: t('home.stats.projects'), color: 'from-indigo-500 to-purple-500' },
-    { icon: PenTool, value: stats?.articleCount || 100, label: t('home.stats.articles'), color: 'from-pink-500 to-rose-500' },
-    { icon: Star, value: stats?.starsCount || 1000, label: t('home.stats.stars'), color: 'from-yellow-500 to-amber-500' }
+    { icon: Coffee, value: stats?.coffeeCount ?? 1000, label: t('home.stats.coffee'), color: 'from-amber-500 to-orange-500' },
+    { icon: Code, value: stats?.projectCount ?? 50, label: t('home.stats.projects'), color: 'from-indigo-500 to-purple-500' },
+    { icon: PenTool, value: stats?.articleCount ?? 100, label: t('home.stats.articles'), color: 'from-pink-500 to-rose-500' },
+    { icon: Star, value: stats?.starsCount ?? 1000, label: t('home.stats.stars'), color: 'from-yellow-500 to-amber-500' }
   ]
 
   const featureIconMap = {

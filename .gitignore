@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 frontend/node_modules/
+.cache/
+**/.cache/
 
 # Build output
 frontend/dist/
@@ -33,3 +35,4 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+uploads/.runtime-jwt-secret

@@ -48,7 +48,7 @@ export default function MusicManager() {
   const [visibilitySavingId, setVisibilitySavingId] = useState(null)
   const [form, setForm] = useState({ title: '', artist: '', displayOrder: 0, isPublic: true, files: [] })
   const lyricsInputRef = useRef(null)
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   useEffect(() => { fetchSongs() }, [page, size])
 
@@ -58,7 +58,7 @@ export default function MusicManager() {
   const fileCount = form.files.length
   const totalPages = Math.max(1, Math.ceil(total / size))
 
-  const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('token')}` })
+  const authHeaders = () => ({ Authorization: `Bearer ${sessionStorage.getItem('token')}` })
 
   const fetchSongs = async ({ showLoading = true } = {}) => {
     if (showLoading) setLoading(true)

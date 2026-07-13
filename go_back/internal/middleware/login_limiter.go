@@ -3,15 +3,29 @@ package middleware
 import (
 	"context"
 	"personal-website-go/internal/cache"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 const (
-	loginLimitWindow   = 10 * time.Minute
-	loginLimitMaxFails = 5
+	loginLimitWindow      = 10 * time.Minute
+	loginLimitMaxFails    = 5
+	maxLocalLoginAttempts = 20000
 )
+
+var loginFailureScript = redis.NewScript(`
+for i, key in ipairs(KEYS) do
+  local count = redis.call('INCR', key)
+  if count == 1 then
+    redis.call('PEXPIRE', key, ARGV[1])
+  end
+end
+return 1
+`)
 
 type loginAttempt struct {
 	Failures int
@@ -29,76 +43,129 @@ func AllowLoginAttempt(ip, username string) bool {
 	if !currentRateLimitSettings().Enabled {
 		return true
 	}
+	keys := loginAttemptKeys(ip, username)
 	if cache.Ready() {
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
-		count, err := cache.Client.Get(ctx, redisLoginAttemptKey(ip, username)).Int()
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		values, err := cache.Client.MGet(ctx, redisLoginAttemptKey(keys[0]), redisLoginAttemptKey(keys[1]), redisLoginAttemptKey(keys[2])).Result()
+		cancel()
 		if err == nil {
-			return count < loginLimitMaxFailures()
+			cache.MarkSuccess()
+			for index, value := range values {
+				count, _ := strconv.Atoi(toString(value))
+				if count >= loginLimitForKey(index) {
+					return false
+				}
+			}
+			return true
 		}
+		cache.MarkFailure(err)
 	}
 
-	key := loginAttemptKey(ip, username)
 	now := time.Now()
-
 	loginAttempts.Lock()
 	defer loginAttempts.Unlock()
-
-	entry, exists := loginAttempts.entries[key]
-	if !exists || now.After(entry.ResetAt) {
-		delete(loginAttempts.entries, key)
-		return true
+	for index, key := range keys {
+		entry, exists := loginAttempts.entries[key]
+		if !exists || now.After(entry.ResetAt) {
+			delete(loginAttempts.entries, key)
+			continue
+		}
+		if entry.Failures >= loginLimitForKey(index) {
+			return false
+		}
 	}
-	return entry.Failures < loginLimitMaxFailures()
+	return true
 }
 
 func RecordLoginFailure(ip, username string) {
+	keys := loginAttemptKeys(ip, username)
 	if cache.Ready() {
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
-		key := redisLoginAttemptKey(ip, username)
-		count, err := cache.Client.Incr(ctx, key).Result()
-		if err == nil && count == 1 {
-			_ = cache.Client.Expire(ctx, key, loginLimitDuration()).Err()
-		}
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		err := loginFailureScript.Run(ctx, cache.Client,
+			[]string{redisLoginAttemptKey(keys[0]), redisLoginAttemptKey(keys[1]), redisLoginAttemptKey(keys[2])}, loginLimitDuration().Milliseconds()).Err()
+		cancel()
 		if err == nil {
+			cache.MarkSuccess()
 			return
 		}
+		cache.MarkFailure(err)
 	}
 
-	key := loginAttemptKey(ip, username)
 	now := time.Now()
-
 	loginAttempts.Lock()
 	defer loginAttempts.Unlock()
-
-	entry, exists := loginAttempts.entries[key]
-	if !exists || now.After(entry.ResetAt) {
-		entry = loginAttempt{ResetAt: now.Add(loginLimitDuration())}
+	if len(loginAttempts.entries) >= maxLocalLoginAttempts {
+		cleanupExpiredLoginAttemptsLocked(now)
 	}
-	entry.Failures++
-	loginAttempts.entries[key] = entry
+	for _, key := range keys {
+		entry, exists := loginAttempts.entries[key]
+		if !exists || now.After(entry.ResetAt) {
+			entry = loginAttempt{ResetAt: now.Add(loginLimitDuration())}
+		}
+		entry.Failures++
+		loginAttempts.entries[key] = entry
+	}
 }
 
 func RecordLoginSuccess(ip, username string) {
+	keys := loginAttemptKeys(ip, username)
 	if cache.Ready() {
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-		defer cancel()
-		_ = cache.Client.Del(ctx, redisLoginAttemptKey(ip, username)).Err()
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		err := cache.Client.Del(ctx, redisLoginAttemptKey(keys[0]), redisLoginAttemptKey(keys[1]), redisLoginAttemptKey(keys[2])).Err()
+		cancel()
+		if err == nil {
+			cache.MarkSuccess()
+		} else {
+			cache.MarkFailure(err)
+		}
 	}
 
-	key := loginAttemptKey(ip, username)
 	loginAttempts.Lock()
 	defer loginAttempts.Unlock()
-	delete(loginAttempts.entries, key)
+	for _, key := range keys {
+		delete(loginAttempts.entries, key)
+	}
 }
 
-func loginAttemptKey(ip, username string) string {
-	return strings.TrimSpace(ip) + "|" + strings.ToLower(strings.TrimSpace(username))
+func loginAttemptKeys(ip, username string) [3]string {
+	cleanIP := strings.TrimSpace(ip)
+	cleanUsername := strings.ToLower(strings.TrimSpace(username))
+	return [3]string{
+		"ip|" + cleanIP,
+		"pair|" + cleanIP + "|" + cleanUsername,
+		"account|" + cleanUsername,
+	}
 }
 
-func redisLoginAttemptKey(ip, username string) string {
-	return "login:fail:" + loginAttemptKey(ip, username)
+func loginLimitForKey(index int) int {
+	limit := loginLimitMaxFailures()
+	if index == 2 {
+		return limit * 5
+	}
+	return limit
+}
+
+func redisLoginAttemptKey(key string) string {
+	return "login:fail:" + key
+}
+
+func cleanupExpiredLoginAttemptsLocked(now time.Time) {
+	for key, entry := range loginAttempts.entries {
+		if !entry.ResetAt.IsZero() && !now.Before(entry.ResetAt) {
+			delete(loginAttempts.entries, key)
+		}
+	}
+}
+
+func toString(value interface{}) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case []byte:
+		return string(typed)
+	default:
+		return ""
+	}
 }
 
 func loginLimitMaxFailures() int {

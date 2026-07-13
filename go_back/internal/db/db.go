@@ -82,3 +82,14 @@ func configurePool(sqlDB *sql.DB) {
 	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 	sqlDB.SetConnMaxLifetime(time.Duration(lifetimeMinutes) * time.Minute)
 }
+
+func Close() error {
+	if DB == nil {
+		return nil
+	}
+	sqlDB, err := DB.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
+}

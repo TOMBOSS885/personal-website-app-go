@@ -3,7 +3,19 @@ package repository
 import (
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/model"
+	"sync"
+	"time"
 )
+
+type cachedMusic struct {
+	value     model.Music
+	expiresAt time.Time
+}
+
+var musicMetadataCache = struct {
+	sync.RWMutex
+	entries map[uint64]cachedMusic
+}{entries: make(map[uint64]cachedMusic)}
 
 func GetMusics() ([]model.Music, error) {
 	var musics []model.Music
@@ -46,8 +58,18 @@ func GetPublicMusics() ([]model.Music, error) {
 }
 
 func GetMusicByID(id uint64) (*model.Music, error) {
+	musicMetadataCache.RLock()
+	entry, ok := musicMetadataCache.entries[id]
+	musicMetadataCache.RUnlock()
+	if ok && time.Now().Before(entry.expiresAt) {
+		music := entry.value
+		return &music, nil
+	}
 	var music model.Music
 	err := db.DB.First(&music, id).Error
+	if err == nil {
+		cacheMusicMetadata(music)
+	}
 	return &music, err
 }
 
@@ -58,17 +80,53 @@ func GetMusicsByIDs(ids []uint64) ([]model.Music, error) {
 }
 
 func CreateMusic(music *model.Music) error {
-	return db.DB.Create(music).Error
+	if err := db.DB.Create(music).Error; err != nil {
+		return err
+	}
+	cacheMusicMetadata(*music)
+	return nil
 }
 
 func UpdateMusic(music *model.Music) error {
-	return db.DB.Save(music).Error
+	if err := db.DB.Save(music).Error; err != nil {
+		return err
+	}
+	cacheMusicMetadata(*music)
+	return nil
 }
 
 func DeleteMusic(id uint64) error {
-	return db.DB.Delete(&model.Music{}, id).Error
+	err := db.DB.Delete(&model.Music{}, id).Error
+	forgetMusicMetadata(id)
+	return err
 }
 
 func DeleteMusics(ids []uint64) error {
-	return db.DB.Where("id IN ?", ids).Delete(&model.Music{}).Error
+	err := db.DB.Where("id IN ?", ids).Delete(&model.Music{}).Error
+	for _, id := range ids {
+		forgetMusicMetadata(id)
+	}
+	return err
+}
+
+func cacheMusicMetadata(music model.Music) {
+	musicMetadataCache.Lock()
+	if len(musicMetadataCache.entries) >= 1000 {
+		now := time.Now()
+		for id, entry := range musicMetadataCache.entries {
+			if !now.Before(entry.expiresAt) {
+				delete(musicMetadataCache.entries, id)
+			}
+		}
+	}
+	if len(musicMetadataCache.entries) < 1000 {
+		musicMetadataCache.entries[music.ID] = cachedMusic{value: music, expiresAt: time.Now().Add(30 * time.Second)}
+	}
+	musicMetadataCache.Unlock()
+}
+
+func forgetMusicMetadata(id uint64) {
+	musicMetadataCache.Lock()
+	delete(musicMetadataCache.entries, id)
+	musicMetadataCache.Unlock()
 }

@@ -111,7 +111,7 @@ func AdminUploadArticleImage(c *gin.Context) {
 		return
 	}
 	contentType, err := detectUploadedContentType(file)
-	if err != nil || !articleImageTypes[contentType] {
+	if err != nil || !articleImageTypes[contentType] || !imageTypeMatchesExtension(ext, contentType) {
 		response.Error(c, http.StatusBadRequest, "图片类型不被支持。")
 		return
 	}

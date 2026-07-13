@@ -7,9 +7,29 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"mime/multipart"
+	"strings"
 
 	_ "golang.org/x/image/webp"
 )
+
+func imageTypeMatchesExtension(ext, contentType string) bool {
+	ext = strings.ToLower(strings.TrimSpace(ext))
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return contentType == "image/jpeg"
+	case ".png":
+		return contentType == "image/png"
+	case ".gif":
+		return contentType == "image/gif"
+	case ".webp":
+		return contentType == "image/webp"
+	case ".avif":
+		return contentType == "image/avif"
+	default:
+		return false
+	}
+}
 
 const (
 	maxGeneralImageDimension = 8192

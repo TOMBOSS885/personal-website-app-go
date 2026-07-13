@@ -31,7 +31,7 @@ export default function ThemeManager() {
     getActiveTheme,
   } = useTheme()
 
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [loadingBackgrounds, setLoadingBackgrounds] = useState(false)

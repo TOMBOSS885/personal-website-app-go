@@ -1,9 +1,13 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 	"log"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -56,6 +60,14 @@ func InitConfig() {
 		log.Printf("invalid JWT_EXPIRATION, using default 86400000: %v", err)
 		jwtExpireMs = 86400000
 	}
+	if jwtExpireMs < 300000 {
+		log.Printf("JWT_EXPIRATION is below 5 minutes; clamping to 300000ms")
+		jwtExpireMs = 300000
+	}
+	if jwtExpireMs > 604800000 {
+		log.Printf("JWT_EXPIRATION is above 7 days; clamping to 604800000ms")
+		jwtExpireMs = 604800000
+	}
 
 	AppConfig = &Config{
 		ServerPort:               getEnv("SERVER_PORT", "8080"),
@@ -92,18 +104,59 @@ func InitConfig() {
 		DBConnectRetries:         intEnv("DB_CONNECT_RETRIES", 10),
 		DBConnectRetryDelay:      intEnv("DB_CONNECT_RETRY_DELAY_SECONDS", 3),
 	}
+	resolveRuntimeJWTSecret(AppConfig)
 	validateProductionConfig(AppConfig)
+}
+
+const runtimeJWTSecretFile = ".runtime-jwt-secret"
+
+func resolveRuntimeJWTSecret(cfg *Config) {
+	if cfg == nil || cfg.GinMode != "release" || !isUnsafeJWTSecret(cfg.JWTSecret) {
+		return
+	}
+
+	secretPath := filepath.Join(cfg.UploadDir, runtimeJWTSecretFile)
+	if data, err := os.ReadFile(secretPath); err == nil {
+		if secret := strings.TrimSpace(string(data)); !isUnsafeJWTSecret(secret) {
+			cfg.JWTSecret = secret
+			log.Printf("using persisted runtime JWT secret from %s", secretPath)
+			return
+		}
+	}
+
+	if err := os.MkdirAll(cfg.UploadDir, 0750); err != nil {
+		log.Fatalf("create upload directory for runtime JWT secret: %v", err)
+	}
+	random := make([]byte, 48)
+	if _, err := rand.Read(random); err != nil {
+		log.Fatalf("generate runtime JWT secret: %v", err)
+	}
+	secret := base64.RawURLEncoding.EncodeToString(random)
+	if err := writeSecretAtomically(secretPath, []byte(secret)); err != nil {
+		log.Fatalf("persist runtime JWT secret: %v", err)
+	}
+	cfg.JWTSecret = secret
+	log.Printf("generated a persistent runtime JWT secret at %s because JWT_SECRET is unsafe", secretPath)
+}
+
+func writeSecretAtomically(path string, data []byte) error {
+	tempPath := path + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0600); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("rename secret file: %w", err)
+	}
+	return os.Chmod(path, 0600)
 }
 
 func validateProductionConfig(cfg *Config) {
 	if cfg.GinMode != "release" {
 		return
 	}
-	if isShortOrDefaultJWTSecret(cfg.JWTSecret) {
-		log.Fatal("JWT_SECRET must be set to a unique value with at least 32 characters in release mode")
-	}
-	if isPlaceholderJWTSecret(cfg.JWTSecret) {
-		log.Println("warning: JWT_SECRET still looks like a placeholder; replace it with a real random secret before public deployment")
+	if isUnsafeJWTSecret(cfg.JWTSecret) {
+		log.Fatal("failed to resolve a secure JWT secret in release mode")
 	}
 	if isUnsafeAdminPassword(cfg.AdminPassword) && cfg.AdminResetPassword {
 		log.Fatal("refusing to reset the admin password to an unsafe default or placeholder value in release mode")
@@ -126,6 +179,10 @@ func isPlaceholderJWTSecret(secret string) bool {
 	return secret == "replace_with_a_random_secret_at_least_32_chars"
 }
 
+func isUnsafeJWTSecret(secret string) bool {
+	return isShortOrDefaultJWTSecret(secret) || isPlaceholderJWTSecret(secret)
+}
+
 func isUnsafeAdminPassword(password string) bool {
 	password = strings.TrimSpace(password)
 	if password == "" {
@@ -137,6 +194,10 @@ func isUnsafeAdminPassword(password string) bool {
 	default:
 		return false
 	}
+}
+
+func IsUnsafeAdminPassword(password string) bool {
+	return isUnsafeAdminPassword(password)
 }
 
 func buildMySQLDSN() string {

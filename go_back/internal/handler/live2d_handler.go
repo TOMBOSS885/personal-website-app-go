@@ -78,6 +78,12 @@ func AdminUploadLive2DModel(c *gin.Context) {
 
 	directory := uuid.NewString()
 	modelDir := filepath.Join(config.AppConfig.UploadDir, "live2d", directory)
+	persisted := false
+	defer func() {
+		if !persisted {
+			_ = os.RemoveAll(modelDir)
+		}
+	}()
 	var detectedEntry string
 	var totalSize int64
 	for i, file := range files {
@@ -142,6 +148,7 @@ func AdminUploadLive2DModel(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "保存 Live2D 模型失败")
 		return
 	}
+	persisted = true
 	liveModel.ThumbnailPath = findLive2DThumbnail(liveModel)
 	_ = repository.UpdateLive2DModel(&liveModel)
 	response.Success(c, liveModel)

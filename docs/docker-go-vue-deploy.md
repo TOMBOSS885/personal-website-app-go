@@ -65,7 +65,7 @@ docker compose version
 
 ```text
 用户名：admin
-密码：admin123
+密码：使用 `.env` 中配置的 `ADMIN_PASSWORD`
 ```
 
 首次登录后请立即修改密码。
@@ -242,7 +242,7 @@ http://服务器IP:3718/admin/login
 
 ```text
 用户名：admin
-密码：admin123
+密码：使用 `.env` 中配置的 `ADMIN_PASSWORD`
 ```
 
 登录后立即修改密码。
@@ -440,7 +440,7 @@ docker compose logs -f web
 - 默认管理员会在 `ADMIN_USERNAME` 不存在时创建。
 - 如果已有旧用户，使用旧用户登录。
 
-如果数据库里已经有 `admin` 用户，但密码不是 `admin123`，可以临时重置一次：
+如果数据库里已经有 `admin` 用户并且确实需要重置密码，可以临时重置一次：
 
 ```env
 ADMIN_USERNAME=admin

@@ -3,7 +3,7 @@
 # It builds l2d-widget, the React/Vite frontend, and the Go API, then runs
 # Nginx plus the Go API in one small runtime container.
 
-FROM node:20-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 RUN npm config set registry "$NPM_REGISTRY" \
@@ -34,7 +34,7 @@ RUN find /app/frontend/dist -type f \( \
       -name '*.txt' \
     \) -exec sh -c 'gzip -9 -c "$1" > "$1.gz"' sh {} \;
 
-FROM golang:1.25-alpine AS backend-builder
+FROM golang:1.26.5-alpine AS backend-builder
 
 ARG GOPROXY=https://goproxy.cn,direct
 ENV GOPROXY=$GOPROXY
@@ -46,7 +46,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY go_back/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/personal-website-api ./cmd/server
 
-FROM alpine:3.20
+FROM alpine:3.22
 
 LABEL maintainer="Claw"
 LABEL description="Personal Website - Go Backend + Frontend"
@@ -71,7 +71,7 @@ RUN chmod +x /entrypoint.sh \
 EXPOSE 3718 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/api/health >/dev/null || exit 1
+  CMD wget -qO- http://127.0.0.1:3718/api/health >/dev/null || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]

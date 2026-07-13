@@ -26,7 +26,7 @@ export default function AdminLayout() {
   const { colorMode, toggleColorMode } = useTheme()
 
   const handleLogout = () => {
-    localStorage.removeItem('token')
+    sessionStorage.removeItem('token')
     localStorage.removeItem('username')
     navigate('/admin/login')
   }

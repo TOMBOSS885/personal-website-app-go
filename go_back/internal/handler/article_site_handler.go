@@ -194,7 +194,11 @@ func signedArticleSiteURL(article *model.Article) string {
 	if article == nil || normalizeArticleContentType(article.ContentType) != "static" || !validArticleSiteKey(article.StaticSiteKey) {
 		return ""
 	}
-	expires := articleSiteExpiry(time.Now(), articleSiteURLTTL()).Unix()
+	ttl := articleSiteURLTTL()
+	if article.IsLocked && ttl > 10*time.Minute {
+		ttl = 10 * time.Minute
+	}
+	expires := articleSiteExpiry(time.Now(), ttl).Unix()
 	version := article.UpdatedAt.UnixNano()
 	signature := signMediaValue(articleSiteSignaturePayload(article.ID, article.StaticSiteKey, version, expires))
 	return articleSiteBaseURL(article.ID, article.StaticSiteKey, version, expires, signature) + "index.html"
@@ -228,7 +232,10 @@ func articleSiteExpiry(now time.Time, ttl time.Duration) time.Time {
 		bucket = time.Minute
 	}
 	expiresUnix := now.Add(ttl).Unix()
-	expiresUnix -= expiresUnix % int64(bucket/time.Second)
+	bucketSeconds := int64(bucket / time.Second)
+	if remainder := expiresUnix % bucketSeconds; remainder != 0 {
+		expiresUnix += bucketSeconds - remainder
+	}
 	return time.Unix(expiresUnix, 0)
 }
 

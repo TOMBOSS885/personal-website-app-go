@@ -1,6 +1,11 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"runtime"
+	"testing"
+)
 
 func TestShortOrDefaultJWTSecret(t *testing.T) {
 	tests := []struct {
@@ -50,5 +55,27 @@ func TestUnsafeAdminPassword(t *testing.T) {
 				t.Fatalf("isUnsafeAdminPassword(%q) = %v, want %v", tt.password, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestResolveRuntimeJWTSecretPersistsAcrossRestart(t *testing.T) {
+	dir := t.TempDir()
+	first := &Config{GinMode: "release", UploadDir: dir, JWTSecret: "please-change-this-secret-key-at-least-32-chars"}
+	resolveRuntimeJWTSecret(first)
+	if isUnsafeJWTSecret(first.JWTSecret) {
+		t.Fatal("generated JWT secret is unsafe")
+	}
+
+	second := &Config{GinMode: "release", UploadDir: dir, JWTSecret: "replace_with_a_random_secret_at_least_32_chars"}
+	resolveRuntimeJWTSecret(second)
+	if second.JWTSecret != first.JWTSecret {
+		t.Fatal("runtime JWT secret was not reused")
+	}
+	info, err := os.Stat(filepath.Join(dir, runtimeJWTSecretFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
+		t.Fatalf("runtime JWT secret has overly broad permissions: %v", info.Mode().Perm())
 	}
 }

@@ -80,7 +80,7 @@ function normalizeSettings(data) {
 }
 
 export default function UploadSettingsManager() {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

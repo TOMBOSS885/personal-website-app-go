@@ -11,14 +11,14 @@ export default function SkillManager() {
   const [editingSkill, setEditingSkill] = useState(null)
   const [form, setForm] = useState({ name: '', category: '', proficiency: 80, displayOrder: 0 })
 
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   useEffect(() => { fetchSkills() }, [])
 
   const fetchSkills = async () => {
     setLoading(true)
     try {
-      const tokenValue = localStorage.getItem('token')
+      const tokenValue = sessionStorage.getItem('token')
       const headers = {}
       if (tokenValue) {
         headers['Authorization'] = `Bearer ${tokenValue}`

@@ -11,8 +11,8 @@ type Project struct {
 	GithubUrl    string    `gorm:"column:github_url;size:255" json:"githubUrl"`
 	DemoUrl      string    `gorm:"column:demo_url;size:255" json:"demoUrl"`
 	Stars        int       `gorm:"column:stars;default:0" json:"stars"`
-	Featured     bool      `gorm:"column:featured;default:false" json:"featured"`
-	DisplayOrder int       `gorm:"column:display_order;default:0" json:"displayOrder"`
+	Featured     bool      `gorm:"column:featured;default:false;index:idx_projects_featured_order,priority:1" json:"featured"`
+	DisplayOrder int       `gorm:"column:display_order;default:0;index:idx_projects_featured_order,priority:2" json:"displayOrder"`
 	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"createdAt"`
 	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
 }

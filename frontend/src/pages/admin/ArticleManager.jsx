@@ -40,7 +40,7 @@ export default function ArticleManager() {
     accessPassword: ''
   })
 
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   const totalPages = Math.max(1, Math.ceil(total / size))
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export default function ArticleManager() {
   const fetchArticles = async () => {
     setLoading(true)
     try {
-      const tokenValue = localStorage.getItem('token')
+      const tokenValue = sessionStorage.getItem('token')
       const headers = {}
       if (tokenValue) {
         headers['Authorization'] = `Bearer ${tokenValue}`
@@ -99,7 +99,7 @@ export default function ArticleManager() {
   const fetchCoverImages = async () => {
     setLoadingCoverImages(true)
     try {
-      const tokenValue = localStorage.getItem('token')
+      const tokenValue = sessionStorage.getItem('token')
       const headers = tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {}
       const res = await fetch(`${API_BASE}/api/admin/article-images`, { headers })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -123,7 +123,7 @@ export default function ArticleManager() {
 
     setUploadingCover(true)
     try {
-      const tokenValue = localStorage.getItem('token')
+      const tokenValue = sessionStorage.getItem('token')
       const formData = new FormData()
       formData.append('file', file)
 
@@ -154,7 +154,7 @@ export default function ArticleManager() {
   const cleanupCoverImages = async () => {
     setCleaningCoverImages(true)
     try {
-      const tokenValue = localStorage.getItem('token')
+      const tokenValue = sessionStorage.getItem('token')
       const res = await fetch(`${API_BASE}/api/admin/upload-assets/cleanup?kind=article_image`, {
         method: 'POST',
         headers: tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {},

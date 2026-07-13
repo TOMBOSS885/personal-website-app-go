@@ -8,9 +8,11 @@ import (
 	"personal-website-go/internal/config"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 type cachedResponseWriter struct {
@@ -19,6 +21,12 @@ type cachedResponseWriter struct {
 }
 
 const publicCacheSchemaVersion = "v2"
+
+var publicCacheVersion atomic.Uint64
+
+func init() {
+	publicCacheVersion.Store(uint64(time.Now().UnixNano()))
+}
 
 func (w cachedResponseWriter) Write(data []byte) (int, error) {
 	w.body.Write(data)
@@ -38,10 +46,13 @@ func CacheGET(prefix string) gin.HandlerFunc {
 		defer cancel()
 
 		if cached, err := cache.Client.Get(ctx, key).Bytes(); err == nil {
+			cache.MarkSuccess()
 			c.Header("X-Cache", "HIT")
 			c.Data(http.StatusOK, "application/json; charset=utf-8", cached)
 			c.Abort()
 			return
+		} else if err != redis.Nil {
+			cache.MarkFailure(err)
 		}
 
 		c.Header("X-Cache", "MISS")
@@ -61,7 +72,11 @@ func CacheGET(prefix string) gin.HandlerFunc {
 
 		setCtx, setCancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer setCancel()
-		_ = cache.Client.Set(setCtx, key, buffer.Bytes(), ttl).Err()
+		if err := cache.Client.Set(setCtx, key, buffer.Bytes(), ttl).Err(); err != nil {
+			cache.MarkFailure(err)
+		} else {
+			cache.MarkSuccess()
+		}
 	}
 }
 
@@ -82,9 +97,7 @@ func InvalidatePublicCacheAfterMutation() gin.HandlerFunc {
 		if c.Writer.Status() >= http.StatusBadRequest || !isMutation(c.Request.Method) {
 			return
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		cache.DeleteByPrefix(ctx, "cache:public:")
+		publicCacheVersion.Add(1)
 	}
 }
 
@@ -97,7 +110,7 @@ func shouldCacheRequest(c *gin.Context) bool {
 }
 
 func cacheKey(prefix, uri string) string {
-	return "cache:" + strings.Trim(prefix, ":") + ":" + publicCacheSchemaVersion + ":" + uri
+	return "cache:" + strings.Trim(prefix, ":") + ":" + publicCacheSchemaVersion + ":" + strconv.FormatUint(publicCacheVersion.Load(), 10) + ":" + uri
 }
 
 func isMutation(method string) bool {

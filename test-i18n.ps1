@@ -1,4 +1,9 @@
-$loginBody = '{"username":"admin","password":"admin123"}'
+$adminUsername = if ($env:ADMIN_USERNAME) { $env:ADMIN_USERNAME } else { "admin" }
+$adminPassword = $env:ADMIN_PASSWORD
+if ([string]::IsNullOrWhiteSpace($adminPassword)) {
+  throw "Set ADMIN_PASSWORD in the environment before running this test."
+}
+$loginBody = @{ username = $adminUsername; password = $adminPassword } | ConvertTo-Json
 $loginRes = Invoke-RestMethod -Uri "http://localhost:8080/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json"
 $token = $loginRes.token
 

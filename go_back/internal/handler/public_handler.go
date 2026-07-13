@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
 	"strconv"
@@ -58,13 +59,66 @@ func GetStats(c *gin.Context) {
 	})
 }
 
+func GetHome(c *gin.Context) {
+	user, err := repository.GetFirstUser()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取首页资料失败")
+		return
+	}
+	articles, _, articlesErr := repository.GetArticleSummaries(0, 3, "", "", "")
+	projects, projectsErr := repository.GetProjects(true)
+	skills, skillsErr := repository.GetSkills()
+	cards, cardsErr := repository.GetFeatureCards(true)
+	if articlesErr != nil || projectsErr != nil || skillsErr != nil || cardsErr != nil {
+		response.Error(c, http.StatusInternalServerError, "获取首页内容失败")
+		return
+	}
+	projectCount, _ := repository.GetProjectCount()
+	articleCount, _ := repository.GetArticleCount()
+	starsCount := int64(user.StarsCount)
+	if starsCount == 0 {
+		starsCount, _ = repository.GetTotalStars()
+	}
+	isEn := strings.EqualFold(c.DefaultQuery("lang", "zh"), "en")
+	response.Success(c, gin.H{
+		"profile": gin.H{
+			"avatar": user.Avatar, "nickname": user.Nickname, "location": user.Location,
+			"website": user.Website, "github": user.Github, "twitter": user.Twitter,
+			"linkedin": user.Linkedin, "emailPublic": user.EmailPublic,
+			"coffeeCount": user.CoffeeCount, "starsCount": user.StarsCount,
+			"bio": localized(isEn, user.Bio, user.BioEn), "tags": localized(isEn, user.Tags, user.TagsEn),
+			"welcomeText":    localized(isEn, user.WelcomeText, user.WelcomeTextEn),
+			"ctaTitle":       localized(isEn, user.CtaTitle, user.CtaTitleEn),
+			"ctaDescription": localized(isEn, user.CtaDesc, user.CtaDescEn),
+		},
+		"stats": gin.H{
+			"coffeeCount": user.CoffeeCount, "projectCount": projectCount,
+			"articleCount": articleCount, "starsCount": starsCount,
+		},
+		"articles":     sanitizePublicArticleSummaries(articles),
+		"projects":     projects,
+		"skills":       skills,
+		"featureCards": cards,
+	})
+}
+
 func GetArticles(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "10"))
 	page, size = normalizePagination(page, size, 20)
 	tag := c.Query("tag")
+	category := strings.TrimSpace(c.Query("category"))
+	keyword := strings.TrimSpace(c.Query("q"))
+	if len(tag) > 100 || len(category) > 100 || len(keyword) > 240 {
+		response.Error(c, http.StatusBadRequest, "筛选条件过长")
+		return
+	}
+	if keyword != "" && len([]rune(keyword)) < 2 {
+		response.Page(c, []model.Article{}, 0, size, page)
+		return
+	}
 
-	articles, total, err := repository.GetArticleSummaries(page, size, tag)
+	articles, total, err := repository.GetArticleSummaries(page, size, strings.TrimSpace(tag), category, keyword)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "获取文章失败")
 		return
@@ -119,6 +173,15 @@ func GetTags(c *gin.Context) {
 		}
 	}
 	response.Success(c, tags)
+}
+
+func GetCategories(c *gin.Context) {
+	categories, err := repository.GetAllArticleCategories()
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "获取分类失败")
+		return
+	}
+	response.Success(c, categories)
 }
 
 func GetProjects(c *gin.Context) {

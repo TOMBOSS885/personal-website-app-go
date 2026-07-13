@@ -9,11 +9,22 @@ import { fetchWithTimeout } from './utils/network'
 
 const API_BASE = ''
 
+try {
+  const legacyToken = localStorage.getItem('token')
+  if (legacyToken && !sessionStorage.getItem('token')) {
+    sessionStorage.setItem('token', legacyToken)
+  }
+  localStorage.removeItem('token')
+} catch {
+  // Storage can be unavailable in hardened browser contexts.
+}
+
 const HomePage = lazy(() => import('./pages/HomePage'))
 const BlogPage = lazy(() => import('./pages/BlogPage'))
 const ArticleDetailPage = lazy(() => import('./pages/ArticleDetailPage'))
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
 const SearchPage = lazy(() => import('./pages/SearchPage'))
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
 const ArticleManager = lazy(() => import('./pages/admin/ArticleManager'))
@@ -78,7 +89,7 @@ function setupAdminApiInterceptor() {
       && res.status === 401
       && !window.location.pathname.includes('/admin/login')
     ) {
-      localStorage.removeItem('token')
+      sessionStorage.removeItem('token')
       window.location.href = '/admin/login'
       return res
     }
@@ -167,6 +178,7 @@ function App() {
                         <Route path="/blog/:id" element={<ArticleDetailPage />} />
                         <Route path="/projects" element={<ProjectsPage />} />
                         <Route path="/search" element={<SearchPage />} />
+                        <Route path="*" element={<NotFoundPage />} />
                       </Routes>
                     </main>
                     <DeferredMount timeout={900}>
@@ -201,7 +213,7 @@ function App() {
 }
 
 function PrivateRoute({ children }) {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   return token ? children : <Navigate to="/admin/login" replace />
 }
 

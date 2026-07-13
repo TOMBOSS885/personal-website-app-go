@@ -6,7 +6,7 @@ const API_BASE = ''
 
 export default function AccountSettings() {
   const navigate = useNavigate()
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   const [saving, setSaving] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [message, setMessage] = useState('')
@@ -56,7 +56,7 @@ export default function AccountSettings() {
 
       setMessage(data.message || '密码修改成功，请重新登录')
       setForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
-      localStorage.removeItem('token')
+      sessionStorage.removeItem('token')
       localStorage.removeItem('username')
       window.setTimeout(() => navigate('/admin/login'), 1200)
     } catch (err) {

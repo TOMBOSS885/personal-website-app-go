@@ -234,7 +234,7 @@ Spring Data Page 当前返回结构较复杂。Go 后端建议保留前端已使
 ```json
 {
   "username": "admin",
-  "password": "admin123"
+  "password": "YOUR_STRONG_ADMIN_PASSWORD"
 }
 ```
 
@@ -1143,7 +1143,7 @@ Go 后端启动时可以执行轻量初始化：
 | 变量 | 默认值 |
 | --- | --- |
 | `ADMIN_USERNAME` | `admin` |
-| `ADMIN_PASSWORD` | `admin123` |
+| `ADMIN_PASSWORD` | 无生产默认值，必须使用强密码 |
 | `ADMIN_EMAIL` | `admin@example.com` |
 
 生产环境首次启动后必须立即修改密码。

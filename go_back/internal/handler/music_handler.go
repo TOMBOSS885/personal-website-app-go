@@ -133,13 +133,50 @@ func StreamMusic(c *gin.Context) {
 		return
 	}
 
-	recordMusicStreamRequest(c.ClientIP(), music.ID, music.Title)
+	if rangeHeader := c.GetHeader("Range"); rangeHeader == "" || strings.HasPrefix(rangeHeader, "bytes=0-") {
+		recordMusicStreamRequest(c.ClientIP(), music.ID, music.Title)
+	}
 	if music.ContentType != "" {
 		c.Header("Content-Type", music.ContentType)
 	}
 	c.Header("Accept-Ranges", "bytes")
 	c.Header("Cache-Control", "private, max-age="+strconv.Itoa(mediaURLCacheSeconds()))
 	http.ServeContent(c.Writer, c.Request, music.FileName, stat.ModTime(), file)
+}
+
+func StreamMusicLyrics(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		response.Error(c, http.StatusBadRequest, "invalid music id")
+		return
+	}
+	music, err := repository.GetMusicByID(id)
+	if err != nil || music == nil || music.LyricsURL == "" {
+		response.Error(c, http.StatusNotFound, "lyrics not found")
+		return
+	}
+	scope := c.DefaultQuery("scope", "public")
+	expires, err := strconv.ParseInt(c.Query("expires"), 10, 64)
+	if err != nil || time.Now().Unix() > expires || (scope != "public" && scope != "admin") {
+		response.Error(c, http.StatusForbidden, "lyrics link expired")
+		return
+	}
+	if scope == "public" && !music.IsPublic {
+		response.Error(c, http.StatusNotFound, "lyrics not found")
+		return
+	}
+	if !validLyricsSignature(music, scope, expires, c.Query("sign")) {
+		response.Error(c, http.StatusForbidden, "invalid lyrics link")
+		return
+	}
+	path, err := uploadedLyricsPath(music.LyricsURL)
+	if err != nil {
+		response.Error(c, http.StatusNotFound, "lyrics not found")
+		return
+	}
+	c.Header("Content-Type", "text/plain; charset=utf-8")
+	c.Header("Cache-Control", "private, max-age="+strconv.Itoa(mediaURLCacheSeconds()))
+	http.ServeFile(c.Writer, c.Request, path)
 }
 
 func AdminUploadMusic(c *gin.Context) {
@@ -418,11 +455,16 @@ func signMusicList(musics []model.Music, scope string) []model.Music {
 }
 
 func signMusicItem(music model.Music, scope string) model.Music {
-	if music.ID == 0 || music.FileURL == "" {
+	if music.ID == 0 {
 		return music
 	}
 	expires := time.Now().Add(mediaURLTTL()).Unix()
-	music.FileURL = signedMusicURL(&music, scope, expires)
+	if music.FileURL != "" {
+		music.FileURL = signedMusicURL(&music, scope, expires)
+	}
+	if music.LyricsURL != "" {
+		music.LyricsURL = signedLyricsURL(&music, scope, expires)
+	}
 	return music
 }
 
@@ -437,6 +479,23 @@ func validMusicSignature(music *model.Music, scope string, expires int64, signat
 	}
 	expected := signMediaValue(musicSignaturePayload(music.ID, scope, music.FileURL, expires))
 	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
+func signedLyricsURL(music *model.Music, scope string, expires int64) string {
+	sign := signMediaValue(lyricsSignaturePayload(music.ID, scope, music.LyricsURL, expires))
+	return fmt.Sprintf("/api/public/music/%d/lyrics?scope=%s&expires=%d&sign=%s", music.ID, scope, expires, sign)
+}
+
+func validLyricsSignature(music *model.Music, scope string, expires int64, signature string) bool {
+	if strings.TrimSpace(signature) == "" {
+		return false
+	}
+	expected := signMediaValue(lyricsSignaturePayload(music.ID, scope, music.LyricsURL, expires))
+	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
+func lyricsSignaturePayload(id uint64, scope, lyricsURL string, expires int64) string {
+	return fmt.Sprintf("lyrics|%d|%s|%s|%d", id, scope, lyricsURL, expires)
 }
 
 func musicSignaturePayload(id uint64, scope, fileURL string, expires int64) string {
@@ -492,6 +551,23 @@ func uploadedMusicPath(fileURL string) (string, error) {
 	}
 	if !strings.HasPrefix(targetAbs, uploadAbs+string(os.PathSeparator)) {
 		return "", errors.New("invalid music path")
+	}
+	return targetAbs, nil
+}
+
+func uploadedLyricsPath(fileURL string) (string, error) {
+	if !strings.HasPrefix(fileURL, "/uploads/music-lyrics/") {
+		return "", errors.New("invalid lyrics path")
+	}
+	rel := strings.TrimPrefix(fileURL, "/uploads/")
+	target := filepath.Join(config.AppConfig.UploadDir, filepath.FromSlash(rel))
+	uploadAbs, err := filepath.Abs(config.AppConfig.UploadDir)
+	if err != nil {
+		return "", err
+	}
+	targetAbs, err := filepath.Abs(target)
+	if err != nil || !strings.HasPrefix(targetAbs, uploadAbs+string(os.PathSeparator)) {
+		return "", errors.New("invalid lyrics path")
 	}
 	return targetAbs, nil
 }

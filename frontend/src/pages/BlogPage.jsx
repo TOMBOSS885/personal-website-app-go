@@ -13,6 +13,7 @@ export default function BlogPage() {
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
   const [selectedTag, setSelectedTag] = useState(searchParams.get('tag') || '')
   const [viewMode, setViewMode] = useState('grid')
@@ -20,6 +21,14 @@ export default function BlogPage() {
   const [allTags, setAllTags] = useState([])
   const { language } = useLanguage()
   const { t } = useTranslation()
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim())
+      setPage(0)
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [searchTerm])
 
   // 从 URL 参数同步 selectedTag
   useEffect(() => {
@@ -35,23 +44,28 @@ export default function BlogPage() {
     if (selectedTag) {
       url += `&tag=${encodeURIComponent(selectedTag)}`
     }
+	if (selectedCategory && selectedCategory !== t('common.all')) {
+	  url += `&category=${encodeURIComponent(selectedCategory)}`
+	}
+	if (debouncedSearch) {
+	  url += `&q=${encodeURIComponent(debouncedSearch)}`
+	}
 
-    fetch(url)
-      .then(res => res.json())
+	const controller = new AbortController()
+    fetch(url, { signal: controller.signal })
+	  .then(res => {
+		if (!res.ok) throw new Error('Failed to load articles')
+		return res.json()
+	  })
       .then(data => {
         const articleList = data.content || []
         setArticles(articleList)
         setTotalPages(data.totalPages || 0)
 
         // 提取分类
-        const cats = new Set(articleList.map(a => a.category).filter(Boolean))
-        const allCats = [t('common.all'), ...Array.from(cats)]
-        setCategories(allCats)
-        if (!selectedCategory || !cats.has(selectedCategory)) {
-          setSelectedCategory(t('common.all'))
-        }
       })
-      .catch(() => {
+	  .catch((error) => {
+		if (error.name === 'AbortError') return
         import('../api/mockApi').then(module => {
           const api = module.default
           const allArticles = api.getArticles()
@@ -69,17 +83,19 @@ export default function BlogPage() {
           setSelectedCategory(t('common.all'))
         })
       })
+	return () => controller.abort()
+  }, [page, language, selectedTag, selectedCategory, debouncedSearch])
 
-    // 加载所有标签（用于标签云）
-    fetch('/api/public/tags')
-      .then(res => res.json())
-      .then(tags => {
-        if (Array.isArray(tags)) {
-          setAllTags(tags)
-        }
-      })
-      .catch(() => {})
-  }, [page, language, selectedTag])
+  useEffect(() => {
+	setSelectedCategory(t('common.all'))
+	Promise.all([
+	  fetch('/api/public/categories').then(res => res.json()),
+	  fetch('/api/public/tags').then(res => res.json()),
+	]).then(([categoryList, tags]) => {
+	  setCategories([t('common.all'), ...(Array.isArray(categoryList) ? categoryList : [])])
+	  setAllTags(Array.isArray(tags) ? tags : [])
+	}).catch(() => setCategories([t('common.all')]))
+  }, [language])
 
   // 搜索和分类过滤（前端过滤，不影响标签筛选因为后端已处理）
   useEffect(() => {
@@ -177,7 +193,7 @@ export default function BlogPage() {
                     key={category}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
-                    onClick={() => setSelectedCategory(category)}
+                    onClick={() => { setSelectedCategory(category); setPage(0) }}
                     className={`px-4 py-2 rounded-lg font-medium transition-all ${
                       selectedCategory === category
                         ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'

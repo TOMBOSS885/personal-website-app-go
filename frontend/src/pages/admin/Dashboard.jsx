@@ -6,7 +6,7 @@ const API_BASE = ''
 export default function Dashboard() {
   const [stats, setStats] = useState({ articles: 0, projects: 0, skills: 0, views: 0 })
   const [loading, setLoading] = useState(true)
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   useEffect(() => {
     fetch(`${API_BASE}/api/admin/dashboard-stats`, {

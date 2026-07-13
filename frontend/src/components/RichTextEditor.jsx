@@ -125,7 +125,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const fetchImages = useCallback(async () => {
     setLoadingImages(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const res = await fetch(`${API_BASE}/api/admin/article-images`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       })
@@ -151,7 +151,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
 
     setUploading(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const formData = new FormData()
       formData.append('file', file)
 
@@ -182,7 +182,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const cleanupImages = async () => {
     setCleaningImages(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const res = await fetch(`${API_BASE}/api/admin/upload-assets/cleanup?kind=article_image`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } : {}

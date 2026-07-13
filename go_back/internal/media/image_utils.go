@@ -23,10 +23,19 @@ type ImageResult struct {
 	Size int64
 }
 
+var imageProcessingSlots = make(chan struct{}, 2)
+
+func acquireImageProcessingSlot() func() {
+	imageProcessingSlots <- struct{}{}
+	return func() { <-imageProcessingSlots }
+}
+
 func GenerateOptimizedVariants(srcPath, destDir, baseName string, variants []ImageVariant) ([]ImageResult, error) {
 	if len(variants) == 0 {
 		return nil, nil
 	}
+	release := acquireImageProcessingSlot()
+	defer release()
 
 	img, err := openImage(srcPath)
 	if err != nil {
@@ -55,6 +64,8 @@ func GenerateOptimizedVariants(srcPath, destDir, baseName string, variants []Ima
 }
 
 func GenerateSquarePNG(srcPath, destPath string, size int) (ImageResult, error) {
+	release := acquireImageProcessingSlot()
+	defer release()
 	if size <= 0 {
 		size = 512
 	}

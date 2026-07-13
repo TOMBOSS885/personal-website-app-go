@@ -19,14 +19,14 @@ export default function ProjectManager() {
     displayOrder: 0 
   })
 
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   useEffect(() => { fetchProjects() }, [])
 
   const fetchProjects = async () => {
     setLoading(true)
     try {
-      const tokenValue = localStorage.getItem('token')
+      const tokenValue = sessionStorage.getItem('token')
       const headers = {}
       if (tokenValue) {
         headers['Authorization'] = `Bearer ${tokenValue}`

@@ -8,7 +8,17 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
+
+var rateLimitScript = redis.NewScript(`
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('PTTL', KEYS[1])
+return {count, ttl}
+`)
 
 type localRateEntry struct {
 	Count   int
@@ -65,19 +75,22 @@ type rateDecision struct {
 }
 
 func allowRequestRedis(name, ip string, limit int, window time.Duration) (rateDecision, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
 	defer cancel()
 
 	key := "rl:" + name + ":" + ip
-	count, err := cache.Client.Incr(ctx, key).Result()
+	result, err := rateLimitScript.Run(ctx, cache.Client, []string{key}, window.Milliseconds()).Int64Slice()
 	if err != nil {
+		cache.MarkFailure(err)
 		return rateDecision{allowed: true, count: 1, remaining: window}, err
 	}
-	if count == 1 {
-		_ = cache.Client.Expire(ctx, key, window).Err()
+	cache.MarkSuccess()
+	if len(result) != 2 {
+		return rateDecision{}, redis.ErrClosed
 	}
-	ttl, err := cache.Client.TTL(ctx, key).Result()
-	if err != nil || ttl <= 0 {
+	count := result[0]
+	ttl := time.Duration(result[1]) * time.Millisecond
+	if ttl <= 0 {
 		ttl = window
 	}
 	return rateDecision{allowed: count <= int64(limit), count: count, remaining: ttl}, nil

@@ -4,13 +4,19 @@ import (
 	"context"
 	"log"
 	"personal-website-go/internal/config"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
 var Client *redis.Client
+
+var health = struct {
+	sync.RWMutex
+	failures int
+	retryAt  time.Time
+}{}
 
 func InitRedis() {
 	if config.AppConfig == nil || !config.AppConfig.RedisEnabled {
@@ -27,41 +33,49 @@ func InitRedis() {
 	defer cancel()
 
 	if err := Client.Ping(ctx).Err(); err != nil {
-		log.Printf("redis disabled: cannot connect to %s: %v", config.AppConfig.RedisAddr, err)
-		_ = Client.Close()
-		Client = nil
+		MarkFailure(err)
+		log.Printf("redis unavailable at startup; local fallbacks are active and reconnects will be retried: %v", err)
 		return
 	}
 
+	MarkSuccess()
 	log.Printf("redis connected: %s db=%d", config.AppConfig.RedisAddr, config.AppConfig.RedisDB)
 }
 
 func Ready() bool {
-	return Client != nil
+	if Client == nil {
+		return false
+	}
+	health.RLock()
+	retryAt := health.retryAt
+	health.RUnlock()
+	return retryAt.IsZero() || !time.Now().Before(retryAt)
 }
 
-func DeleteByPrefix(ctx context.Context, prefix string) {
-	if !Ready() || strings.TrimSpace(prefix) == "" {
+func MarkSuccess() {
+	health.Lock()
+	health.failures = 0
+	health.retryAt = time.Time{}
+	health.Unlock()
+}
+
+func MarkFailure(err error) {
+	if err == nil {
 		return
 	}
-
-	var cursor uint64
-	pattern := prefix + "*"
-	for {
-		keys, next, err := Client.Scan(ctx, cursor, pattern, 100).Result()
-		if err != nil {
-			log.Printf("redis cache invalidation failed for %q: %v", prefix, err)
-			return
-		}
-		if len(keys) > 0 {
-			if err := Client.Del(ctx, keys...).Err(); err != nil {
-				log.Printf("redis cache delete failed for %q: %v", prefix, err)
-				return
-			}
-		}
-		cursor = next
-		if cursor == 0 {
-			return
-		}
+	health.Lock()
+	health.failures++
+	delay := time.Second << min(health.failures-1, 5)
+	if delay > 30*time.Second {
+		delay = 30 * time.Second
 	}
+	health.retryAt = time.Now().Add(delay)
+	health.Unlock()
+}
+
+func Close() error {
+	if Client == nil {
+		return nil
+	}
+	return Client.Close()
 }

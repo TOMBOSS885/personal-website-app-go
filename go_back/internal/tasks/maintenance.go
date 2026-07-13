@@ -13,6 +13,7 @@ import (
 
 func StartMaintenanceTasks() {
 	go runArticleViewFlushLoop()
+	go runSecurityAccessFlushLoop()
 	go runLocalRateLimitCleanupLoop()
 	go runDailyCleanupLoop()
 }
@@ -23,7 +24,16 @@ func RunStartupMaintenance() {
 	repository.CleanupOperationLogs()
 	repository.CleanupMissingUploadAssets("")
 	repository.FlushPendingArticleViews()
+	repository.FlushPendingSecurityAccess()
 	cleanupOrphanedArticleSites(time.Now())
+}
+
+func runSecurityAccessFlushLoop() {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		repository.FlushPendingSecurityAccess()
+	}
 }
 
 func runArticleViewFlushLoop() {

@@ -30,7 +30,7 @@ const defaultSettings = {
 }
 
 export default function Live2DManager() {
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
   const directoryInputRef = useRef(null)
   const [settings, setSettings] = useState(defaultSettings)
   const [models, setModels] = useState([])

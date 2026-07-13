@@ -19,16 +19,15 @@ If you use a dedicated user, replace `MYSQL_USERNAME` and `MYSQL_PASSWORD` in `.
 
 ## 2. Import initial data
 
-Use phpMyAdmin or Baota's database import tool to import `init.sql` into
+Optionally use phpMyAdmin or Baota's database import tool to import `init.sql` into
 `personal_website`.
 
-The default admin account after importing `init.sql` is:
+The application creates the initial admin from the `ADMIN_USERNAME`,
+`ADMIN_PASSWORD`, and `ADMIN_EMAIL` values in `.env`. There is no built-in
+production password.
 
-- Username: `admin`
-- Password: `admin123`
-
-Warning: `init.sql` truncates existing tables. Use it only for first deployment
-or intentional reset. Change this password immediately after first login.
+`init.sql` is non-destructive and only ensures the database exists. Application
+tables are created or upgraded automatically when the container starts.
 
 ## 3. Create `.env`
 
@@ -122,7 +121,7 @@ Test the login API:
 ```bash
 curl -X POST http://127.0.0.1:3718/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"admin123"}'
+  -d '{"username":"admin","password":"YOUR_ADMIN_PASSWORD"}'
 ```
 
 Success returns a JSON object containing `token`.

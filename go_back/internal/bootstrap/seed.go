@@ -43,6 +43,10 @@ func SeedDefaultData() {
 		log.Printf("failed to query admin user %q: %v", config.AppConfig.AdminUsername, err)
 		return
 	}
+	if config.AppConfig.GinMode == "release" && config.IsUnsafeAdminPassword(config.AppConfig.AdminPassword) {
+		log.Printf("refusing to create a new admin user %q with an unsafe configured password", config.AppConfig.AdminUsername)
+		return
+	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(config.AppConfig.AdminPassword), bcrypt.DefaultCost)
 	if err != nil {

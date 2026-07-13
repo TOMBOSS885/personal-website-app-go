@@ -2,15 +2,31 @@ package repository
 
 import (
 	"errors"
+	"log"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/model"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+const maxPendingSecurityStats = 20000
+
+type securityAccessKey struct {
+	Date     string
+	IP       string
+	Category string
+	MusicID  uint64
+}
+
+var pendingSecurityAccess = struct {
+	sync.Mutex
+	entries map[securityAccessKey]model.SecurityAccessStat
+}{entries: make(map[securityAccessKey]model.SecurityAccessStat)}
 
 func GetOrCreateRateLimitSettings() (*model.RateLimitSettings, error) {
 	var settings model.RateLimitSettings
@@ -56,7 +72,77 @@ func RecordSecurityAccess(stat model.SecurityAccessStat) {
 		stat.Date = time.Now().Format("20060102")
 	}
 	stat.LastSeenAt = time.Now()
-	db.DB.Clauses(clause.OnConflict{
+	key := securityAccessKey{Date: stat.Date, IP: stat.IP, Category: stat.Category, MusicID: stat.MusicID}
+
+	pendingSecurityAccess.Lock()
+	current, exists := pendingSecurityAccess.entries[key]
+	if !exists && len(pendingSecurityAccess.entries) >= maxPendingSecurityStats {
+		pendingSecurityAccess.Unlock()
+		if err := persistSecurityAccess(stat); err != nil {
+			log.Printf("security access stat write failed: %v", err)
+		}
+		return
+	}
+	current.Date = stat.Date
+	current.IP = stat.IP
+	current.Category = stat.Category
+	current.MusicID = stat.MusicID
+	if stat.MusicTitle != "" {
+		current.MusicTitle = stat.MusicTitle
+	}
+	current.Count += stat.Count
+	current.LimitedCount += stat.LimitedCount
+	current.BlockedCount += stat.BlockedCount
+	current.LoginAttempts += stat.LoginAttempts
+	current.LoginFailures += stat.LoginFailures
+	current.LastSeenAt = stat.LastSeenAt
+	pendingSecurityAccess.entries[key] = current
+	pendingSecurityAccess.Unlock()
+}
+
+func FlushPendingSecurityAccess() int {
+	pendingSecurityAccess.Lock()
+	if len(pendingSecurityAccess.entries) == 0 {
+		pendingSecurityAccess.Unlock()
+		return 0
+	}
+	batch := pendingSecurityAccess.entries
+	pendingSecurityAccess.entries = make(map[securityAccessKey]model.SecurityAccessStat, len(batch))
+	pendingSecurityAccess.Unlock()
+
+	written := 0
+	for key, stat := range batch {
+		if err := persistSecurityAccess(stat); err != nil {
+			log.Printf("security access stat flush failed: %v", err)
+			pendingSecurityAccess.Lock()
+			mergePendingSecurityStat(key, stat)
+			pendingSecurityAccess.Unlock()
+			continue
+		}
+		written++
+	}
+	return written
+}
+
+func mergePendingSecurityStat(key securityAccessKey, stat model.SecurityAccessStat) {
+	current := pendingSecurityAccess.entries[key]
+	current.Date, current.IP, current.Category, current.MusicID = stat.Date, stat.IP, stat.Category, stat.MusicID
+	if current.MusicTitle == "" {
+		current.MusicTitle = stat.MusicTitle
+	}
+	current.Count += stat.Count
+	current.LimitedCount += stat.LimitedCount
+	current.BlockedCount += stat.BlockedCount
+	current.LoginAttempts += stat.LoginAttempts
+	current.LoginFailures += stat.LoginFailures
+	if stat.LastSeenAt.After(current.LastSeenAt) {
+		current.LastSeenAt = stat.LastSeenAt
+	}
+	pendingSecurityAccess.entries[key] = current
+}
+
+func persistSecurityAccess(stat model.SecurityAccessStat) error {
+	return db.DB.Clauses(clause.OnConflict{
 		Columns: []clause.Column{
 			{Name: "date"},
 			{Name: "ip"},
@@ -73,7 +159,7 @@ func RecordSecurityAccess(stat model.SecurityAccessStat) {
 			"last_seen_at":   stat.LastSeenAt,
 			"updated_at":     time.Now(),
 		}),
-	}).Create(&stat)
+	}).Create(&stat).Error
 }
 
 func CreateSecurityEvent(event *model.SecurityEvent) {

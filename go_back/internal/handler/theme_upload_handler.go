@@ -151,12 +151,18 @@ func AdminUploadThemeBackground(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "不支持的图片格式")
 		return
 	}
+	if ext == ".avif" {
+		response.Error(c, http.StatusBadRequest, "AVIF 上传暂不支持安全的尺寸校验，请使用 jpg、png、gif 或 webp")
+		return
+	}
+	if !imageTypeMatchesExtension(ext, contentType) {
+		response.Error(c, http.StatusBadRequest, "图片扩展名与实际格式不一致")
+		return
+	}
 
-	if ext != ".avif" {
-		if err := validateUploadedImageDimensions(file, 0, settings.ImageMaxDimension, settings.ImageMaxPixels); err != nil {
-			response.Error(c, http.StatusBadRequest, "invalid or oversized image dimensions")
-			return
-		}
+	if err := validateUploadedImageDimensions(file, 0, settings.ImageMaxDimension, settings.ImageMaxPixels); err != nil {
+		response.Error(c, http.StatusBadRequest, "invalid or oversized image dimensions")
+		return
 	}
 
 	dir := filepath.Join(config.AppConfig.UploadDir, "theme-backgrounds")

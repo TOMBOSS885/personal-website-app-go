@@ -15,7 +15,7 @@ func GetArticles(page, size int, tag string, onlyPublished bool) ([]model.Articl
 		query = query.Where("published = ?", true)
 	}
 	if tag != "" {
-		query = query.Where("tags LIKE ?", "%"+tag+"%")
+		query = query.Where("FIND_IN_SET(?, REPLACE(tags, ' ', '')) > 0", tag)
 	}
 
 	err := query.Count(&total).Error
@@ -28,13 +28,20 @@ func GetArticles(page, size int, tag string, onlyPublished bool) ([]model.Articl
 	return articles, total, err
 }
 
-func GetArticleSummaries(page, size int, tag string) ([]model.Article, int64, error) {
+func GetArticleSummaries(page, size int, tag, category, keyword string) ([]model.Article, int64, error) {
 	var articles []model.Article
 	var total int64
 
 	query := db.DB.Model(&model.Article{}).Where("published = ?", true)
 	if tag != "" {
-		query = query.Where("tags LIKE ?", "%"+tag+"%")
+		query = query.Where("FIND_IN_SET(?, REPLACE(tags, ' ', '')) > 0", tag)
+	}
+	if category != "" {
+		query = query.Where("category = ?", category)
+	}
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("title LIKE ? OR summary LIKE ? OR category LIKE ? OR tags LIKE ?", like, like, like, like)
 	}
 
 	if err := query.Count(&total).Error; err != nil {
@@ -91,6 +98,16 @@ func GetAllTagsRaw() ([]string, error) {
 	var tags []string
 	err := db.DB.Model(&model.Article{}).Where("published = ?", true).Pluck("tags", &tags).Error
 	return tags, err
+}
+
+func GetAllArticleCategories() ([]string, error) {
+	var categories []string
+	err := db.DB.Model(&model.Article{}).
+		Where("published = ? AND category <> ?", true, "").
+		Distinct().
+		Order("category ASC").
+		Pluck("category", &categories).Error
+	return categories, err
 }
 
 func GetArticleCount() (int64, error) {

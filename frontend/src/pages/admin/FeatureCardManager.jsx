@@ -43,7 +43,7 @@ export default function FeatureCardManager() {
   const [editingCard, setEditingCard] = useState(null)
   const [form, setForm] = useState(emptyForm)
 
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   useEffect(() => { fetchCards() }, [])
 

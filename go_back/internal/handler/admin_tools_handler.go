@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 )
@@ -112,7 +113,16 @@ func AdminExportData(c *gin.Context) {
 }
 
 func PublicSearch(c *gin.Context) {
-	results, err := searchAll(strings.TrimSpace(c.Query("q")), false)
+	keyword := strings.TrimSpace(c.Query("q"))
+	if keyword != "" && utf8.RuneCountInString(keyword) < 2 {
+		response.Success(c, []SearchResult{})
+		return
+	}
+	if utf8.RuneCountInString(keyword) > 80 {
+		response.Error(c, http.StatusBadRequest, "搜索关键词过长")
+		return
+	}
+	results, err := searchAll(keyword, false)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "搜索失败")
 		return
@@ -138,10 +148,13 @@ func searchAll(keyword string, includeDrafts bool) ([]SearchResult, error) {
 
 	var articles []model.Article
 	articleQuery := db.DB.Model(&model.Article{}).
-		Select("id", "title", "summary", "category", "tags", "published", "updated_at").
-		Where("title LIKE ? OR summary LIKE ? OR category LIKE ? OR tags LIKE ? OR content LIKE ?", like, like, like, like, like)
+		Select("id", "title", "summary", "category", "tags", "published", "updated_at")
 	if !includeDrafts {
-		articleQuery = articleQuery.Where("published = ? AND is_locked = ?", true, false)
+		articleQuery = articleQuery.
+			Where("title LIKE ? OR summary LIKE ? OR category LIKE ? OR tags LIKE ?", like, like, like, like).
+			Where("published = ? AND is_locked = ?", true, false)
+	} else {
+		articleQuery = articleQuery.Where("title LIKE ? OR summary LIKE ? OR category LIKE ? OR tags LIKE ? OR content LIKE ?", like, like, like, like, like)
 	}
 	if err := articleQuery.Order("updated_at DESC").Limit(12).Find(&articles).Error; err != nil {
 		return nil, err

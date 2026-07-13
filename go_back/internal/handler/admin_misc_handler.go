@@ -293,7 +293,7 @@ func AdminUploadAvatar(c *gin.Context) {
 		return
 	}
 	contentType, err := detectUploadedContentType(file)
-	if err != nil || !avatarImageTypes[contentType] {
+	if err != nil || !avatarImageTypes[contentType] || !imageTypeMatchesExtension(ext, contentType) {
 		response.Error(c, http.StatusBadRequest, "unsupported avatar image type")
 		return
 	}
@@ -376,6 +376,10 @@ func AdminChangePassword(c *gin.Context) {
 	}
 	if len(req.NewPassword) < 8 {
 		response.Error(c, http.StatusBadRequest, "新密码至少需要 8 位")
+		return
+	}
+	if len(req.CurrentPassword) > 72 || len(req.NewPassword) > 72 {
+		response.Error(c, http.StatusBadRequest, "密码长度不能超过 72 字节")
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.CurrentPassword)) != nil {

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,6 +22,7 @@ func Health(c *gin.Context) {
 }
 
 func FullHealth(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
 	checks := gin.H{
 		"http":     "up",
 		"database": "unknown",
@@ -28,12 +30,14 @@ func FullHealth(c *gin.Context) {
 		"redis":    "disabled",
 	}
 
-	if err := db.DB.Exec("SELECT 1").Error; err != nil {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+	defer cancel()
+	if err := db.DB.WithContext(ctx).Exec("SELECT 1").Error; err != nil {
 		checks["database"] = "down"
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"status": "down",
 			"checks": checks,
-			"error":  err.Error(),
+			"error":  "database check failed",
 		})
 		return
 	}
@@ -45,7 +49,7 @@ func FullHealth(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"status": "down",
 			"checks": checks,
-			"error":  err.Error(),
+			"error":  "upload directory check failed",
 		})
 		return
 	}
@@ -56,7 +60,7 @@ func FullHealth(c *gin.Context) {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"status": "down",
 			"checks": checks,
-			"error":  err.Error(),
+			"error":  "upload write check failed",
 		})
 		return
 	}

@@ -91,6 +91,9 @@ func TestArticleSiteExpiryIsStableWithinBucket(t *testing.T) {
 	if first.Before(base.Add(55 * time.Minute)) {
 		t.Fatalf("expiry is unexpectedly short: %v", first)
 	}
+	if first.Before(base.Add(time.Hour)) {
+		t.Fatalf("expiry is shorter than the configured TTL: %v", first)
+	}
 }
 
 func testZipReader(t *testing.T, files map[string]string) *zip.Reader {

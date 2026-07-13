@@ -54,7 +54,7 @@ services:
       DB_CONNECT_RETRIES: "${DB_CONNECT_RETRIES:-10}"
       DB_CONNECT_RETRY_DELAY_SECONDS: "${DB_CONNECT_RETRY_DELAY_SECONDS:-3}"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3718/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

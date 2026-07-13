@@ -43,7 +43,7 @@ export default function StabilityManager() {
   const [total, setTotal] = useState(0)
   const [searching, setSearching] = useState(false)
   const [results, setResults] = useState([])
-  const token = localStorage.getItem('token')
+  const token = sessionStorage.getItem('token')
 
   const totalPages = Math.max(1, Math.ceil(total / size))
   const actionOptions = useMemo(() => Object.keys(ACTION_LABELS).sort(), [])

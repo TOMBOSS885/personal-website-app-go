@@ -31,7 +31,7 @@ export default function LoginPage() {
       
       const data = await res.json()
       if (data.token) {
-        localStorage.setItem('token', data.token)
+        sessionStorage.setItem('token', data.token)
         localStorage.setItem('username', username)
         navigate('/admin')
       } else {

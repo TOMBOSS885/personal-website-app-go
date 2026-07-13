@@ -5,10 +5,15 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $API_BASE = "http://localhost:8080"
+$adminUsername = if ($env:ADMIN_USERNAME) { $env:ADMIN_USERNAME } else { "admin" }
+$adminPassword = $env:ADMIN_PASSWORD
+if ([string]::IsNullOrWhiteSpace($adminPassword)) {
+    throw "Set ADMIN_PASSWORD in the environment before running this test."
+}
 
 # 1. Login
 Write-Host "[1/6] Login..." -ForegroundColor Yellow
-$loginBody = '{"username":"admin","password":"admin123"}'
+$loginBody = @{ username = $adminUsername; password = $adminPassword } | ConvertTo-Json
 try {
     $loginRes = Invoke-RestMethod -Uri "$API_BASE/api/auth/login" -Method Post -Body $loginBody -ContentType "application/json"
     $token = $loginRes.token
