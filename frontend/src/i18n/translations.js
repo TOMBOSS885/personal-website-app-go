@@ -3,7 +3,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 export const translations = {
   zh: {
     nav: {
-      home: '首页', blog: '博客', projects: '项目', admin: '管理后台',
+      home: '首页', blog: '博客', projects: '项目', downloadClient: '下载客户端', admin: '管理后台',
       logout: '退出登录', login: '登录'
     },
     home: {
@@ -97,7 +97,7 @@ export const translations = {
   },
   en: {
     nav: {
-      home: 'Home', blog: 'Blog', projects: 'Projects', admin: 'Admin',
+      home: 'Home', blog: 'Blog', projects: 'Projects', downloadClient: 'Download', admin: 'Admin',
       logout: 'Logout', login: 'Login'
     },
     home: {

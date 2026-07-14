@@ -1,0 +1,76 @@
+- generic [ref=f4e6]:
+  - complementary [ref=f4e7]:
+    - generic [ref=f4e8]:
+      - generic [ref=f4e13]:
+        - heading "管理后台" [level=1] [ref=f4e14]
+        - paragraph [ref=f4e15]: Personal Website
+      - button "暗色模式" [ref=f4e16] [cursor=pointer]
+    - navigation [ref=f4e20]:
+      - link "概览" [ref=f4e21] [cursor=pointer]:
+        - /url: /admin
+      - link "文章管理" [ref=f4e28] [cursor=pointer]:
+        - /url: /admin/articles
+      - link "项目管理" [ref=f4e33] [cursor=pointer]:
+        - /url: /admin/projects
+      - link "能力卡片" [ref=f4e37] [cursor=pointer]:
+        - /url: /admin/feature-cards
+      - link "专业技能" [ref=f4e44] [cursor=pointer]:
+        - /url: /admin/skills
+      - link "主题管理" [ref=f4e49] [cursor=pointer]:
+        - /url: /admin/theme
+      - link "Live2D 管理" [ref=f4e57] [cursor=pointer]:
+        - /url: /admin/live2d
+      - link "音乐管理" [ref=f4e62] [cursor=pointer]:
+        - /url: /admin/music
+      - link "客户端发布" [ref=f4e68] [cursor=pointer]:
+        - /url: /admin/client-download
+      - link "用户监控" [ref=f4e73] [cursor=pointer]:
+        - /url: /admin/users
+      - link "个人信息" [ref=f4e80] [cursor=pointer]:
+        - /url: /admin/profile
+      - link "上传限制" [ref=f4e85] [cursor=pointer]:
+        - /url: /admin/upload-settings
+      - link "站点稳定性" [ref=f4e90] [cursor=pointer]:
+        - /url: /admin/stability
+      - link "访问安全" [ref=f4e94] [cursor=pointer]:
+        - /url: /admin/security
+      - link "账号安全" [ref=f4e98] [cursor=pointer]:
+        - /url: /admin/account
+    - generic [ref=f4e103]:
+      - generic [ref=f4e104]:
+        - generic [ref=f4e105]: A
+        - generic [ref=f4e106]: Admin
+      - button "退出登录" [ref=f4e107] [cursor=pointer]
+  - main [ref=f4e112]:
+    - generic [ref=f4e113]:
+      - generic [ref=f4e119]:
+        - heading "客户端发布" [level=1] [ref=f4e120]
+        - paragraph [ref=f4e121]: 管理网站导航中的客户端下载入口
+      - generic [ref=f4e122]:
+        - generic [ref=f4e123]:
+          - generic [ref=f4e124]:
+            - heading "下载入口" [level=2] [ref=f4e125]
+            - paragraph [ref=f4e126]: 关闭后，前台不会显示下载按钮
+          - generic [ref=f4e127] [cursor=pointer]:
+            - checkbox "已启用" [checked] [ref=f4e128]
+            - generic [ref=f4e130]: 已启用
+        - generic [ref=f4e131]:
+          - generic [ref=f4e132]:
+            - generic [ref=f4e133]: 下载地址
+            - textbox "下载地址" [ref=f4e137]:
+              - /placeholder: https://example.com/releases/client.exe
+              - text: https://downloads.example.com/client.exe
+          - generic [ref=f4e138]:
+            - generic [ref=f4e139]: 版本号
+            - textbox "版本号" [ref=f4e140]:
+              - /placeholder: 例如：v1.0.0
+              - text: v1.4.2
+          - generic [ref=f4e141]:
+            - generic [ref=f4e142]:
+              - paragraph [ref=f4e143]: 当前目标
+              - paragraph [ref=f4e144]: https://downloads.example.com/client.exe
+            - link "测试链接" [ref=f4e145] [cursor=pointer]:
+              - /url: https://downloads.example.com/client.exe
+        - generic [ref=f4e150]:
+          - generic [ref=f4e156]: 客户端配置已保存
+          - button "保存配置" [ref=f4e151] [cursor=pointer]

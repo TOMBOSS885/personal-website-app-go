@@ -35,6 +35,7 @@ const ProjectManager = lazy(() => import('./pages/admin/ProjectManager'))
 const SkillManager = lazy(() => import('./pages/admin/SkillManager'))
 const FeatureCardManager = lazy(() => import('./pages/admin/FeatureCardManager'))
 const ProfileManager = lazy(() => import('./pages/admin/ProfileManager'))
+const ClientDownloadManager = lazy(() => import('./pages/admin/ClientDownloadManager'))
 const ThemeManager = lazy(() => import('./pages/admin/ThemeManager'))
 const Live2DManager = lazy(() => import('./pages/admin/Live2DManager'))
 const MusicManager = lazy(() => import('./pages/admin/MusicManager'))
@@ -119,6 +120,7 @@ function App() {
       return null
     }
   })
+  const [clientDownload, setClientDownload] = useState(null)
 
   const loadProfile = useCallback(() => {
     fetchWithTimeout(`${API_BASE}/api/public/profile`, {}, 7000)
@@ -133,12 +135,27 @@ function App() {
       .catch(() => {})
   }, [])
 
+  const loadClientDownload = useCallback(() => {
+    fetchWithTimeout(`${API_BASE}/api/public/client-download`, {}, 7000)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
+      .then(data => setClientDownload(data))
+      .catch(() => setClientDownload(null))
+  }, [])
+
   useEffect(() => {
     setupAdminApiInterceptor()
     loadProfile()
+    loadClientDownload()
     window.addEventListener('profile:updated', loadProfile)
-    return () => window.removeEventListener('profile:updated', loadProfile)
-  }, [loadProfile])
+    window.addEventListener('client-download:updated', loadClientDownload)
+    return () => {
+      window.removeEventListener('profile:updated', loadProfile)
+      window.removeEventListener('client-download:updated', loadClientDownload)
+    }
+  }, [loadClientDownload, loadProfile])
 
   return (
     <ThemeProvider>
@@ -164,6 +181,7 @@ function App() {
                   <Route path="feature-cards" element={<FeatureCardManager />} />
                   <Route path="skills" element={<SkillManager />} />
                   <Route path="profile" element={<ProfileManager />} />
+                  <Route path="client-download" element={<ClientDownloadManager />} />
                   <Route path="account" element={<AccountSettings />} />
                   <Route path="theme" element={<ThemeManager />} />
                   <Route path="live2d" element={<Live2DManager />} />
@@ -175,7 +193,7 @@ function App() {
                 </Route>
 				<Route path="/*" element={
 				  <UserAuthProvider>
-                    <Navbar profile={profile} />
+                    <Navbar profile={profile} clientDownload={clientDownload} />
                     <main className="flex-1">
                       <Routes>
                         <Route path="/" element={<HomePage />} />

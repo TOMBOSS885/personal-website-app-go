@@ -3,6 +3,7 @@ import {
   Activity,
   Award,
   Bot,
+  Download,
   FileText,
   Folder,
   LayoutDashboard,
@@ -34,6 +35,7 @@ export default function AdminLayout() {
 
   const navItems = [
     { path: '/admin', label: '概览', icon: LayoutDashboard, exact: true },
+    { path: '/admin/client-download', label: '客户端发布', icon: Download },
     { path: '/admin/articles', label: '文章管理', icon: FileText },
     { path: '/admin/projects', label: '项目管理', icon: Folder },
     { path: '/admin/feature-cards', label: '能力卡片', icon: LayoutGrid },

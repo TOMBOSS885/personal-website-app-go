@@ -104,6 +104,7 @@ func main() {
 		{
 			publicCache := middleware.CacheGET("public")
 			public.GET("/profile", publicCache, handler.GetProfile)
+			public.GET("/client-download", publicCache, handler.GetClientDownload)
 			public.GET("/home", publicCache, handler.GetHome)
 			public.GET("/stats", publicCache, handler.GetStats)
 			public.GET("/articles", publicCache, handler.GetArticles)
@@ -176,6 +177,8 @@ func main() {
 			admin.PUT("/account/password", handler.AdminChangePassword)
 			admin.GET("/upload-settings", handler.AdminGetUploadSettings)
 			admin.PUT("/upload-settings", handler.AdminUpdateUploadSettings)
+			admin.GET("/client-download", handler.AdminGetClientDownload)
+			admin.PUT("/client-download", handler.AdminUpdateClientDownload)
 			admin.POST("/upload-assets/cleanup", handler.AdminCleanupUploadAssets)
 			admin.GET("/dashboard-stats", handler.AdminDashboardStats)
 			admin.GET("/operation-logs", handler.AdminGetOperationLogs)
@@ -286,6 +289,7 @@ func autoMigrateModels() error {
 		{"live2d_settings", &model.Live2DSettings{}},
 		{"music", &model.Music{}},
 		{"upload_settings", &model.UploadSettings{}},
+		{"client_download_settings", &model.ClientDownloadSettings{}},
 		{"operation_logs", &model.OperationLog{}},
 		{"rate_limit_settings", &model.RateLimitSettings{}},
 		{"security_access_stats", &model.SecurityAccessStat{}},

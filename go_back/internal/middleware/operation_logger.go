@@ -108,6 +108,8 @@ func actionFromRequest(method, path string) string {
 		return "change_password"
 	case strings.Contains(path, "upload-settings"):
 		return "save_upload_settings"
+	case strings.Contains(path, "client-download"):
+		return "save_client_download"
 	default:
 		return strings.ToLower(method)
 	}

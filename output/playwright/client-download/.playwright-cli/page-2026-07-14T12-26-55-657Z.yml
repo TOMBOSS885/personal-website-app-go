@@ -1,0 +1,330 @@
+- generic [ref=f2e3]:
+  - navigation [ref=f2e6]:
+    - generic [ref=f2e8]:
+      - link "返回首页" [ref=f2e9] [cursor=pointer]:
+        - /url: /
+        - generic "avatar" [ref=f2e11]: W
+        - generic "我的网站" [ref=f2e15]
+      - generic [ref=f2e50]:
+        - button "EN" [ref=f2e51] [cursor=pointer]
+        - link "登录" [ref=f2e56] [cursor=pointer]:
+          - /url: /login?returnTo=%2F
+        - button "切换到暗色模式" [ref=f2e60] [cursor=pointer]
+        - button "关闭导航菜单" [expanded] [active] [ref=f2e657] [cursor=pointer]
+  - generic [ref=f2e664]:
+    - button [ref=f2e666] [cursor=pointer]
+    - generic [ref=f2e670]:
+      - link "首页" [ref=f2e672] [cursor=pointer]:
+        - /url: /
+      - link "博客" [ref=f2e678] [cursor=pointer]:
+        - /url: /blog
+      - link "项目" [ref=f2e684] [cursor=pointer]:
+        - /url: /projects
+      - link "搜索" [ref=f2e689] [cursor=pointer]:
+        - /url: /search
+      - link "下载客户端 v1.4.2" [ref=f2e695] [cursor=pointer]:
+        - /url: https://downloads.example.com/client.exe
+        - generic [ref=f2e699]: 下载客户端
+        - generic [ref=f2e700]: v1.4.2
+      - link "登录" [ref=f2e702] [cursor=pointer]:
+        - /url: /login?returnTo=%2F
+    - paragraph [ref=f2e709]: 感谢访问 ✨
+  - main [ref=f2e68]:
+    - generic [ref=f2e69]:
+      - generic [ref=f2e76]:
+        - generic "Claw avatar" [ref=f2e84]: C
+        - paragraph [ref=f2e89]: 👋 Hello, I'm
+        - heading "Claw" [level=1] [ref=f2e90]
+        - generic [ref=f2e91]:
+          - text: 一名
+          - generic [ref=f2e92]: 终身学习者
+        - paragraph [ref=f2e95]: 全栈开发者，热爱技术与开源。专注于构建优雅的解决方案，从全栈开发到系统架构，始终保持学习的热情。
+        - generic [ref=f2e96]:
+          - link "阅读博客" [ref=f2e97] [cursor=pointer]:
+            - /url: /blog
+          - link "查看项目" [ref=f2e106] [cursor=pointer]:
+            - /url: /projects
+        - generic [ref=f2e111]:
+          - link [ref=f2e112] [cursor=pointer]:
+            - /url: https://github.com/claw
+          - link [ref=f2e116] [cursor=pointer]:
+            - /url: https://linkedin.com/in/claw
+          - link [ref=f2e121] [cursor=pointer]:
+            - /url: mailto:hello@example.com
+      - generic [ref=f2e132]:
+        - generic [ref=f2e135]:
+          - generic [ref=f2e140]: "1000"
+          - generic [ref=f2e141]: 杯咖啡
+        - generic [ref=f2e144]:
+          - generic [ref=f2e149]: "50"
+          - generic [ref=f2e150]: 个项目
+        - generic [ref=f2e153]:
+          - generic [ref=f2e160]: "100"
+          - generic [ref=f2e161]: 篇文章
+        - generic [ref=f2e164]:
+          - generic [ref=f2e168]: "1000"
+          - generic [ref=f2e169]: Stars
+      - generic [ref=f2e171]:
+        - generic [ref=f2e172]:
+          - generic [ref=f2e173]: 我能做什么
+          - heading "专业技能" [level=2] [ref=f2e176]
+        - generic [ref=f2e177]:
+          - generic [ref=f2e180]:
+            - heading "全栈开发" [level=3] [ref=f2e186]
+            - paragraph [ref=f2e187]: 前后端技术栈全面掌握，构建完整解决方案
+          - generic [ref=f2e190]:
+            - heading "系统架构" [level=3] [ref=f2e197]
+            - paragraph [ref=f2e198]: 设计高可用、可扩展的分布式系统架构
+          - generic [ref=f2e201]:
+            - heading "技术写作" [level=3] [ref=f2e207]
+            - paragraph [ref=f2e208]: 分享技术心得与实践经验，记录成长历程
+          - generic [ref=f2e211]:
+            - heading "持续创新" [level=3] [ref=f2e219]
+            - paragraph [ref=f2e220]: 保持对新技术的探索热情，拥抱变化
+      - generic [ref=f2e223]:
+        - generic [ref=f2e224]:
+          - generic [ref=f2e225]: 技术栈
+          - heading "技能专长" [level=2] [ref=f2e229]
+        - generic [ref=f2e230]:
+          - generic [ref=f2e231]:
+            - heading "前端开发" [level=3] [ref=f2e232]
+            - generic [ref=f2e234]:
+              - generic [ref=f2e235]:
+                - generic [ref=f2e236]:
+                  - generic [ref=f2e237]: React
+                  - generic [ref=f2e238]: 95%
+                - progressbar "React 95%" [ref=f2e239]
+              - generic [ref=f2e241]:
+                - generic [ref=f2e242]:
+                  - generic [ref=f2e243]: TypeScript
+                  - generic [ref=f2e244]: 92%
+                - progressbar "TypeScript 92%" [ref=f2e245]
+              - generic [ref=f2e247]:
+                - generic [ref=f2e248]:
+                  - generic [ref=f2e249]: Vue.js
+                  - generic [ref=f2e250]: 85%
+                - progressbar "Vue.js 85%" [ref=f2e251]
+              - generic [ref=f2e253]:
+                - generic [ref=f2e254]:
+                  - generic [ref=f2e255]: TailwindCSS
+                  - generic [ref=f2e256]: 90%
+                - progressbar "TailwindCSS 90%" [ref=f2e257]
+              - generic [ref=f2e259]:
+                - generic [ref=f2e260]:
+                  - generic [ref=f2e261]: Next.js
+                  - generic [ref=f2e262]: 88%
+                - progressbar "Next.js 88%" [ref=f2e263]
+          - generic [ref=f2e265]:
+            - heading "后端开发" [level=3] [ref=f2e266]
+            - generic [ref=f2e268]:
+              - generic [ref=f2e269]:
+                - generic [ref=f2e270]:
+                  - generic [ref=f2e271]: Go
+                  - generic [ref=f2e272]: 92%
+                - progressbar "Go 92%" [ref=f2e273]
+              - generic [ref=f2e275]:
+                - generic [ref=f2e276]:
+                  - generic [ref=f2e277]: Gin
+                  - generic [ref=f2e278]: 90%
+                - progressbar "Gin 90%" [ref=f2e279]
+              - generic [ref=f2e281]:
+                - generic [ref=f2e282]:
+                  - generic [ref=f2e283]: GORM
+                  - generic [ref=f2e284]: 82%
+                - progressbar "GORM 82%" [ref=f2e285]
+              - generic [ref=f2e287]:
+                - generic [ref=f2e288]:
+                  - generic [ref=f2e289]: Node.js
+                  - generic [ref=f2e290]: 85%
+                - progressbar "Node.js 85%" [ref=f2e291]
+              - generic [ref=f2e293]:
+                - generic [ref=f2e294]:
+                  - generic [ref=f2e295]: Python
+                  - generic [ref=f2e296]: 80%
+                - progressbar "Python 80%" [ref=f2e297]
+          - generic [ref=f2e299]:
+            - heading "DevOps" [level=3] [ref=f2e300]
+            - generic [ref=f2e302]:
+              - generic [ref=f2e303]:
+                - generic [ref=f2e304]:
+                  - generic [ref=f2e305]: Docker
+                  - generic [ref=f2e306]: 88%
+                - progressbar "Docker 88%" [ref=f2e307]
+              - generic [ref=f2e309]:
+                - generic [ref=f2e310]:
+                  - generic [ref=f2e311]: Kubernetes
+                  - generic [ref=f2e312]: 75%
+                - progressbar "Kubernetes 75%" [ref=f2e313]
+              - generic [ref=f2e315]:
+                - generic [ref=f2e316]:
+                  - generic [ref=f2e317]: CI/CD
+                  - generic [ref=f2e318]: 85%
+                - progressbar "CI/CD 85%" [ref=f2e319]
+              - generic [ref=f2e321]:
+                - generic [ref=f2e322]:
+                  - generic [ref=f2e323]: Linux
+                  - generic [ref=f2e324]: 82%
+                - progressbar "Linux 82%" [ref=f2e325]
+      - generic [ref=f2e328]:
+        - generic [ref=f2e329]:
+          - generic [ref=f2e330]:
+            - generic [ref=f2e331]: 最新动态
+            - heading "最新文章" [level=2] [ref=f2e337]
+          - link "查看全部" [ref=f2e338] [cursor=pointer]:
+            - /url: /blog
+        - generic [ref=f2e342]:
+          - link "深入理解 React 18 新特性 前端开发 深入理解 React 18 新特性 探索 React 18 带来的并发渲染、自动批处理、Suspense 等激动人心的新特性，了解它们如何提升应用性能。 2026/7/12 1256 阅读" [ref=f2e345] [cursor=pointer]:
+            - /url: /blog/1
+            - generic [ref=f2e346]:
+              - generic [ref=f2e347]:
+                - img "深入理解 React 18 新特性" [ref=f2e349]
+                - generic [ref=f2e351]: 前端开发
+              - generic [ref=f2e353]:
+                - heading "深入理解 React 18 新特性" [level=3] [ref=f2e354]
+                - paragraph [ref=f2e355]: 探索 React 18 带来的并发渲染、自动批处理、Suspense 等激动人心的新特性，了解它们如何提升应用性能。
+                - generic [ref=f2e356]:
+                  - generic [ref=f2e357]:
+                    - generic [ref=f2e358]: 2026/7/12
+                    - generic [ref=f2e362]: "1256"
+                  - generic [ref=f2e367]: 阅读
+          - link "后端开发 Go 后端轻量化重构实践 记录从传统后端迁移到 Go/Gin 的关键步骤，包括接口适配、数据库迁移、Docker 部署和性能优化。 2026/7/9 892 阅读" [ref=f2e374] [cursor=pointer]:
+            - /url: /blog/2
+            - generic [ref=f2e375]:
+              - generic [ref=f2e376]: 后端开发
+              - generic [ref=f2e380]:
+                - heading "Go 后端轻量化重构实践" [level=3] [ref=f2e381]
+                - paragraph [ref=f2e382]: 记录从传统后端迁移到 Go/Gin 的关键步骤，包括接口适配、数据库迁移、Docker 部署和性能优化。
+                - generic [ref=f2e383]:
+                  - generic [ref=f2e384]:
+                    - generic [ref=f2e385]: 2026/7/9
+                    - generic [ref=f2e389]: "892"
+                  - generic [ref=f2e394]: 阅读
+          - link "前端开发 使用 TailwindCSS 构建现代UI 学习如何使用 TailwindCSS 快速构建响应式、现代化的用户界面，掌握实用类优先的设计理念。 2026/7/7 654 阅读" [ref=f2e401] [cursor=pointer]:
+            - /url: /blog/3
+            - generic [ref=f2e402]:
+              - generic [ref=f2e403]: 前端开发
+              - generic [ref=f2e407]:
+                - heading "使用 TailwindCSS 构建现代UI" [level=3] [ref=f2e408]
+                - paragraph [ref=f2e409]: 学习如何使用 TailwindCSS 快速构建响应式、现代化的用户界面，掌握实用类优先的设计理念。
+                - generic [ref=f2e410]:
+                  - generic [ref=f2e411]:
+                    - generic [ref=f2e412]: 2026/7/7
+                    - generic [ref=f2e416]: "654"
+                  - generic [ref=f2e421]: 阅读
+      - generic [ref=f2e428]:
+        - generic [ref=f2e429]:
+          - generic [ref=f2e430]:
+            - generic [ref=f2e431]: 作品展示
+            - heading "精选项目" [level=2] [ref=f2e437]
+          - link "查看全部" [ref=f2e438] [cursor=pointer]:
+            - /url: /projects
+        - generic [ref=f2e442]:
+          - generic [ref=f2e445]:
+            - generic [ref=f2e447]: 精选
+            - generic [ref=f2e452]:
+              - generic [ref=f2e459]:
+                - heading "个人作品集网站" [level=3] [ref=f2e460]
+                - generic [ref=f2e461]: "156"
+              - paragraph [ref=f2e465]: 一个现代化的个人作品集网站，展示项目、文章和技能，支持深色模式和响应式设计
+              - generic [ref=f2e466]:
+                - generic [ref=f2e467]: React
+                - generic [ref=f2e468]: TypeScript
+                - generic [ref=f2e469]: TailwindCSS
+                - generic [ref=f2e470]: Framer Motion
+              - generic [ref=f2e471]:
+                - link "源码" [ref=f2e472] [cursor=pointer]:
+                  - /url: https://github.com/username/portfolio
+                - link "演示" [ref=f2e477] [cursor=pointer]:
+                  - /url: https://portfolio.example.com/
+          - generic [ref=f2e486]:
+            - generic [ref=f2e488]: 精选
+            - generic [ref=f2e493]:
+              - generic [ref=f2e500]:
+                - heading "API 网关服务" [level=3] [ref=f2e501]
+                - generic [ref=f2e502]: "234"
+              - paragraph [ref=f2e506]: 高性能的 API 网关服务，支持动态路由、限流熔断、负载均衡和可观测性
+              - generic [ref=f2e507]:
+                - generic [ref=f2e508]: Go
+                - generic [ref=f2e509]: Gin
+                - generic [ref=f2e510]: Docker
+                - generic [ref=f2e511]: Kubernetes
+                - generic [ref=f2e512]: Redis
+              - generic [ref=f2e513]:
+                - link "源码" [ref=f2e514] [cursor=pointer]:
+                  - /url: https://github.com/username/api-gateway
+                - link "演示" [ref=f2e519] [cursor=pointer]:
+                  - /url: https://gateway.example.com/
+      - generic [ref=f2e532]:
+        - heading "开始合作" [level=2] [ref=f2e533]
+        - paragraph [ref=f2e534]: 有想法？想要合作？或者只是想打个招呼？随时联系我！
+        - generic [ref=f2e535]:
+          - link "发送邮件" [ref=f2e536] [cursor=pointer]:
+            - /url: mailto:hello@example.com
+          - link "浏览文章" [ref=f2e540] [cursor=pointer]:
+            - /url: /blog
+  - contentinfo [ref=f2e543]:
+    - generic [ref=f2e548]:
+      - generic [ref=f2e549]:
+        - generic [ref=f2e550]:
+          - generic [ref=f2e551]:
+            - generic "avatar" [ref=f2e553]: W
+            - generic [ref=f2e556]: 我的网站
+          - paragraph [ref=f2e557]: 热爱技术，专注于构建优雅的解决方案。从全栈开发到系统架构，始终保持学习的热情，用代码改变世界。
+          - generic [ref=f2e558]:
+            - link "GitHub" [ref=f2e559] [cursor=pointer]:
+              - /url: https://github.com/
+            - link "Twitter" [ref=f2e563] [cursor=pointer]:
+              - /url: https://twitter.com/
+            - link "LinkedIn" [ref=f2e566] [cursor=pointer]:
+              - /url: https://linkedin.com/
+            - link "Email" [ref=f2e571] [cursor=pointer]:
+              - /url: mailto:hello@example.com
+        - generic [ref=f2e575]:
+          - heading "导航" [level=3] [ref=f2e576]
+          - list [ref=f2e577]:
+            - listitem [ref=f2e578]:
+              - link "首页 →" [ref=f2e579] [cursor=pointer]:
+                - /url: /
+                - generic [ref=f2e580]: 首页
+                - generic [ref=f2e581]: →
+            - listitem [ref=f2e582]:
+              - link "博客 →" [ref=f2e583] [cursor=pointer]:
+                - /url: /blog
+                - generic [ref=f2e584]: 博客
+                - generic [ref=f2e585]: →
+            - listitem [ref=f2e586]:
+              - link "项目 →" [ref=f2e587] [cursor=pointer]:
+                - /url: /projects
+                - generic [ref=f2e588]: 项目
+                - generic [ref=f2e589]: →
+        - generic [ref=f2e590]:
+          - heading "联系" [level=3] [ref=f2e591]
+          - list [ref=f2e592]:
+            - listitem [ref=f2e593]:
+              - link "GitHub" [ref=f2e594] [cursor=pointer]:
+                - /url: https://github.com/
+            - listitem [ref=f2e600]:
+              - link "LinkedIn" [ref=f2e601] [cursor=pointer]:
+                - /url: https://linkedin.com/
+            - listitem [ref=f2e607]:
+              - link "Email" [ref=f2e608] [cursor=pointer]:
+                - /url: mailto:hello@example.com
+      - generic [ref=f2e615]:
+        - paragraph [ref=f2e616]:
+          - generic [ref=f2e617]: © 2026
+          - generic [ref=f2e618]: ·
+          - generic [ref=f2e619]: 我的网站
+          - generic [ref=f2e620]: ·
+          - generic [ref=f2e621]: 版权所有
+        - paragraph [ref=f2e622]:
+          - generic [ref=f2e623]: 用
+          - generic [ref=f2e627]: 和
+          - generic [ref=f2e631]: 技术构建
+          - generic [ref=f2e632]: React
+          - generic [ref=f2e633]: +
+          - generic [ref=f2e634]: Tailwind
+    - button [ref=f2e635] [cursor=pointer]
+  - generic [ref=f2e640]:
+    - button "音乐" [ref=f2e641] [cursor=pointer]
+    - button "音乐" [ref=f2e646] [cursor=pointer]
+  - button "背景" [ref=f2e648] [cursor=pointer]
