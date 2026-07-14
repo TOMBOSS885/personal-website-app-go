@@ -7,11 +7,13 @@ func Success(c *gin.Context, data interface{}) {
 }
 
 type ErrorResponse struct {
-	Message string `json:"message"`
+	Message   string `json:"message"`
+	RequestID string `json:"requestId,omitempty"`
 }
 
 func Error(c *gin.Context, status int, message string) {
-	c.JSON(status, ErrorResponse{Message: message})
+	requestID := c.GetString("requestId")
+	c.JSON(status, ErrorResponse{Message: message, RequestID: requestID})
 }
 
 type PageResponse struct {

@@ -7,6 +7,7 @@
 - 前端：React 18、Vite、TailwindCSS、Framer Motion、React Router
 - 后端：Go、Gin、GORM、JWT、MySQL
 - Live2D：`l2d-widget` 本地依赖，支持模型上传、启用、切换和显示参数配置
+- 桌面管理端：`desktop` 目录，使用 Tauri 2、React 和 TypeScript，通过同一套 Go API 与网站同步
 - 部署：Nginx、Docker、Docker Compose、Supervisor
 
 ## 主要功能
@@ -25,6 +26,7 @@ personal-website/
 │   ├── cmd/server/         # 服务入口
 │   └── internal/           # 配置、数据库、模型、仓储、接口、中间件
 ├── l2d-widget/             # Live2D 组件源码，本项目通过本地 file 依赖引用
+├── desktop/               # Tauri 2 桌面管理端
 ├── docker/                 # Docker 运行时配置
 │   ├── nginx.conf
 │   └── supervisord.conf

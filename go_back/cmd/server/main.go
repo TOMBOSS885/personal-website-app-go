@@ -47,7 +47,7 @@ func main() {
 		log.Printf("failed to set trusted proxies: %v", err)
 	}
 	r.MaxMultipartMemory = 32 << 20
-	r.Use(gin.Logger(), middleware.ErrorHandler(), middleware.RequestBodyLimit(), middleware.CORS(), middleware.IPBanGuard())
+	r.Use(middleware.RequestID(), gin.Logger(), middleware.ErrorHandler(), middleware.RequestBodyLimit(), middleware.CORS(), middleware.IPBanGuard())
 
 	uploads := r.Group("/uploads")
 	uploads.Use(func(c *gin.Context) {
@@ -74,6 +74,7 @@ func main() {
 
 	api := r.Group("/api")
 	{
+		api.GET("/meta", handler.Meta)
 		api.GET("/health", handler.Health)
 		api.GET("/health/full", handler.FullHealth)
 
@@ -144,6 +145,7 @@ func main() {
 		admin.Use(middleware.OperationLogger())
 		admin.Use(middleware.InvalidatePublicCacheAfterMutation())
 		{
+			admin.GET("/session", handler.AdminSession)
 			admin.GET("/articles", handler.AdminGetArticles)
 			admin.POST("/articles", handler.AdminCreateArticleSecure)
 			admin.PUT("/articles/:id", handler.AdminUpdateArticleSecure)

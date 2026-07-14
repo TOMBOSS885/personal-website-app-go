@@ -26,6 +26,13 @@ const jwtAudience = "personal-website-admin-api"
 const userJWTIssuer = "personal-website-user"
 const userJWTAudience = "personal-website-user-api"
 const UserSessionCookie = "pw_user_session"
+const AdminSessionContextKey = "adminSession"
+
+type AdminSessionInfo struct {
+	ID        string `json:"id"`
+	IssuedAt  string `json:"issuedAt"`
+	ExpiresAt string `json:"expiresAt"`
+}
 
 type adminClaims struct {
 	UserID              uint64 `json:"uid"`
@@ -142,8 +149,32 @@ func JWTAuth() gin.HandlerFunc {
 
 		c.Set("username", username)
 		c.Set("user", user)
+		c.Set(AdminSessionContextKey, adminSessionInfo(claims))
 		c.Next()
 	}
+}
+
+func CurrentAdminSession(c *gin.Context) (AdminSessionInfo, bool) {
+	value, exists := c.Get(AdminSessionContextKey)
+	if !exists {
+		return AdminSessionInfo{}, false
+	}
+	session, ok := value.(AdminSessionInfo)
+	return session, ok && session.ID != "" && session.ExpiresAt != ""
+}
+
+func adminSessionInfo(claims *adminClaims) AdminSessionInfo {
+	if claims == nil {
+		return AdminSessionInfo{}
+	}
+	session := AdminSessionInfo{ID: claims.ID}
+	if claims.IssuedAt != nil {
+		session.IssuedAt = claims.IssuedAt.Time.UTC().Format(time.RFC3339)
+	}
+	if claims.ExpiresAt != nil {
+		session.ExpiresAt = claims.ExpiresAt.Time.UTC().Format(time.RFC3339)
+	}
+	return session
 }
 
 func OptionalUserAuth() gin.HandlerFunc {

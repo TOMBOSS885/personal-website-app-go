@@ -40,6 +40,27 @@ func TestGenerateTokenUsesStrictAdminClaims(t *testing.T) {
 	}
 }
 
+func TestAdminSessionInfoUsesRegisteredClaims(t *testing.T) {
+	issuedAt := time.Date(2026, time.July, 14, 10, 0, 0, 0, time.FixedZone("CST", 8*60*60))
+	expiresAt := issuedAt.Add(24 * time.Hour)
+	claims := &adminClaims{RegisteredClaims: jwt.RegisteredClaims{
+		ID:        "session-id",
+		IssuedAt:  jwt.NewNumericDate(issuedAt),
+		ExpiresAt: jwt.NewNumericDate(expiresAt),
+	}}
+
+	session := adminSessionInfo(claims)
+	if session.ID != "session-id" {
+		t.Fatalf("session ID = %q", session.ID)
+	}
+	if session.IssuedAt != issuedAt.UTC().Format(time.RFC3339) {
+		t.Fatalf("issuedAt = %q", session.IssuedAt)
+	}
+	if session.ExpiresAt != expiresAt.UTC().Format(time.RFC3339) {
+		t.Fatalf("expiresAt = %q", session.ExpiresAt)
+	}
+}
+
 func TestSameOriginMutationRejectsCookieRequestWithoutOrigin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
