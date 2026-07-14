@@ -100,13 +100,6 @@ func UpdateActiveMemberUsername(userID, tokenVersion uint64, username string) (i
 	return result.RowsAffected, result.Error
 }
 
-func UpdateActiveMemberAvatar(userID, tokenVersion uint64, avatar string) (int64, error) {
-	result := db.DB.Model(&model.User{}).
-		Where("id = ? AND LOWER(status) = ? AND COALESCE(UPPER(role), '') <> ? AND token_version = ?", userID, "active", "ADMIN", tokenVersion).
-		Update("avatar", avatar)
-	return result.RowsAffected, result.Error
-}
-
 func ResetActiveMemberPassword(userID uint64, passwordHash string) (int64, error) {
 	result := db.DB.Model(&model.User{}).
 		Where("id = ? AND LOWER(status) = ? AND COALESCE(UPPER(role), '') <> ?", userID, "active", "ADMIN").

@@ -11,18 +11,7 @@ import ProfileAvatar from './ProfileAvatar'
 import { useUserAuth } from '../contexts/UserAuthContext'
 
 function NavbarAvatar({ user, profile }) {
-  const avatar = typeof user?.avatar === 'string' && user.avatar.startsWith('/uploads/user-avatars/')
-    ? user.avatar
-    : ''
   const sharedClass = 'relative z-10 h-12 w-12 overflow-hidden rounded-full bg-white shadow-lg ring-2 ring-white/80 transition-shadow group-hover:shadow-xl dark:bg-slate-900 dark:ring-slate-800/80'
-
-  if (user && avatar) {
-    return (
-      <div className={sharedClass}>
-        <img src={avatar} alt={`${user.username} 的头像`} className="h-full w-full object-cover" />
-      </div>
-    )
-  }
 
   return (
     <ProfileAvatar

@@ -12,12 +12,9 @@ import (
 	"log"
 	"net/http"
 	"net/mail"
-	"os"
-	"path/filepath"
 	"personal-website-go/internal/cache"
 	"personal-website-go/internal/config"
 	"personal-website-go/internal/mailer"
-	"personal-website-go/internal/media"
 	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
@@ -42,7 +39,6 @@ const (
 	emailCodeCooldown      = 60 * time.Second
 	emailCodeHourlyLimit   = 6
 	emailCodeIPHourlyLimit = 30
-	maxUserAvatarBytes     = 500 * 1024
 	emailCodeRegister      = "register"
 	emailCodeResetPassword = "reset"
 )
@@ -481,74 +477,9 @@ func UpdateCurrentUsername(c *gin.Context) {
 	response.Success(c, publicUser(user))
 }
 
-func UploadCurrentUserAvatar(c *gin.Context) {
-	user, ok := middleware.CurrentUser(c)
-	if !ok {
-		response.Error(c, http.StatusUnauthorized, "请先登录")
-		return
-	}
-	settings := getOrCreateUploadSettings()
-	file, err := c.FormFile("file")
-	if err != nil || file == nil {
-		response.Error(c, http.StatusBadRequest, "请选择头像图片")
-		return
-	}
-	if file.Size > bytesFromMB(settings.AvatarImageMaxMB) {
-		response.Error(c, http.StatusBadRequest, "头像原图超过上传限制")
-		return
-	}
-	ext := strings.ToLower(filepath.Ext(file.Filename))
-	if !allowedExt(ext, avatarImageExts) {
-		response.Error(c, http.StatusBadRequest, "头像仅支持 JPG、PNG 和 WebP")
-		return
-	}
-	contentType, err := detectUploadedContentType(file)
-	if err != nil || !avatarImageTypes[contentType] || !imageTypeMatchesExtension(ext, contentType) {
-		response.Error(c, http.StatusBadRequest, "头像图片格式无效")
-		return
-	}
-	if err := validateUploadedImageDimensions(file, settings.AvatarMinDimension, settings.AvatarMaxDimension, settings.AvatarMaxPixels); err != nil {
-		response.Error(c, http.StatusBadRequest, "头像尺寸无效")
-		return
-	}
-	dir := filepath.Join(config.AppConfig.UploadDir, "user-avatars")
-	base := fmt.Sprintf("u%d-%s", user.ID, uuid.NewString())
-	rawTarget := filepath.Join(dir, base+"-raw"+ext)
-	if err := saveUploadedFile(c, file, dir, rawTarget); err != nil {
-		response.Error(c, http.StatusInternalServerError, "头像上传失败")
-		return
-	}
-	defer os.Remove(rawTarget)
-	name := base + ".jpg"
-	target := filepath.Join(dir, name)
-	result, err := media.GenerateSquareJPEGUnderLimit(rawTarget, target, 512, maxUserAvatarBytes)
-	if err != nil || result.Size > maxUserAvatarBytes {
-		_ = os.Remove(target)
-		response.Error(c, http.StatusInternalServerError, "头像压缩失败")
-		return
-	}
-	oldAvatar := user.Avatar
-	avatar := "/uploads/user-avatars/" + name
-	rows, err := repository.UpdateActiveMemberAvatar(user.ID, user.TokenVersion, avatar)
-	if err != nil {
-		_ = os.Remove(target)
-		response.Error(c, http.StatusInternalServerError, "头像保存失败")
-		return
-	}
-	if rows == 0 {
-		_ = os.Remove(target)
-		response.Error(c, http.StatusForbidden, "账号状态已变化，请重新登录")
-		return
-	}
-	user.Avatar = avatar
-	removeUserAvatar(oldAvatar, user.ID)
-	recordUserActivity(c, user, "upload_avatar", "account", fmt.Sprintf("头像已压缩至 %d KB", (result.Size+1023)/1024))
-	response.Success(c, publicUser(user))
-}
-
 func publicUser(user *model.User) gin.H {
 	return gin.H{
-		"id": user.ID, "username": user.Username, "email": user.Email, "avatar": user.Avatar,
+		"id": user.ID, "username": user.Username, "email": user.Email,
 		"status": user.Status, "passwordConfigured": user.PasswordConfigured,
 		"createdAt": user.CreatedAt, "lastActiveAt": user.LastActiveAt,
 	}
@@ -831,13 +762,4 @@ func maskedEmail(email string) string {
 		return "***"
 	}
 	return parts[0][:1] + "***@" + parts[1]
-}
-
-func removeUserAvatar(avatar string, userID uint64) {
-	prefix := "/uploads/user-avatars/u" + fmt.Sprint(userID) + "-"
-	if !strings.HasPrefix(avatar, prefix) {
-		return
-	}
-	target := filepath.Join(config.AppConfig.UploadDir, "user-avatars", filepath.Base(avatar))
-	_ = os.Remove(target)
 }

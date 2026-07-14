@@ -104,7 +104,7 @@ func CreateArticleComment(c *gin.Context) {
 	response.Success(c, model.CommentView{
 		ID: comment.ID, ArticleID: comment.ArticleID, UserID: comment.UserID, ParentID: comment.ParentID,
 		Content: comment.Content, Status: comment.Status, CreatedAt: comment.CreatedAt, UpdatedAt: comment.UpdatedAt,
-		Username: user.Username, Avatar: user.Avatar,
+		Username: user.Username,
 	})
 }
 

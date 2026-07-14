@@ -63,6 +63,10 @@ func main() {
 			c.AbortWithStatus(404)
 			return
 		}
+		if c.Request.URL.Path == "/uploads/user-avatars" || strings.HasPrefix(c.Request.URL.Path, "/uploads/user-avatars/") {
+			c.AbortWithStatus(404)
+			return
+		}
 		c.Header("Cache-Control", "public, max-age=604800, immutable")
 		c.Next()
 	})
@@ -125,7 +129,6 @@ func main() {
 		{
 			account.GET("/me", handler.GetCurrentUser)
 			account.PUT("/username", middleware.RateLimit("account-update", 20, time.Hour), handler.UpdateCurrentUsername)
-			account.POST("/avatar", middleware.RateLimit("avatar-upload", 10, time.Hour), handler.UploadCurrentUserAvatar)
 		}
 
 		member := api.Group("/user")

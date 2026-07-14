@@ -136,17 +136,6 @@ export function UserAuthProvider({ children }) {
     return currentUser
   }, [])
 
-  const uploadAvatar = useCallback(async blob => {
-    const form = new FormData()
-    form.append('file', blob, 'avatar.jpg')
-    const currentUser = await userRequest('/api/account/avatar', {
-      method: 'POST',
-      body: form,
-    })
-    setUser(currentUser)
-    return currentUser
-  }, [])
-
   const openLogin = useCallback((returnTo = '') => {
     const fallback = typeof window === 'undefined'
       ? '/'
@@ -168,8 +157,7 @@ export function UserAuthProvider({ children }) {
     refresh,
     openLogin,
     updateUsername,
-    uploadAvatar,
-	}), [user, loading, authFetch, requestCode, login, register, resetPassword, logout, refresh, openLogin, updateUsername, uploadAvatar])
+	}), [user, loading, authFetch, requestCode, login, register, resetPassword, logout, refresh, openLogin, updateUsername])
 
   return <UserAuthContext.Provider value={value}>{children}</UserAuthContext.Provider>
 }

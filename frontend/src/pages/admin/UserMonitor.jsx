@@ -437,13 +437,9 @@ function UsersTab({ data, loading, keyword, setKeyword, status, setStatus, submi
                   <tr key={id} className="text-gray-700 dark:text-slate-200">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        {valueOf(user, 'avatarUrl', 'avatar') ? (
-                          <img src={valueOf(user, 'avatarUrl', 'avatar')} alt="" className="h-9 w-9 rounded-full object-cover" />
-                        ) : (
-                          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 font-semibold text-gray-500 dark:bg-slate-800 dark:text-slate-300">
-                            {String(valueOf(user, 'username', 'name', 'email') || '?').charAt(0).toUpperCase()}
-                          </span>
-                        )}
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 font-semibold text-gray-500 dark:bg-slate-800 dark:text-slate-300">
+                          {String(valueOf(user, 'username', 'name', 'email') || '?').charAt(0).toUpperCase()}
+                        </span>
                         <div className="min-w-0">
                           <div className="font-medium text-gray-900 dark:text-slate-100">{valueOf(user, 'username', 'name') || '未设置用户名'}</div>
                           <div className="flex max-w-xs items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">

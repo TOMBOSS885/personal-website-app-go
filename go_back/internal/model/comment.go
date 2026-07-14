@@ -26,6 +26,5 @@ type CommentView struct {
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 	Username     string    `json:"username"`
-	Avatar       string    `json:"avatar"`
 	ArticleTitle string    `json:"articleTitle,omitempty"`
 }

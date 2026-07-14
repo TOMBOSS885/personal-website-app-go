@@ -199,7 +199,7 @@ export default function CommentSection({ articleId }) {
             </div>
           )}
           <div className="flex items-start gap-3">
-            <CommentAvatar avatar={user.avatar} username={user.username} size="large" />
+            <CommentAvatar username={user.username} size="large" />
             <div className="min-w-0 flex-1">
               <textarea
                 id="article-comment-input"
@@ -344,7 +344,7 @@ function CommentItem({
 
   return (
     <article className={`flex gap-3 py-6 ${isReply ? 'sm:gap-4' : 'sm:gap-5'}`}>
-      <CommentAvatar avatar={comment.avatar} username={comment.username} />
+      <CommentAvatar username={comment.username} />
       <div className="min-w-0 flex-1">
         <header className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="font-semibold text-gray-900 dark:text-slate-100">{comment.username || '用户'}</span>
@@ -409,11 +409,8 @@ function CommentItem({
   )
 }
 
-function CommentAvatar({ avatar, username, size = 'normal' }) {
+function CommentAvatar({ username, size = 'normal' }) {
   const dimension = size === 'large' ? 'h-10 w-10 sm:h-11 sm:w-11' : 'h-9 w-9 sm:h-10 sm:w-10'
-  if (avatar) {
-    return <img src={avatar} alt="" loading="lazy" referrerPolicy="no-referrer" className={`${dimension} shrink-0 rounded-full bg-gray-100 object-cover ring-2 ring-white/80 dark:bg-slate-800 dark:ring-slate-700`} />
-  }
   return (
     <div aria-hidden="true" className={`${dimension} flex shrink-0 items-center justify-center rounded-full bg-indigo-100 font-semibold text-indigo-600 ring-2 ring-white/80 dark:bg-indigo-500/15 dark:text-indigo-300 dark:ring-slate-700`}>
       {String(username || 'U').slice(0, 1).toUpperCase()}

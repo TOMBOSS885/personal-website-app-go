@@ -50,7 +50,7 @@ func ListArticleComments(articleID uint64, page, size int) ([]model.CommentView,
 
 	var comments []model.CommentView
 	err := db.DB.Table("comments AS c").
-		Select("c.id, c.article_id, c.user_id, c.parent_id, c.content, c.status, c.created_at, c.updated_at, u.username, u.avatar").
+		Select("c.id, c.article_id, c.user_id, c.parent_id, c.content, c.status, c.created_at, c.updated_at, u.username").
 		Joins("JOIN users AS u ON u.id = c.user_id").
 		Where("c.article_id = ? AND c.status = ? AND c.deleted_at IS NULL AND (c.id IN ? OR c.parent_id IN ?)", articleID, "visible", rootIDs, rootIDs).
 		Order("c.created_at ASC, c.id ASC").
@@ -81,7 +81,7 @@ func ListAdminComments(keyword, status string, page, size int) ([]model.CommentV
 	if size <= 0 || size > 100 {
 		size = 30
 	}
-	err := query.Select("c.id, c.article_id, c.user_id, c.parent_id, c.content, c.status, c.created_at, c.updated_at, u.username, u.avatar, a.title AS article_title").
+	err := query.Select("c.id, c.article_id, c.user_id, c.parent_id, c.content, c.status, c.created_at, c.updated_at, u.username, a.title AS article_title").
 		Order("c.created_at DESC").Offset(page * size).Limit(size).Scan(&comments).Error
 	return comments, total, err
 }
