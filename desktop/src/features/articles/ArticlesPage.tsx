@@ -57,13 +57,12 @@ export function ArticlesPage() {
     <div className="page">
       <section className="page-intro compact">
         <div>
-          <span className="section-label">NOTES & STORIES</span>
           <h2>文章归档</h2>
           <p>技术笔记、生活记录与持续更新的长篇文章。</p>
         </div>
         <div className="summary-number">
           <strong>{articleQuery.data?.totalElements ?? '—'}</strong>
-          <span>ARTICLES</span>
+          <span>篇</span>
         </div>
       </section>
 

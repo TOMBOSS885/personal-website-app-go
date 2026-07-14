@@ -41,7 +41,7 @@ $env:PATH = "C:\Users\$env:USERNAME\.cargo\bin;$env:PATH"
 npm run tauri dev
 ```
 
-默认服务器是 `http://127.0.0.1:8080`，也可以在应用“设置”中改为生产域名。
+默认服务器是 `https://blog.tombossking.xyz`。本地联调时，在“设置 > 高级选项”中确认后可临时改为 `http://127.0.0.1:8080`。
 
 ## 验证
 

@@ -69,11 +69,6 @@ export function HomePage() {
             <Link className="button button-secondary" to="/projects">
               <FolderGit2 size={17} /> 浏览项目
             </Link>
-            {profile?.github && (
-              <button className="icon-button" title="在系统浏览器打开 GitHub" onClick={() => openExternalUrl(profile.github)}>
-                <Github size={18} />
-              </button>
-            )}
           </div>
           <div className="social-links" aria-label="个人链接">
             {profile?.website && <button title="个人网站" onClick={() => void openExternalUrl(profile.website)}><Globe2 size={15} /></button>}
@@ -98,7 +93,7 @@ export function HomePage() {
 
       {featureCards.length > 0 && (
         <section className="content-section">
-          <div className="section-heading"><div><span className="section-label">WHAT I DO</span><h2>能力与方向</h2></div></div>
+          <div className="section-heading"><div><h2>能力与方向</h2></div></div>
           <div className="feature-grid">
             {featureCards.map((feature) => {
               const Icon = featureIcon(feature.icon)
@@ -120,8 +115,7 @@ export function HomePage() {
       <section className="content-section">
         <div className="section-heading">
           <div>
-            <span className="section-label">LATEST NOTES</span>
-            <h2>最近更新</h2>
+              <h2>最近更新</h2>
           </div>
           <Link to="/articles">查看全部 <ArrowRight size={16} /></Link>
         </div>
@@ -136,7 +130,6 @@ export function HomePage() {
         <section className="content-section project-highlight-section">
           <div className="section-heading">
             <div>
-              <span className="section-label">SELECTED WORK</span>
               <h2>精选项目</h2>
             </div>
             <Link to="/projects">项目档案 <ArrowRight size={16} /></Link>
@@ -161,7 +154,6 @@ export function HomePage() {
         <section className="content-section skills-section">
           <div className="section-heading">
             <div>
-              <span className="section-label">TOOLKIT</span>
               <h2>技能图谱</h2>
             </div>
           </div>
@@ -184,7 +176,7 @@ export function HomePage() {
 
       {(profile?.ctaTitle || profile?.ctaDescription) && (
         <section className="home-cta">
-          <div><span className="section-label">LET'S CONNECT</span><h2>{profile.ctaTitle || '保持联系'}</h2><p>{profile.ctaDescription}</p></div>
+          <div><h2>{profile.ctaTitle || '保持联系'}</h2><p>{profile.ctaDescription}</p></div>
           <div>{profile.website && <button className="button button-secondary" onClick={() => void openExternalUrl(profile.website)}><ExternalLink size={16} />访问网站</button>}{profile.emailPublic && <button className="button button-primary" onClick={() => void openExternalUrl(`mailto:${profile.emailPublic}`)}><Mail size={16} />发送邮件</button>}</div>
         </section>
       )}

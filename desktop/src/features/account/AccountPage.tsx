@@ -104,7 +104,6 @@ function AccountAccess() {
       <section className="account-access">
         <aside className="account-intro">
           <span className="account-emblem"><ShieldCheck size={28} /></span>
-          <span className="section-label">READER ACCOUNT</span>
           <h2>把博客讨论与账号带到桌面</h2>
           <p>使用与 Web 端相同的普通用户账号。登录凭据由 Windows 安全凭据库保存，不写入浏览器存储。</p>
           <div className="account-benefits">
@@ -161,7 +160,7 @@ function AccountProfile() {
     <div className="page account-page">
       <section className="profile-overview">
         <span className="profile-monogram">{user.username.slice(0, 1).toUpperCase()}</span>
-        <div><span className="section-label">SIGNED IN</span><h2>{user.username}</h2><p>{user.email}</p></div>
+        <div><h2>{user.username}</h2><p>{user.email}</p></div>
         <span className="profile-status"><CheckCircle2 size={14} /> 已登录</span>
       </section>
       <section className="account-settings-grid">

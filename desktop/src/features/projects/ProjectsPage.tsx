@@ -35,11 +35,10 @@ export function ProjectsPage() {
     <div className="page">
       <section className="page-intro compact">
         <div>
-          <span className="section-label">SELECTED & ARCHIVED</span>
           <h2>作品与实验</h2>
           <p>从完整产品到周末实验，所有公开项目都从同一服务器同步。</p>
         </div>
-        <div className="summary-number"><strong>{query.data.length}</strong><span>PROJECTS</span></div>
+        <div className="summary-number"><strong>{query.data.length}</strong><span>个</span></div>
       </section>
 
       <div className="filter-bar">

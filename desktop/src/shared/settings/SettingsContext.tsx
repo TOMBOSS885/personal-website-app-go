@@ -17,7 +17,8 @@ type SettingsContextValue = {
 }
 
 const STORAGE_KEY = 'personal-blog-desktop:settings:v1'
-const defaultServer = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8080'
+export const DEFAULT_SERVER_URL = 'https://blog.tombossking.xyz'
+const defaultServer = import.meta.env.VITE_API_BASE_URL || DEFAULT_SERVER_URL
 const defaults: AppSettings = {
   serverUrl: normalizeServerUrl(defaultServer),
   language: 'zh',

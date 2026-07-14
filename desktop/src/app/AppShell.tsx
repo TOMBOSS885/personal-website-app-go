@@ -37,7 +37,7 @@ const titles: Record<string, string> = {
   '/articles': '全部文章',
   '/projects': '项目档案',
   '/search': '全站搜索',
-  '/settings': '应用设置',
+  '/settings': '设置',
   '/account': '读者账号',
 }
 
@@ -129,14 +129,10 @@ export function AppShell() {
       <aside className="sidebar">
         <div className="brand-block">
           <span className="brand-mark">P.</span>
-          <span>
-            <strong>{profile?.nickname || 'Personal Blog'}</strong>
-            <small>DESKTOP JOURNAL</small>
-          </span>
+          <strong>{profile?.nickname || 'Personal Blog'}</strong>
         </div>
 
         <nav className="primary-nav" aria-label="主导航">
-          <span className="nav-caption">阅读</span>
           {navigation.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
@@ -153,7 +149,7 @@ export function AppShell() {
         <div className="sidebar-spacer" />
         <div className={`connection-status ${homeQuery.isError ? 'offline' : ''}`}>
           {homeQuery.isError ? <WifiOff size={15} /> : <Wifi size={15} />}
-          <span>{homeQuery.isError ? '服务器未连接' : homeQuery.isPending ? '正在连接' : '内容已同步'}</span>
+          <span>{homeQuery.isError ? '离线' : homeQuery.isPending ? '连接中' : '已同步'}</span>
         </div>
         <NavLink to="/account" className={({ isActive }) => `nav-item account-nav${isActive ? ' active' : ''}`}>
           <UserRound size={18} strokeWidth={1.8} />
@@ -168,13 +164,11 @@ export function AppShell() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <span className="topbar-eyebrow">PERSONAL JOURNAL</span>
             <h1>{title}</h1>
           </div>
           <button className="search-trigger" onClick={() => navigate('/search')}>
             <Search size={17} />
             <span>搜索博客内容</span>
-            <kbd>Ctrl K</kbd>
           </button>
           {auth.user ? (
             <button className="topbar-avatar avatar-fallback account-avatar-button" title="打开读者账号" onClick={() => navigate('/account')}>

@@ -1,8 +1,23 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Globe2, Monitor, Moon, Music2, Save, Server, Sun, TestTube2, TriangleAlert } from 'lucide-react'
+import {
+  CheckCircle2,
+  ChevronDown,
+  Globe2,
+  LockKeyhole,
+  Monitor,
+  Moon,
+  Music2,
+  Pencil,
+  RotateCcw,
+  Save,
+  Server,
+  Sun,
+  TestTube2,
+  TriangleAlert,
+} from 'lucide-react'
 import { useEffect, useState, type ReactNode } from 'react'
 import { isSecureServerUrl, normalizeServerUrl, publicApi } from '../../shared/api/client'
-import { useSettings, type ColorMode } from '../../shared/settings/SettingsContext'
+import { DEFAULT_SERVER_URL, useSettings, type ColorMode } from '../../shared/settings/SettingsContext'
 
 type TestState = { kind: 'idle' | 'testing' | 'success' | 'error'; message?: string }
 
@@ -10,6 +25,7 @@ export function SettingsPage() {
   const { settings, updateSettings } = useSettings()
   const queryClient = useQueryClient()
   const [serverDraft, setServerDraft] = useState(settings.serverUrl)
+  const [editingServer, setEditingServer] = useState(false)
   const [saved, setSaved] = useState(false)
   const [test, setTest] = useState<TestState>({ kind: 'idle' })
 
@@ -22,61 +38,45 @@ export function SettingsPage() {
 
   const saveServer = () => {
     if (!normalized) return
+    if (normalized !== settings.serverUrl && !window.confirm('更改内容服务器会切换全部博客数据，并退出当前服务器的登录状态。确定继续吗？')) return
     updateSettings({ serverUrl: normalized })
     queryClient.removeQueries()
+    setEditingServer(false)
     setSaved(true)
     window.setTimeout(() => setSaved(false), 1800)
   }
+
   const testServer = async () => {
     if (!normalized) return setTest({ kind: 'error', message: '服务器地址格式不正确' })
     setTest({ kind: 'testing' })
     try {
       await publicApi.health(normalized)
-      setTest({ kind: 'success', message: '服务器连接正常' })
+      setTest({ kind: 'success', message: '连接正常' })
     } catch (error) {
       setTest({ kind: 'error', message: error instanceof Error ? error.message : '连接失败' })
     }
   }
 
+  const cancelServerEdit = () => {
+    setServerDraft(settings.serverUrl)
+    setEditingServer(false)
+    setTest({ kind: 'idle' })
+  }
+
   return (
     <div className="page settings-page">
-      <section className="settings-heading">
-        <span className="section-label">PREFERENCES</span>
-        <h2>应用设置</h2>
-      </section>
-
-      <section className="settings-section">
-        <div className="setting-title"><span><Server size={18} /></span><div><h3>内容服务器</h3><p>公开博客 API 与媒体资源的根地址</p></div></div>
-        <div className="server-setting-row">
-          <label className="text-field">
-            <span>服务器地址</span>
-            <input value={serverDraft} onChange={(event) => { setServerDraft(event.target.value); setTest({ kind: 'idle' }) }} placeholder="https://blog.example.com" />
-          </label>
-          <button className="button button-secondary" onClick={testServer} disabled={!normalized || test.kind === 'testing'}>
-            <TestTube2 size={16} /> {test.kind === 'testing' ? '测试中' : '测试连接'}
-          </button>
-          <button className="button button-primary" onClick={saveServer} disabled={!normalized}>
-            {saved ? <CheckCircle2 size={16} /> : <Save size={16} />} {saved ? '已保存' : '保存'}
-          </button>
-        </div>
-        {test.kind !== 'idle' && test.kind !== 'testing' && (
-          <div className={`setting-notice ${test.kind}`}>
-            {test.kind === 'success' ? <CheckCircle2 size={16} /> : <TriangleAlert size={16} />}{test.message}
-          </div>
-        )}
-        {normalized && !secure && <div className="setting-notice warning"><TriangleAlert size={16} />生产服务器应使用 HTTPS，避免内容在传输中被篡改。</div>}
-      </section>
+      <header className="settings-heading"><h2>设置</h2></header>
 
       <section className="settings-section split-settings">
         <div>
-          <div className="setting-title"><span><Globe2 size={18} /></span><div><h3>内容语言</h3><p>优先读取服务器上的对应简介</p></div></div>
+          <div className="setting-title"><span><Globe2 size={18} /></span><div><h3>内容语言</h3></div></div>
           <div className="segmented-control">
             <button className={settings.language === 'zh' ? 'active' : ''} onClick={() => { updateSettings({ language: 'zh' }); queryClient.removeQueries() }}>中文</button>
             <button className={settings.language === 'en' ? 'active' : ''} onClick={() => { updateSettings({ language: 'en' }); queryClient.removeQueries() }}>English</button>
           </div>
         </div>
         <div>
-          <div className="setting-title"><span><Monitor size={18} /></span><div><h3>外观</h3><p>选择阅读界面的明暗模式</p></div></div>
+          <div className="setting-title"><span><Monitor size={18} /></span><div><h3>外观</h3></div></div>
           <div className="segmented-control icon-segments">
             <ModeButton mode="system" value={settings.colorMode} icon={<Monitor size={15} />} label="跟随系统" onSelect={(colorMode) => updateSettings({ colorMode })} />
             <ModeButton mode="light" value={settings.colorMode} icon={<Sun size={15} />} label="浅色" onSelect={(colorMode) => updateSettings({ colorMode })} />
@@ -86,13 +86,35 @@ export function SettingsPage() {
       </section>
 
       <section className="settings-section media-settings">
-        <div className="setting-title"><span><Music2 size={18} /></span><div><h3>桌面体验</h3><p>控制从服务器同步的可选媒体功能</p></div></div>
-        <div className="toggle-list">
-          <label><span><Music2 size={16} /><span><strong>音乐播放栏</strong><small>登录后加载 Web 端公开歌单</small></span></span><input type="checkbox" checked={settings.musicEnabled} onChange={(event) => updateSettings({ musicEnabled: event.target.checked })} /></label>
-        </div>
+        <div className="setting-title"><span><Music2 size={18} /></span><div><h3>音乐播放栏</h3></div></div>
+        <label className="single-toggle"><input aria-label="音乐播放栏" type="checkbox" checked={settings.musicEnabled} onChange={(event) => updateSettings({ musicEnabled: event.target.checked })} /></label>
       </section>
 
-      <section className="settings-meta"><span>Personal Blog Desktop</span><span>0.1.0</span><span>Tauri + React</span></section>
+      <details className="advanced-settings">
+        <summary><span><LockKeyhole size={17} /><strong>高级选项</strong></span><ChevronDown size={17} /></summary>
+        <div className="advanced-content">
+          <div className="advanced-title"><span><Server size={18} /></span><div><h3>内容服务器</h3><code>{settings.serverUrl}</code></div></div>
+
+          {!editingServer ? (
+            <div className="advanced-actions">
+              {saved && <span className="saved-indicator"><CheckCircle2 size={14} /> 已保存</span>}
+              <button className="button button-ghost" onClick={() => setEditingServer(true)}><Pencil size={15} /> 编辑地址</button>
+            </div>
+          ) : (
+            <div className="server-editor">
+              <label className="text-field"><span>服务器地址</span><input value={serverDraft} onChange={(event) => { setServerDraft(event.target.value); setTest({ kind: 'idle' }) }} autoComplete="off" spellCheck={false} /></label>
+              <div className="server-editor-actions">
+                <button className="button button-ghost" onClick={() => { setServerDraft(DEFAULT_SERVER_URL); setTest({ kind: 'idle' }) }}><RotateCcw size={15} /> 恢复默认</button>
+                <button className="button button-secondary" onClick={testServer} disabled={!normalized || test.kind === 'testing'}><TestTube2 size={15} /> {test.kind === 'testing' ? '测试中' : '测试连接'}</button>
+                <button className="button button-primary" onClick={saveServer} disabled={!normalized}><Save size={15} /> 确认更改</button>
+                <button className="button button-ghost" onClick={cancelServerEdit}>取消</button>
+              </div>
+              {test.kind !== 'idle' && test.kind !== 'testing' && <div className={`setting-notice ${test.kind}`}>{test.kind === 'success' ? <CheckCircle2 size={15} /> : <TriangleAlert size={15} />}{test.message}</div>}
+              {normalized && !secure && <div className="setting-notice warning"><TriangleAlert size={15} />远程服务器必须使用 HTTPS</div>}
+            </div>
+          )}
+        </div>
+      </details>
     </div>
   )
 }

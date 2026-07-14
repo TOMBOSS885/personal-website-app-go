@@ -23,7 +23,6 @@ export function SearchPage() {
   return (
     <div className="page search-page">
       <section className="search-stage">
-        <span className="section-label">SEARCH THE JOURNAL</span>
         <h2>找到那篇文章或那个项目</h2>
         <form onSubmit={(event) => {
           event.preventDefault()
