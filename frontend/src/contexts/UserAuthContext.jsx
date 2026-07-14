@@ -4,12 +4,17 @@ const UserAuthContext = createContext(null)
 
 async function readResponse(response) {
   const contentType = response.headers.get('content-type') || ''
-  const body = contentType.includes('application/json')
+	const isJSON = contentType.includes('application/json')
+	const body = isJSON
     ? await response.json().catch(() => ({}))
     : { message: await response.text().catch(() => '') }
 
   if (!response.ok) {
-    const error = new Error(body?.message || '请求失败，请稍后重试')
+		const htmlGatewayError = !isJSON && /<(!doctype|html)[\s>]/i.test(body?.message || '')
+		const message = htmlGatewayError
+		  ? `服务器暂时无法连接（HTTP ${response.status}），请稍后重试`
+		  : body?.message || '请求失败，请稍后重试'
+		const error = new Error(message)
     error.status = response.status
     error.data = body
     throw error
@@ -81,19 +86,38 @@ export function UserAuthProvider({ children }) {
     }
   }, [])
 
-  const requestCode = useCallback(email => userRequest('/api/user-auth/code', {
+	const requestCode = useCallback((email, purpose) => userRequest('/api/user-auth/code', {
     method: 'POST',
-    body: JSON.stringify({ email: email.trim() }),
+		body: JSON.stringify({ email: email.trim(), purpose }),
   }), [])
 
-  const login = useCallback(async (email, code) => {
+	const login = useCallback(async (identifier, password) => {
     const currentUser = await userRequest('/api/user-auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email: email.trim(), code: code.trim() }),
+			body: JSON.stringify({ identifier: identifier.trim(), password }),
     })
     setUser(currentUser)
     return currentUser
   }, [])
+
+	const register = useCallback(async ({ email, code, username, password }) => {
+		const currentUser = await userRequest('/api/user-auth/register', {
+			method: 'POST',
+			body: JSON.stringify({
+				email: email.trim(),
+				code: code.trim(),
+				username: username.trim(),
+				password,
+			}),
+		})
+		setUser(currentUser)
+		return currentUser
+	}, [])
+
+	const resetPassword = useCallback(({ email, code, password }) => userRequest('/api/user-auth/password/reset', {
+		method: 'POST',
+		body: JSON.stringify({ email: email.trim(), code: code.trim(), password }),
+	}), [])
 
   const logout = useCallback(async () => {
     try {
@@ -138,12 +162,14 @@ export function UserAuthProvider({ children }) {
     authFetch,
     requestCode,
     login,
+		register,
+		resetPassword,
     logout,
     refresh,
     openLogin,
     updateUsername,
     uploadAvatar,
-  }), [user, loading, authFetch, requestCode, login, logout, refresh, openLogin, updateUsername, uploadAvatar])
+	}), [user, loading, authFetch, requestCode, login, register, resetPassword, logout, refresh, openLogin, updateUsername, uploadAvatar])
 
   return <UserAuthContext.Provider value={value}>{children}</UserAuthContext.Provider>
 }

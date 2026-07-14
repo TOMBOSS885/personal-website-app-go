@@ -87,7 +87,9 @@ func main() {
 			c.Next()
 		})
 		userAuth.POST("/code", middleware.RateLimit("email-code", 10, time.Minute), handler.RequestUserEmailCode)
-		userAuth.POST("/login", middleware.RateLimit("email-login", 20, time.Minute), handler.LoginUserByEmailCode)
+		userAuth.POST("/register", middleware.RateLimit("email-register", 10, time.Minute), handler.RegisterUserByEmailCode)
+		userAuth.POST("/login", middleware.RateLimit("email-login", 20, time.Minute), handler.LoginUserByPassword)
+		userAuth.POST("/password/reset", middleware.RateLimit("password-reset", 10, time.Minute), handler.ResetUserPasswordByEmailCode)
 		api.GET("/public/article-sites/:id/:siteKey/:version/:expires/:sign/*filepath", handler.ServeArticleSiteFile)
 
 		public := api.Group("/public")

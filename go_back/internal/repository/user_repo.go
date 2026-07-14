@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/model"
 	"strings"
@@ -19,8 +20,26 @@ func GetUserByUsername(username string) (*model.User, error) {
 }
 
 func GetUserByEmail(email string) (*model.User, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
 	var user model.User
-	err := db.DB.Where("LOWER(email) = ?", strings.ToLower(strings.TrimSpace(email))).First(&user).Error
+	err := db.DB.Where("email = ?", email).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		err = db.DB.Where("LOWER(email) = ?", email).First(&user).Error
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func GetMemberUserByIdentifier(identifier string) (*model.User, error) {
+	identifier = strings.TrimSpace(identifier)
+	var user model.User
+	err := db.DB.Where("(username = ? OR email = ?) AND COALESCE(UPPER(role), '') <> ?", identifier, strings.ToLower(identifier), "ADMIN").First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		normalized := strings.ToLower(identifier)
+		err = db.DB.Where("(LOWER(username) = ? OR LOWER(email) = ?) AND COALESCE(UPPER(role), '') <> ?", normalized, normalized, "ADMIN").First(&user).Error
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -35,11 +54,19 @@ func GetUserByID(id uint64) (*model.User, error) {
 
 func UsernameExists(username string, excludeUserID uint64) (bool, error) {
 	var count int64
-	query := db.DB.Model(&model.User{}).Where("LOWER(username) = ?", strings.ToLower(strings.TrimSpace(username)))
+	username = strings.TrimSpace(username)
+	query := db.DB.Model(&model.User{}).Where("username = ?", username)
 	if excludeUserID > 0 {
 		query = query.Where("id <> ?", excludeUserID)
 	}
 	err := query.Count(&count).Error
+	if err == nil && count == 0 {
+		query = db.DB.Model(&model.User{}).Where("LOWER(username) = ?", strings.ToLower(username))
+		if excludeUserID > 0 {
+			query = query.Where("id <> ?", excludeUserID)
+		}
+		err = query.Count(&count).Error
+	}
 	return count > 0, err
 }
 
@@ -66,16 +93,6 @@ func UpdateUser(user *model.User) error {
 	return db.DB.Save(user).Error
 }
 
-// InitializeUserLoginState only fills fields introduced for member sessions. It
-// deliberately preserves an administrator's concurrent disable/revoke update.
-func InitializeUserLoginState(userID uint64) error {
-	return db.DB.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
-		"email_verified": true,
-		"status":         gorm.Expr("CASE WHEN status IS NULL OR status = '' THEN ? ELSE status END", "active"),
-		"token_version":  gorm.Expr("CASE WHEN token_version IS NULL OR token_version = 0 THEN 1 ELSE token_version END"),
-	}).Error
-}
-
 func UpdateActiveMemberUsername(userID, tokenVersion uint64, username string) (int64, error) {
 	result := db.DB.Model(&model.User{}).
 		Where("id = ? AND LOWER(status) = ? AND COALESCE(UPPER(role), '') <> ? AND token_version = ?", userID, "active", "ADMIN", tokenVersion).
@@ -87,6 +104,17 @@ func UpdateActiveMemberAvatar(userID, tokenVersion uint64, avatar string) (int64
 	result := db.DB.Model(&model.User{}).
 		Where("id = ? AND LOWER(status) = ? AND COALESCE(UPPER(role), '') <> ? AND token_version = ?", userID, "active", "ADMIN", tokenVersion).
 		Update("avatar", avatar)
+	return result.RowsAffected, result.Error
+}
+
+func ResetActiveMemberPassword(userID uint64, passwordHash string) (int64, error) {
+	result := db.DB.Model(&model.User{}).
+		Where("id = ? AND LOWER(status) = ? AND COALESCE(UPPER(role), '') <> ?", userID, "active", "ADMIN").
+		Updates(map[string]interface{}{
+			"password":            passwordHash,
+			"password_configured": true,
+			"token_version":       gorm.Expr("token_version + 1"),
+		})
 	return result.RowsAffected, result.Error
 }
 

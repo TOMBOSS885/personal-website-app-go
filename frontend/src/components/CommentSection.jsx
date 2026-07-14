@@ -159,7 +159,7 @@ export default function CommentSection({ articleId }) {
   }
 
   return (
-    <section aria-labelledby="comments-title" className="mx-auto mt-14 max-w-4xl border-t border-white/70 pt-9 dark:border-slate-700/60">
+    <section aria-labelledby="comments-title" className="mx-auto mt-14 max-w-4xl rounded-3xl border border-white/60 bg-white/75 px-5 py-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:px-8 md:py-8">
       <div className="mb-7 flex items-end justify-between gap-4">
         <div>
           <div className="mb-2 flex items-center gap-2 text-indigo-600 dark:text-indigo-300">
@@ -239,7 +239,7 @@ export default function CommentSection({ articleId }) {
             </div>
           </div>
           <Link to={`/login?returnTo=${encodeURIComponent(`/blog/${articleId}`)}`} className="shrink-0 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-700">
-            邮箱登录
+			登录或注册
           </Link>
         </div>
       )}

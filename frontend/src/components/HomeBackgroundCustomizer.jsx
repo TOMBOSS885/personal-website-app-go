@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Image as ImageIcon, Loader, Palette, RefreshCw, Settings2, X } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import OptimizedImage from './OptimizedImage'
 
@@ -29,6 +30,7 @@ const IMAGE_POSITION_OPTIONS = [
 ]
 
 export default function HomeBackgroundCustomizer() {
+	const location = useLocation()
   const { setCustomTheme, getActiveTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -54,6 +56,8 @@ export default function HomeBackgroundCustomizer() {
       fetchBackgroundImages()
     }
   }, [open, activeTheme.backgroundStyle])
+
+	if (location.pathname === '/login' || location.pathname === '/account') return null
 
   const updateTheme = (patch) => {
     const nextTheme = {

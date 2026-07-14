@@ -68,7 +68,7 @@ func FullHealth(c *gin.Context) {
 	checks["uploads"] = "up"
 
 	if config.AppConfig.RedisEnabled {
-		if !cache.Ready() {
+		if cache.Client == nil {
 			checks["redis"] = "down"
 			c.JSON(http.StatusServiceUnavailable, gin.H{
 				"status": "down",
@@ -77,6 +77,20 @@ func FullHealth(c *gin.Context) {
 			})
 			return
 		}
+		redisCtx, redisCancel := context.WithTimeout(c.Request.Context(), time.Second)
+		redisErr := cache.Client.Ping(redisCtx).Err()
+		redisCancel()
+		if redisErr != nil {
+			cache.MarkFailure(redisErr)
+			checks["redis"] = "down"
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status": "down",
+				"checks": checks,
+				"error":  "redis check failed",
+			})
+			return
+		}
+		cache.MarkSuccess()
 		checks["redis"] = "up"
 	}
 

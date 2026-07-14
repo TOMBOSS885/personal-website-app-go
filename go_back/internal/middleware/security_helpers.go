@@ -10,6 +10,7 @@ import (
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -324,6 +325,10 @@ func recordLimitTrigger(c *gin.Context, category string) {
 
 func limitResponse(c *gin.Context, category string, remaining int64) {
 	message := limitMessage(category)
+	if remaining < 1 {
+		remaining = 1
+	}
+	c.Header("Retry-After", strconv.FormatInt(remaining, 10))
 	c.JSON(http.StatusTooManyRequests, gin.H{
 		"code":             "rate_limited",
 		"category":         category,

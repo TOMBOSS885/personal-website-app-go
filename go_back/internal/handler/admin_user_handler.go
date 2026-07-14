@@ -36,7 +36,7 @@ func AdminListUsers(c *gin.Context) {
 		user := &users[i]
 		items = append(items, gin.H{
 			"id": user.ID, "username": user.Username, "email": user.Email, "avatar": user.Avatar,
-			"status": user.Status, "emailVerified": user.EmailVerified, "loginCount": user.LoginCount,
+			"status": user.Status, "emailVerified": user.EmailVerified, "passwordConfigured": user.PasswordConfigured, "loginCount": user.LoginCount,
 			"createdAt": user.CreatedAt, "lastLoginAt": user.LastLoginAt, "lastActiveAt": user.LastActiveAt,
 		})
 	}

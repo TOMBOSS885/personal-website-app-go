@@ -31,7 +31,7 @@ func SendLoginCode(ctx context.Context, to, code string, expires time.Duration) 
 	if minutes < 1 {
 		minutes = 10
 	}
-	subject := mime.QEncoding.Encode("UTF-8", "您的登录验证码")
+	subject := mime.QEncoding.Encode("UTF-8", "您的邮箱验证码")
 	body := fmt.Sprintf("您的验证码是：%s\r\n\r\n验证码将在 %d 分钟后失效，请勿转发给他人。\r\n如果不是您本人操作，请忽略此邮件。", code, minutes)
 	message := []byte("From: " + formatAddress(cfg.SMTPFromName, cfg.SMTPFrom) + "\r\n" +
 		"To: " + to + "\r\n" +
@@ -103,7 +103,10 @@ func SendLoginCode(ctx context.Context, to, code string, expires time.Duration) 
 	if err := w.Close(); err != nil {
 		return err
 	}
-	return client.Quit()
+	// A successful DATA close means the server accepted the message. A later
+	// QUIT failure must not invalidate a code that may already be delivered.
+	_ = client.Quit()
+	return nil
 }
 
 func tlsConfig(host string) *tls.Config {

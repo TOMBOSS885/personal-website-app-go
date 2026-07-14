@@ -35,6 +35,7 @@ const ACTION_LABELS = {
   update_profile: '修改资料',
   update_username: '修改用户名',
   upload_avatar: '上传头像',
+	reset_password: '重设密码',
   create_comment: '发表评论',
   delete_comment: '删除评论',
   play_music: '播放音乐',
@@ -446,8 +447,9 @@ function UsersTab({ data, loading, keyword, setKeyword, status, setStatus, submi
                         <div className="min-w-0">
                           <div className="font-medium text-gray-900 dark:text-slate-100">{valueOf(user, 'username', 'name') || '未设置用户名'}</div>
                           <div className="flex max-w-xs items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
-                            <span className="truncate">{user.email || '-'}</span>
-                            {user.emailVerified === false && <span className="shrink-0 text-amber-600 dark:text-amber-300">未验证</span>}
+							<span className="truncate">{user.email || '-'}</span>
+							{user.emailVerified === false && <span className="shrink-0 text-amber-600 dark:text-amber-300">未验证</span>}
+							{user.passwordConfigured === false && <span className="shrink-0 text-amber-600 dark:text-amber-300">未设置密码</span>}
                           </div>
                         </div>
                       </div>

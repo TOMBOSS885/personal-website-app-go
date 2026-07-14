@@ -711,7 +711,7 @@ export default function MusicPlayer() {
             {!user ? (
               <div className="px-5 py-5 text-center">
                 <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">登录后收听音乐</div>
-                <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-slate-400">使用邮箱验证码登录，即可访问歌曲和歌词。</p>
+				<p className="mt-1 text-xs leading-5 text-gray-500 dark:text-slate-400">登录账号后即可访问歌曲和歌词。</p>
                 <button
                   type="button"
                   onClick={() => openLogin(`${window.location.pathname}${window.location.search}`)}

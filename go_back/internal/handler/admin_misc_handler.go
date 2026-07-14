@@ -397,6 +397,7 @@ func AdminChangePassword(c *gin.Context) {
 		return
 	}
 	user.Password = string(hash)
+	user.PasswordConfigured = true
 	if err := repository.UpdateUser(user); err != nil {
 		response.Error(c, http.StatusInternalServerError, "密码修改失败")
 		return
