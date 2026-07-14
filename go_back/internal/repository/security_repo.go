@@ -180,6 +180,21 @@ func CreateSecurityEvent(event *model.SecurityEvent) {
 	_ = db.DB.Create(event).Error
 }
 
+func IsKnownAdminLoginIP(username, ip string, since time.Time) (bool, error) {
+	username = strings.TrimSpace(username)
+	ip = strings.TrimSpace(ip)
+	if username == "" || ip == "" {
+		return false, nil
+	}
+
+	var total int64
+	err := db.DB.Model(&model.SecurityEvent{}).
+		Where("type = ? AND username = ? AND ip = ? AND created_at >= ?", "login_success", username, ip, since).
+		Limit(1).
+		Count(&total).Error
+	return total > 0, err
+}
+
 func CountDailySecurityEvents(ip, eventType string, day time.Time) (int64, error) {
 	var total int64
 	start := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, day.Location())
@@ -331,8 +346,9 @@ func ListActiveBans() ([]model.SecurityEvent, error) {
 
 func CleanupSecurityLogs() {
 	now := time.Now()
-	_ = db.DB.Where("created_at < ? AND type NOT IN ?", now.AddDate(0, -1, 0), []string{"limit", "ban"}).Delete(&model.SecurityEvent{}).Error
-	_ = db.DB.Where("created_at < ? AND type IN ?", now.AddDate(-1, 0, 0), []string{"limit", "ban"}).Delete(&model.SecurityEvent{}).Error
+	retainedTypes := []string{"limit", "ban", "login_success", "login_2fa_required", "login_2fa_failed", "login_2fa_success"}
+	_ = db.DB.Where("created_at < ? AND type NOT IN ?", now.AddDate(0, -1, 0), retainedTypes).Delete(&model.SecurityEvent{}).Error
+	_ = db.DB.Where("created_at < ? AND type IN ?", now.AddDate(-1, 0, 0), retainedTypes).Delete(&model.SecurityEvent{}).Error
 	_ = db.DB.Where("date < ?", now.AddDate(0, -1, 0).Format("20060102")).Delete(&model.SecurityAccessStat{}).Error
 }
 

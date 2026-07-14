@@ -25,6 +25,7 @@ const (
 	securityCategoryMusic         = "music"
 	securityCategoryMusicStream   = "music-stream"
 	securityCategoryLogin         = "login"
+	securityCategoryMemberLogin   = "member-login"
 	securityCategoryArticleUnlock = "article-unlock"
 )
 
@@ -421,5 +422,72 @@ func RecordLoginSecurityEvent(c *gin.Context, username string, success bool, mes
 		Method:    c.Request.Method,
 		UserAgent: c.Request.UserAgent(),
 		Message:   message,
+	})
+}
+
+func RecordAdminLogin2FAEvent(c *gin.Context, username, eventType, message string) {
+	severity := "info"
+	if eventType == "login_2fa_failed" {
+		severity = "warning"
+	}
+	repository.CreateSecurityEvent(&model.SecurityEvent{
+		Type:      eventType,
+		Severity:  severity,
+		IP:        c.ClientIP(),
+		Category:  securityCategoryLogin,
+		Username:  username,
+		Path:      c.Request.URL.RequestURI(),
+		Method:    c.Request.Method,
+		UserAgent: c.Request.UserAgent(),
+		Message:   message,
+	})
+}
+
+func RecordMemberLoginSecurityEvent(c *gin.Context, user *model.User, eventType, message string, failures int, lockedUntil *time.Time) {
+	if user == nil {
+		return
+	}
+	now := time.Now()
+	stat := model.SecurityAccessStat{
+		Date:          now.Format("20060102"),
+		IP:            c.ClientIP(),
+		Category:      securityCategoryMemberLogin,
+		UserID:        user.ID,
+		LoginAttempts: 1,
+		LastSeenAt:    now,
+	}
+	severity := "warning"
+	switch eventType {
+	case "member_login_failure":
+		stat.LoginFailures = 1
+	case "member_login_banned":
+		stat.LoginFailures = 1
+		stat.BlockedCount = 1
+		severity = "critical"
+	case "member_login_blocked":
+		stat.BlockedCount = 1
+		severity = "high"
+	}
+	repository.RecordSecurityAccess(stat)
+
+	remaining := int64(0)
+	if lockedUntil != nil && now.Before(*lockedUntil) {
+		remaining = int64(time.Until(*lockedUntil).Seconds())
+	}
+	repository.CreateSecurityEvent(&model.SecurityEvent{
+		Type:             eventType,
+		Severity:         severity,
+		IP:               c.ClientIP(),
+		Category:         securityCategoryMemberLogin,
+		Username:         user.Username,
+		UserID:           user.ID,
+		Path:             c.Request.URL.RequestURI(),
+		Method:           c.Request.Method,
+		UserAgent:        c.Request.UserAgent(),
+		Message:          message,
+		Count:            int64(failures),
+		Limit:            repository.MemberLoginMaxFailures,
+		RemainingSeconds: remaining,
+		ExpiresAt:        lockedUntil,
 	})
 }

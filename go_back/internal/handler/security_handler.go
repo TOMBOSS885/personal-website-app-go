@@ -15,13 +15,16 @@ import (
 )
 
 type activeRestriction struct {
-	Key              string `json:"key"`
-	IP               string `json:"ip"`
-	Category         string `json:"category"`
-	Type             string `json:"type"`
-	Value            string `json:"value"`
-	RemainingSeconds int64  `json:"remainingSeconds"`
-	Severity         string `json:"severity"`
+	Key              string     `json:"key"`
+	IP               string     `json:"ip"`
+	Username         string     `json:"username,omitempty"`
+	UserID           uint64     `json:"userId,omitempty"`
+	Category         string     `json:"category"`
+	Type             string     `json:"type"`
+	Value            string     `json:"value"`
+	RemainingSeconds int64      `json:"remainingSeconds"`
+	Severity         string     `json:"severity"`
+	ExpiresAt        *time.Time `json:"expiresAt,omitempty"`
 }
 
 func AdminSecurityDashboard(c *gin.Context) {
@@ -106,6 +109,24 @@ func AdminUpdateRateLimitSettings(c *gin.Context) {
 func listActiveRestrictions() []activeRestriction {
 	items := make([]activeRestriction, 0)
 	seen := map[string]bool{}
+	if users, err := repository.ListLockedMemberAccounts(time.Now()); err == nil {
+		for i := range users {
+			user := &users[i]
+			if user.LoginLockedUntil == nil {
+				continue
+			}
+			remaining := int64(time.Until(*user.LoginLockedUntil).Seconds())
+			if remaining > 0 {
+				items = append(items, activeRestriction{
+					Key:      "db:member-login:" + strconv.FormatUint(user.ID, 10),
+					Username: user.Username, UserID: user.ID,
+					Category: "member-login", Type: "member_account_ban",
+					Value: "密码连续错误 5 次", RemainingSeconds: remaining,
+					Severity: "critical", ExpiresAt: user.LoginLockedUntil,
+				})
+			}
+		}
+	}
 	if bans, err := repository.ListActiveBans(); err == nil {
 		for _, ban := range bans {
 			remaining := int64(0)
@@ -122,6 +143,7 @@ func listActiveRestrictions() []activeRestriction {
 					Value:            ban.Message,
 					RemainingSeconds: remaining,
 					Severity:         "critical",
+					ExpiresAt:        ban.ExpiresAt,
 				})
 			}
 		}

@@ -39,6 +39,22 @@ func TestEmailCodeHashIsBoundToEmail(t *testing.T) {
 	}
 }
 
+func TestAdminLoginCodePurposeIsBoundToIP(t *testing.T) {
+	first := adminLoginCodePurpose("203.0.113.10")
+	if !strings.HasPrefix(first, emailCodeAdminLogin+":") {
+		t.Fatalf("unexpected admin login code purpose: %q", first)
+	}
+	if first != adminLoginCodePurpose(" 203.0.113.10 ") {
+		t.Fatal("equivalent IP values should produce the same purpose")
+	}
+	if first == adminLoginCodePurpose("203.0.113.11") {
+		t.Fatal("admin login codes must not be reusable from another IP")
+	}
+	if _, err := normalizeEmailCodePurpose(emailCodeAdminLogin); err == nil {
+		t.Fatal("the internal admin login purpose must not be exposed by the public email-code API")
+	}
+}
+
 func TestValidUserPassword(t *testing.T) {
 	for _, value := range []string{"password", "密码password"} {
 		if !validUserPassword(value) {

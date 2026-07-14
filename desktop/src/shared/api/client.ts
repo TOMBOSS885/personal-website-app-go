@@ -22,12 +22,14 @@ type RequestOptions = {
 export class ApiError extends Error {
   readonly status: number
   readonly requestId?: string
+  readonly data?: unknown
 
-  constructor(message: string, status: number, requestId?: string) {
+  constructor(message: string, status: number, requestId?: string, data?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.requestId = requestId
+    this.data = data
   }
 }
 
@@ -101,7 +103,7 @@ async function requestJson<T>(serverUrl: string, path: string, options: RequestO
     const message = payload && typeof payload === 'object' && 'message' in payload
       ? String(payload.message)
       : `服务器返回 ${response.status}`
-    throw new ApiError(message, response.status, requestId)
+    throw new ApiError(message, response.status, requestId, payload)
   }
   return payload as T
 }

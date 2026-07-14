@@ -363,6 +363,11 @@ func authenticateUserPassword(c *gin.Context) (*model.User, bool) {
 		if strings.EqualFold(strings.TrimSpace(user.Status), "disabled") {
 			eligible = false
 		}
+		if user.LoginLockedUntil != nil && time.Now().Before(*user.LoginLockedUntil) {
+			recordLockedMemberLogin(c, user, "member_login_blocked", "临时封禁期间再次尝试登录")
+			writeMemberLoginLocked(c, user.LoginLockedUntil)
+			return nil, false
+		}
 	}
 	if !middleware.AllowLoginAttempt(c.ClientIP(), loginIdentity) {
 		response.Error(c, http.StatusTooManyRequests, "登录失败次数过多，请稍后再试")
@@ -373,13 +378,76 @@ func authenticateUserPassword(c *gin.Context) (*model.User, bool) {
 		response.Error(c, http.StatusInternalServerError, "登录服务暂时不可用")
 		return nil, false
 	}
-	if !passwordMatches || !eligible {
+	if !passwordMatches {
+		middleware.RecordLoginFailure(c.ClientIP(), loginIdentity)
+		if user != nil && eligible {
+			state, err := repository.RecordMemberLoginFailure(user.ID, time.Now())
+			if err != nil {
+				response.Error(c, http.StatusInternalServerError, "登录服务暂时不可用")
+				return nil, false
+			}
+			user.FailedLoginAttempts = state.Failures
+			user.LoginLockedUntil = state.LockedUntil
+			if state.LockedUntil != nil {
+				eventType := "member_login_banned"
+				detail := fmt.Sprintf("密码连续错误 %d 次，账号封禁至 %s", repository.MemberLoginMaxFailures, formatMemberLockTime(*state.LockedUntil))
+				if state.AlreadyLocked {
+					eventType = "member_login_blocked"
+					detail = "临时封禁期间再次尝试登录"
+				}
+				recordLockedMemberLogin(c, user, eventType, detail)
+				writeMemberLoginLocked(c, state.LockedUntil)
+				return nil, false
+			}
+			detail := fmt.Sprintf("密码错误（第 %d/%d 次）", state.Failures, repository.MemberLoginMaxFailures)
+			recordUserActivity(c, user, "login_failed", "account", detail)
+			middleware.RecordMemberLoginSecurityEvent(c, user, "member_login_failure", detail, state.Failures, nil)
+		}
+		response.Error(c, http.StatusUnauthorized, "用户名、邮箱或密码错误")
+		return nil, false
+	}
+	if !eligible {
 		middleware.RecordLoginFailure(c.ClientIP(), loginIdentity)
 		response.Error(c, http.StatusUnauthorized, "用户名、邮箱或密码错误")
 		return nil, false
 	}
+	if err := repository.ResetMemberLoginFailures(user.ID); err != nil {
+		response.Error(c, http.StatusInternalServerError, "登录服务暂时不可用")
+		return nil, false
+	}
+	user.FailedLoginAttempts = 0
+	user.LoginLockedUntil = nil
 	middleware.RecordLoginSuccess(c.ClientIP(), loginIdentity)
 	return user, true
+}
+
+func recordLockedMemberLogin(c *gin.Context, user *model.User, eventType, detail string) {
+	if user == nil || user.LoginLockedUntil == nil {
+		return
+	}
+	recordUserActivity(c, user, strings.TrimPrefix(eventType, "member_"), "account", detail)
+	middleware.RecordMemberLoginSecurityEvent(c, user, eventType, detail, user.FailedLoginAttempts, user.LoginLockedUntil)
+}
+
+func writeMemberLoginLocked(c *gin.Context, lockedUntil *time.Time) {
+	if lockedUntil == nil {
+		response.Error(c, http.StatusLocked, "账号已被临时封禁，请稍后重试")
+		return
+	}
+	remaining := int64(time.Until(*lockedUntil).Seconds())
+	if remaining < 1 {
+		remaining = 1
+	}
+	c.JSON(http.StatusLocked, gin.H{
+		"code":             "account_temporarily_banned",
+		"message":          fmt.Sprintf("密码连续错误 %d 次，账号已封禁 1 天，请于 %s 后重试", repository.MemberLoginMaxFailures, formatMemberLockTime(*lockedUntil)),
+		"lockedUntil":      lockedUntil.UTC().Format(time.RFC3339),
+		"remainingSeconds": remaining,
+	})
+}
+
+func formatMemberLockTime(value time.Time) string {
+	return value.Format("2006-01-02 15:04:05")
 }
 
 func ResetUserPasswordByEmailCode(c *gin.Context) {

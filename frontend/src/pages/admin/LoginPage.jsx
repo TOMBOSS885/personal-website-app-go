@@ -1,145 +1,233 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Lock, User, Sun, Moon } from 'lucide-react'
+import { KeyRound, Loader, Lock, Mail, Moon, RefreshCw, ShieldCheck, Sun, User } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 
 const API_BASE = ''
+const RESEND_COOLDOWN_SECONDS = 60
 
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const [verificationRequired, setVerificationRequired] = useState(false)
+  const [maskedEmail, setMaskedEmail] = useState('')
+  const [resendSeconds, setResendSeconds] = useState(0)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resending, setResending] = useState(false)
   const navigate = useNavigate()
   const { colorMode, toggleColorMode } = useTheme()
 
-  const handleLogin = async (e) => {
-    e.preventDefault()
+  useEffect(() => {
+    if (resendSeconds <= 0) return undefined
+    const timer = window.setInterval(() => {
+      setResendSeconds(current => Math.max(0, current - 1))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [resendSeconds])
+
+  const resetVerification = () => {
+    setVerificationRequired(false)
+    setMaskedEmail('')
+    setCode('')
+    setResendSeconds(0)
     setError('')
-    setLoading(true)
-    
+  }
+
+  const beginVerification = (data, cooldown = RESEND_COOLDOWN_SECONDS) => {
+    setVerificationRequired(true)
+    setMaskedEmail(data.maskedEmail || maskedEmail)
+    setCode('')
+    setResendSeconds(Math.max(1, Number(data.retryAfter) || cooldown))
+  }
+
+  const submitCredentials = async ({ resend = false } = {}) => {
+    setError('')
+    resend ? setResending(true) : setLoading(true)
+
     try {
+      const payload = { username, password }
+      if (verificationRequired && !resend) payload.code = code
+
       const res = await fetch(`${API_BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify(payload),
       })
-      
+      let data = {}
+      try {
+        data = await res.json()
+      } catch {
+        // The status-based fallback below handles an empty or invalid response.
+      }
+
+      if (res.status === 202 && data.verificationRequired) {
+        beginVerification(data)
+        return
+      }
       if (!res.ok) {
-        throw new Error('Login failed')
+        if (data.verificationRequired) beginVerification(data)
+        throw new Error(data.message || `登录失败（${res.status}）`)
       }
-      
-      const data = await res.json()
-      if (data.token) {
-        sessionStorage.setItem('token', data.token)
-        localStorage.setItem('username', username)
-        navigate('/admin')
-      } else {
-        setError('登录失败，请检查用户名和密码')
+      if (!data.token) {
+        throw new Error('登录响应无效，请稍后重试')
       }
-    } catch (err) {
-      console.error('Login error:', err)
-      setError('登录失败，请稍后重试')
+
+      sessionStorage.setItem('token', data.token)
+      localStorage.setItem('username', username)
+      navigate('/admin')
+    } catch (requestError) {
+      console.error('Login error:', requestError)
+      setError(requestError instanceof Error ? requestError.message : '登录失败，请稍后重试')
     } finally {
-      setLoading(false)
+      resend ? setResending(false) : setLoading(false)
     }
   }
 
+  const handleLogin = async event => {
+    event.preventDefault()
+    await submitCredentials()
+  }
+
+  const handleUsernameChange = event => {
+    setUsername(event.target.value)
+    if (verificationRequired) resetVerification()
+  }
+
+  const handlePasswordChange = event => {
+    setPassword(event.target.value)
+    if (verificationRequired) resetVerification()
+  }
+
+  const busy = loading || resending
+  const submitDisabled = busy || (verificationRequired && code.length !== 6)
+
   return (
-    <div className="admin-login min-h-screen bg-gradient-to-br from-slate-100 via-indigo-100 to-purple-100 flex items-center justify-center px-4 relative overflow-hidden transition-colors dark:from-slate-950 dark:via-purple-950 dark:to-slate-950">
+    <main className="admin-login relative flex min-h-[100svh] items-center justify-center overflow-y-auto bg-slate-100 px-4 py-16 transition-colors dark:bg-slate-950 sm:px-6">
       <button
         type="button"
         onClick={toggleColorMode}
-        className="absolute right-5 top-5 z-20 flex h-11 w-11 items-center justify-center rounded-xl border border-white/70 bg-white/80 text-gray-700 shadow-lg backdrop-blur-md transition-colors hover:bg-white dark:border-slate-700/70 dark:bg-slate-900/80 dark:text-slate-100 dark:hover:bg-slate-800"
+        className="fixed right-4 top-4 z-20 flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800 sm:right-6 sm:top-6"
         title={colorMode === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
       >
         {colorMode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
       </button>
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
-        <div className="absolute top-40 left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
-      </div>
 
-      <div className="max-w-md w-full relative z-10">
-        <div className="text-center mb-8">
-          <div 
-          className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-2xl"
-          style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow-lg)' }}
-        >
-          <Lock className="w-10 h-10 text-white" />
-        </div>
-          <h1 className="text-3xl font-bold text-white mb-2">管理后台</h1>
-          <p className="text-gray-400">登录以管理您的网站内容</p>
+      <div className="w-full max-w-md">
+        <div className="mb-7 text-center">
+          <div
+            className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg shadow-lg"
+            style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow-lg)' }}
+          >
+            <Lock className="h-8 w-8 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white">管理后台</h1>
+          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+            {verificationRequired ? '完成邮箱安全验证后继续登录' : '登录以管理网站内容'}
+          </p>
         </div>
 
-        <form onSubmit={handleLogin} className="bg-white/10 backdrop-blur-xl p-8 rounded-2xl shadow-2xl border border-white/20">
+        <form onSubmit={handleLogin} className="rounded-lg border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60 dark:border-slate-800 dark:bg-slate-900 dark:shadow-black/20 sm:p-8">
+          {verificationRequired && (
+            <div className="mb-5 flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-100">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="min-w-0">
+                <div className="font-semibold">不常用 IP 安全验证</div>
+                <div className="mt-1 break-all text-emerald-700 dark:text-emerald-300">验证码已发送至 {maskedEmail || '站长公开邮箱'}</div>
+              </div>
+            </div>
+          )}
+
           {error && (
-            <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 text-red-300 text-sm rounded-lg backdrop-blur-sm">
+            <div role="alert" aria-live="polite" className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
               {error}
             </div>
           )}
 
-          <div className="mb-5">
-            <label className="block text-sm font-medium text-gray-300 mb-2">用户名</label>
-            <div className="relative">
-              <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <label className="mb-5 block">
+            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">用户名</span>
+            <span className="relative block">
+              <User className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+                onChange={handleUsernameChange}
+                className="w-full rounded-lg border border-slate-300 bg-white py-3 pl-11 pr-4 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                 placeholder="请输入用户名"
+                autoComplete="username"
                 required
-                disabled={loading}
+                disabled={busy}
               />
-            </div>
-          </div>
+            </span>
+          </label>
 
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-300 mb-2">密码</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <label className="mb-5 block">
+            <span className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">密码</span>
+            <span className="relative block">
+              <KeyRound className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+                onChange={handlePasswordChange}
+                className="w-full rounded-lg border border-slate-300 bg-white py-3 pl-11 pr-4 text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
                 placeholder="请输入密码"
+                autoComplete="current-password"
                 required
-                disabled={loading}
+                disabled={busy}
               />
-            </div>
-          </div>
+            </span>
+          </label>
 
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-medium rounded-xl shadow-lg shadow-purple-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          {verificationRequired && (
+            <div className="mb-6">
+              <label htmlFor="admin-login-code" className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">邮箱验证码</label>
+              <div className="flex min-w-0 gap-2">
+                <span className="relative min-w-0 flex-1">
+                  <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+                  <input
+                    id="admin-login-code"
+                    value={code}
+                    onChange={event => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-full rounded-lg border border-slate-300 bg-white py-3 pl-11 pr-3 text-lg tracking-[0.2em] text-slate-900 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+                    placeholder="000000"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    required
+                    disabled={busy}
+                    autoFocus
+                  />
+                </span>
+                <button
+                  type="button"
+                  onClick={() => submitCredentials({ resend: true })}
+                  disabled={busy || resendSeconds > 0}
+                  className="inline-flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <RefreshCw className={`h-4 w-4 ${resending ? 'animate-spin' : ''}`} />
+                  <span>{resendSeconds > 0 ? `${resendSeconds}s` : '重发'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={submitDisabled}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                登录中...
-              </>
-            ) : '登录'}
+            {loading && <Loader className="h-5 w-5 animate-spin" />}
+            {loading ? '验证中...' : verificationRequired ? '验证并登录' : '登录'}
           </button>
 
-          <div className="mt-6 pt-4 border-t border-white/10">
-            <p className="text-center text-sm text-gray-400">
-              登录后可在账号安全中修改密码
-            </p>
-          </div>
+          <p className="mt-5 border-t border-slate-100 pt-4 text-center text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            登录后可在账号安全中修改密码
+          </p>
         </form>
 
-        <p className="mt-6 text-center text-xs text-gray-500">
-          Powered by Go + React
-        </p>
+        <p className="mt-5 text-center text-xs text-slate-400 dark:text-slate-600">Powered by Go + React</p>
       </div>
-    </div>
+    </main>
   )
 }

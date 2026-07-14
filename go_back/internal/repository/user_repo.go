@@ -8,7 +8,20 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
+
+const (
+	MemberLoginMaxFailures  = 5
+	MemberLoginLockDuration = 24 * time.Hour
+)
+
+type MemberLoginFailureState struct {
+	Failures      int
+	LockedUntil   *time.Time
+	NewlyLocked   bool
+	AlreadyLocked bool
+}
 
 func GetUserByUsername(username string) (*model.User, error) {
 	var user model.User
@@ -104,11 +117,75 @@ func ResetActiveMemberPassword(userID uint64, passwordHash string) (int64, error
 	result := db.DB.Model(&model.User{}).
 		Where("id = ? AND LOWER(status) = ? AND COALESCE(UPPER(role), '') <> ?", userID, "active", "ADMIN").
 		Updates(map[string]interface{}{
-			"password":            passwordHash,
-			"password_configured": true,
-			"token_version":       gorm.Expr("token_version + 1"),
+			"password":              passwordHash,
+			"password_configured":   true,
+			"token_version":         gorm.Expr("token_version + 1"),
+			"failed_login_attempts": 0,
+			"login_locked_until":    nil,
 		})
 	return result.RowsAffected, result.Error
+}
+
+func RecordMemberLoginFailure(userID uint64, now time.Time) (MemberLoginFailureState, error) {
+	state := MemberLoginFailureState{}
+	err := db.DB.Transaction(func(tx *gorm.DB) error {
+		var user model.User
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id", "failed_login_attempts", "login_locked_until").
+			Where("id = ? AND COALESCE(UPPER(role), '') <> ?", userID, "ADMIN").
+			First(&user).Error; err != nil {
+			return err
+		}
+
+		state = nextMemberLoginFailureState(user.FailedLoginAttempts, user.LoginLockedUntil, now)
+		if state.AlreadyLocked {
+			return nil
+		}
+		return tx.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+			"failed_login_attempts": state.Failures,
+			"login_locked_until":    state.LockedUntil,
+		}).Error
+	})
+	return state, err
+}
+
+func ResetMemberLoginFailures(userID uint64) error {
+	return db.DB.Model(&model.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"failed_login_attempts": 0,
+		"login_locked_until":    nil,
+	}).Error
+}
+
+func nextMemberLoginFailureState(currentFailures int, currentLockedUntil *time.Time, now time.Time) MemberLoginFailureState {
+	if currentLockedUntil != nil && now.Before(*currentLockedUntil) {
+		return MemberLoginFailureState{
+			Failures:      currentFailures,
+			LockedUntil:   currentLockedUntil,
+			AlreadyLocked: true,
+		}
+	}
+	if currentFailures < 0 || currentLockedUntil != nil {
+		currentFailures = 0
+	}
+
+	state := MemberLoginFailureState{Failures: currentFailures + 1}
+	if state.Failures >= MemberLoginMaxFailures {
+		lockedUntil := now.Add(MemberLoginLockDuration)
+		state.Failures = MemberLoginMaxFailures
+		state.LockedUntil = &lockedUntil
+		state.NewlyLocked = true
+	}
+	return state
+}
+
+func ListLockedMemberAccounts(now time.Time) ([]model.User, error) {
+	var users []model.User
+	err := db.DB.Select("id", "username", "email", "failed_login_attempts", "login_locked_until").
+		Where("COALESCE(UPPER(role), '') <> ? AND login_locked_until > ?", "ADMIN", now).
+		Order("login_locked_until DESC").
+		Limit(200).
+		Find(&users).Error
+	return users, err
 }
 
 func RecordUserLogin(userID uint64, now time.Time) error {
@@ -126,10 +203,15 @@ func TouchUserActivity(userID uint64, now time.Time) error {
 }
 
 func UpdateUserStatus(userID uint64, status string) error {
-	return db.DB.Model(&model.User{}).Where("id = ? AND UPPER(role) <> ?", userID, "ADMIN").Updates(map[string]interface{}{
+	updates := map[string]interface{}{
 		"status":        status,
 		"token_version": gorm.Expr("token_version + 1"),
-	}).Error
+	}
+	if strings.EqualFold(strings.TrimSpace(status), "active") {
+		updates["failed_login_attempts"] = 0
+		updates["login_locked_until"] = nil
+	}
+	return db.DB.Model(&model.User{}).Where("id = ? AND UPPER(role) <> ?", userID, "ADMIN").Updates(updates).Error
 }
 
 func RevokeUserSessions(userID uint64) error {

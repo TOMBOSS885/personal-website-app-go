@@ -29,6 +29,8 @@ const ACTION_LABELS = {
   login: '登录',
   login_success: '登录成功',
   login_failed: '登录失败',
+  login_banned: '登录封禁',
+  login_blocked: '封禁拦截',
   logout: '退出登录',
   register: '注册',
   send_code: '发送验证码',
@@ -433,6 +435,9 @@ function UsersTab({ data, loading, keyword, setKeyword, status, setStatus, submi
               {data.rows.map(user => {
                 const id = valueOf(user, 'id', 'userId')
                 const userState = valueOf(user, 'status') || (user.disabled ? 'disabled' : 'active')
+                const lockTime = user.loginLockedUntil ? new Date(user.loginLockedUntil) : null
+                const temporarilyLocked = userState !== 'disabled' && lockTime && !Number.isNaN(lockTime.getTime()) && lockTime.getTime() > Date.now()
+                const displayState = temporarilyLocked ? 'locked' : userState
                 return (
                   <tr key={id} className="text-gray-700 dark:text-slate-200">
                     <td className="px-5 py-3">
@@ -450,7 +455,12 @@ function UsersTab({ data, loading, keyword, setKeyword, status, setStatus, submi
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3"><StatusBadge status={userState} /></td>
+                    <td className="px-5 py-3">
+                      <StatusBadge status={displayState} />
+                      {temporarilyLocked && (
+                        <div className="mt-1 whitespace-nowrap text-xs text-red-500">至 {formatTime(user.loginLockedUntil)}</div>
+                      )}
+                    </td>
                     <td className="whitespace-nowrap px-5 py-3">{formatTime(valueOf(user, 'createdAt', 'registeredAt'))}</td>
                     <td className="whitespace-nowrap px-5 py-3">{formatTime(valueOf(user, 'lastActiveAt', 'lastLoginAt', 'updatedAt'))}</td>
                     <td className="px-5 py-3">{valueOf(user, 'loginCount') ?? 0}</td>
@@ -590,6 +600,9 @@ function DataState({ loading, empty, emptyText, children }) {
 
 function StatusBadge({ status }) {
   const disabled = status === 'disabled' || status === 'hidden'
+  if (status === 'locked') {
+    return <span className="inline-flex rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/50 dark:text-red-300">临时封禁</span>
+  }
   return (
     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${disabled ? 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'}`}>
       {status === 'disabled' ? '已禁用' : status === 'hidden' ? '已隐藏' : status === 'visible' ? '公开' : '正常'}

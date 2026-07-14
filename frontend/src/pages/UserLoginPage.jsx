@@ -9,11 +9,18 @@ import {
   LogIn,
   Mail,
   ShieldCheck,
+  ShieldAlert,
   UserPlus,
   UserRound,
 } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useUserAuth } from '../contexts/UserAuthContext'
+import {
+  accountLockFromError,
+  accountLockRemaining,
+  formatAccountLockRemaining,
+  normalizeLoginIdentifier,
+} from '../utils/accountLock'
 
 const CODE_COOLDOWN_SECONDS = 60
 const USERNAME_PATTERN = /^[\p{L}\p{N}_-]{2,30}$/u
@@ -53,6 +60,8 @@ export default function UserLoginPage() {
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [loginLock, setLoginLock] = useState(null)
+  const [lockClock, setLockClock] = useState(Date.now())
 
   useEffect(() => {
     if (!loading && user) navigate(safeReturnPath(location.search), { replace: true })
@@ -63,6 +72,21 @@ export default function UserLoginPage() {
     const timer = window.setInterval(() => setCooldown(value => Math.max(0, value - 1)), 1000)
     return () => window.clearInterval(timer)
   }, [cooldown])
+
+  useEffect(() => {
+    if (!loginLock) return undefined
+    const update = () => {
+      const now = Date.now()
+      if (accountLockRemaining(loginLock, now) <= 0) {
+        setLoginLock(null)
+        return
+      }
+      setLockClock(now)
+    }
+    update()
+    const timer = window.setInterval(update, 1000)
+    return () => window.clearInterval(timer)
+  }, [loginLock?.deadline])
 
   const changeMode = nextMode => {
     if (sending) return
@@ -130,6 +154,7 @@ export default function UserLoginPage() {
     setSubmitting(true)
     try {
       if (mode === 'login') {
+        if (loginLock && normalizeLoginIdentifier(identifier) === loginLock.identifier && accountLockRemaining(loginLock) > 0) return
         await login(identifier, password)
       } else if (mode === 'register') {
         await register({ email, code, username, password })
@@ -140,10 +165,18 @@ export default function UserLoginPage() {
         setConfirmPassword('')
         setCode('')
         setMode('login')
+        setLoginLock(null)
         setMessage('密码已设置，请使用新密码登录。')
       }
     } catch (submitError) {
-      setError(submitError.message)
+      const lock = mode === 'login' ? accountLockFromError(submitError, identifier) : null
+      if (lock) {
+        setLoginLock(lock)
+        setLockClock(Date.now())
+        setError('')
+      } else {
+        setError(submitError.message)
+      }
     } finally {
       setSubmitting(false)
     }
@@ -153,6 +186,11 @@ export default function UserLoginPage() {
   const isRegister = mode === 'register'
   const activeCooldown = cooldownEmail === email.trim().toLowerCase() ? cooldown : 0
   const title = isLogin ? '用户登录' : isRegister ? '创建账号' : '重设密码'
+  const activeLoginLock = isLogin
+    && loginLock
+    && normalizeLoginIdentifier(identifier) === loginLock.identifier
+    && accountLockRemaining(loginLock, lockClock) > 0
+  const lockRemaining = activeLoginLock ? accountLockRemaining(loginLock, lockClock) : 0
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-4 py-24 sm:px-6">
@@ -246,15 +284,26 @@ export default function UserLoginPage() {
                 {message}
               </div>
             )}
+            {activeLoginLock && (
+              <div role="alert" className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-semibold">账号临时封禁</div>
+                  <div className="mt-1 break-words leading-5">
+                    剩余 {formatAccountLockRemaining(lockRemaining)}，预计 {new Date(loginLock.lockedUntil).toLocaleString('zh-CN', { hour12: false })} 解封。
+                  </div>
+                </div>
+              </div>
+            )}
             {error && <div role="alert" className="rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">{error}</div>}
 
             <button
               type="submit"
-              disabled={submitting || (isLogin ? !identifier.trim() || !password : !email.trim() || !password || !confirmPassword || code.length !== 6 || (isRegister && !username.trim()))}
+              disabled={submitting || activeLoginLock || (isLogin ? !identifier.trim() || !password : !email.trim() || !password || !confirmPassword || code.length !== 6 || (isRegister && !username.trim()))}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 font-medium text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? <Loader className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-              {submitting ? '正在提交...' : isLogin ? '登录' : isRegister ? '完成注册' : '设置新密码'}
+              {submitting ? '正在提交...' : activeLoginLock ? '账号封禁中' : isLogin ? '登录' : isRegister ? '完成注册' : '设置新密码'}
             </button>
           </form>
         </section>

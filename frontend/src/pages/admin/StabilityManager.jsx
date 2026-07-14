@@ -8,6 +8,9 @@ const ACTION_LABELS = {
   login_success: '登录成功',
   login_failed: '登录失败',
   login_blocked: '登录锁定',
+  login_2fa_required: '需要邮箱验证',
+  login_2fa_failed: '邮箱验证失败',
+  login_2fa_success: '邮箱验证成功',
   save_article: '保存文章',
   delete_article: '删除文章',
   upload_article_image: '上传文章图片',
@@ -266,6 +269,7 @@ export default function StabilityManager() {
                   <th className="px-5 py-3">用户</th>
                   <th className="px-5 py-3">操作</th>
                   <th className="px-5 py-3">路径</th>
+                  <th className="px-5 py-3">消息</th>
                   <th className="px-5 py-3">状态</th>
                   <th className="px-5 py-3">IP</th>
                 </tr>
@@ -277,6 +281,7 @@ export default function StabilityManager() {
                     <td className="px-5 py-3">{log.username || '-'}</td>
                     <td className="px-5 py-3">{ACTION_LABELS[log.action] || log.action}</td>
                     <td className="max-w-xs truncate px-5 py-3 text-gray-500 dark:text-slate-400">{log.path}</td>
+                    <td className="max-w-sm truncate px-5 py-3 text-gray-500 dark:text-slate-400" title={log.message || ''}>{log.message || '-'}</td>
                     <td className="px-5 py-3">{log.status}</td>
                     <td className="px-5 py-3">{log.ip}</td>
                   </tr>

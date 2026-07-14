@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Ban, ChevronLeft, ChevronRight, RefreshCw, Save, Search, Settings, ShieldAlert, TrendingUp } from 'lucide-react'
+import { Ban, ChevronLeft, ChevronRight, LockKeyhole, RefreshCw, Save, Search, Settings, ShieldAlert, TrendingUp } from 'lucide-react'
 
 const API = '/api/admin/security'
 const PAGE_SIZES = [20, 30, 50, 100]
@@ -105,6 +105,7 @@ export default function SecurityManager() {
         item.ip || '-',
         item.username || '-',
         item.message || '-',
+        formatTime(item.expiresAt),
       ])
     }
     return stats.map(item => [
@@ -137,10 +138,11 @@ export default function SecurityManager() {
         </button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryCard icon={ShieldAlert} title="当前限制" value={restrictions.length} tone="amber" />
         <SummaryCard icon={TrendingUp} title="高访问标记" value={highAccess.length} tone="indigo" />
         <SummaryCard icon={Ban} title="封禁规则" value={`${settings?.dailyLimitTriggerThreshold || 5}次 / ${settings?.banDays || 30}天`} tone="red" />
+        <SummaryCard icon={LockKeyhole} title="用户密码封禁" value="5次 / 1天" tone="red" />
       </div>
 
       <details className="rounded-2xl border border-gray-200 bg-white/90 p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900/90">
@@ -208,6 +210,12 @@ export default function SecurityManager() {
               <option value="login_success">登录成功</option>
               <option value="login_failure">登录失败</option>
               <option value="login_blocked">登录被限制</option>
+              <option value="login_2fa_required">后台登录需要邮箱验证</option>
+              <option value="login_2fa_failed">后台邮箱验证失败</option>
+              <option value="login_2fa_success">后台邮箱验证成功</option>
+              <option value="member_login_failure">普通用户密码错误</option>
+              <option value="member_login_banned">普通用户账号封禁</option>
+              <option value="member_login_blocked">普通用户封禁拦截</option>
             </select>
             <select
               value={severity}
@@ -229,13 +237,15 @@ export default function SecurityManager() {
       </div>
 
       <Section title="当前限制与封禁">
-        <DataTable columns={['类型', 'IP', '内容', '剩余时间', '等级']} rows={restrictions.map(item => [
-          item.type,
-          item.ip,
-          item.category || item.value,
-          `${item.remainingSeconds}s`,
+        <DataTable columns={['类型', 'IP', '账号', '内容', '剩余时间', '解封/到期时间', '等级']} rows={restrictions.map(item => [
+          restrictionTypeLabel(item.type),
+          item.ip || '-',
+          item.username || '-',
+          item.value || categoryLabel(item.category),
+          formatRemaining(item.remainingSeconds),
+          formatTime(item.expiresAt),
           <SeverityBadge key={item.key} severity={item.severity} />,
-        ])} empty="当前没有正在限制的 IP" />
+        ])} empty="当前没有正在限制的 IP 或账号" />
       </Section>
 
       <Section title="高访问用户">
@@ -272,7 +282,7 @@ export default function SecurityManager() {
 
         <DataTable
           columns={activeTab === 'events'
-            ? ['时间', '等级', '类型', 'IP', '用户', '消息']
+            ? ['时间', '等级', '类型', 'IP', '用户', '消息', '解封/到期时间']
             : ['日期', 'IP', '类型', '歌曲', '访问', '限流', '封禁拦截', '登录尝试', '失败']}
           rows={rows}
           empty={loading ? '加载中...' : '暂无日志'}
@@ -416,6 +426,7 @@ function categoryLabel(category) {
     'music-stream': '音乐流',
     'music-stream-song': '歌曲流',
     login: '后台登录',
+    'member-login': '普通用户登录',
     ban: '封禁',
   }
   return map[category] || category
@@ -428,8 +439,31 @@ function eventTypeLabel(type) {
     login_success: '登录成功',
     login_failure: '登录失败',
     login_blocked: '登录被限制',
+    login_2fa_required: '需要邮箱验证',
+    login_2fa_failed: '邮箱验证失败',
+    login_2fa_success: '邮箱验证成功',
+    member_login_failure: '普通用户密码错误',
+    member_login_banned: '普通用户账号封禁',
+    member_login_blocked: '普通用户封禁拦截',
   }
   return map[type] || type
+}
+
+function restrictionTypeLabel(type) {
+  const map = {
+    limit: '限流',
+    ban: 'IP 封禁',
+    member_account_ban: '账号封禁',
+  }
+  return map[type] || type
+}
+
+function formatRemaining(value) {
+  const seconds = Math.max(0, Number(value) || 0)
+  if (seconds >= 86400) return `${Math.floor(seconds / 86400)}天 ${Math.floor((seconds % 86400) / 3600)}小时`
+  if (seconds >= 3600) return `${Math.floor(seconds / 3600)}小时 ${Math.floor((seconds % 3600) / 60)}分钟`
+  if (seconds >= 60) return `${Math.floor(seconds / 60)}分钟`
+  return `${Math.floor(seconds)}秒`
 }
 
 function normalizeDate(value) {

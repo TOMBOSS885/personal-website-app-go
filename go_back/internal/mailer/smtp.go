@@ -20,22 +20,37 @@ func Configured() bool {
 }
 
 func SendLoginCode(ctx context.Context, to, code string, expires time.Duration) error {
-	if !Configured() {
-		return errors.New("SMTP is not configured")
-	}
-	cfg := config.AppConfig
-	if strings.ContainsAny(to+cfg.SMTPFrom+cfg.SMTPFromName, "\r\n") {
-		return errors.New("invalid email header")
-	}
 	minutes := int(expires.Round(time.Minute) / time.Minute)
 	if minutes < 1 {
 		minutes = 10
 	}
-	subject := mime.QEncoding.Encode("UTF-8", "您的邮箱验证码")
+	subject := "您的邮箱验证码"
 	body := fmt.Sprintf("您的验证码是：%s\r\n\r\n验证码将在 %d 分钟后失效，请勿转发给他人。\r\n如果不是您本人操作，请忽略此邮件。", code, minutes)
+	return sendPlainText(ctx, to, subject, body)
+}
+
+func SendAdminLoginCode(ctx context.Context, to, code, ip string, expires time.Duration) error {
+	minutes := int(expires.Round(time.Minute) / time.Minute)
+	if minutes < 1 {
+		minutes = 10
+	}
+	subject := "后台登录安全验证"
+	body := fmt.Sprintf("检测到后台正在从不常用 IP 登录。\r\n\r\n登录 IP：%s\r\n验证码：%s\r\n\r\n验证码将在 %d 分钟后失效，请勿转发给他人。\r\n如果不是您本人操作，请立即检查后台账号安全。", strings.TrimSpace(ip), code, minutes)
+	return sendPlainText(ctx, to, subject, body)
+}
+
+func sendPlainText(ctx context.Context, to, subject, body string) error {
+	if !Configured() {
+		return errors.New("SMTP is not configured")
+	}
+	cfg := config.AppConfig
+	if strings.ContainsAny(to+cfg.SMTPFrom+cfg.SMTPFromName+subject, "\r\n") {
+		return errors.New("invalid email header")
+	}
+	encodedSubject := mime.QEncoding.Encode("UTF-8", subject)
 	message := []byte("From: " + formatAddress(cfg.SMTPFromName, cfg.SMTPFrom) + "\r\n" +
 		"To: " + to + "\r\n" +
-		"Subject: " + subject + "\r\n" +
+		"Subject: " + encodedSubject + "\r\n" +
 		"MIME-Version: 1.0\r\n" +
 		"Content-Type: text/plain; charset=UTF-8\r\n" +
 		"Content-Transfer-Encoding: 8bit\r\n\r\n" + body + "\r\n")

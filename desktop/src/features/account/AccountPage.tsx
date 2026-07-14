@@ -11,11 +11,19 @@ import {
   Save,
   Send,
   ShieldCheck,
+  ShieldAlert,
   UserPlus,
   UserRound,
 } from 'lucide-react'
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useUserAuth } from './UserAuthContext'
+import {
+  accountLockFromError,
+  accountLockRemaining,
+  formatAccountLockRemaining,
+  normalizeLoginIdentifier,
+  type AccountLock,
+} from './loginLock'
 
 type Mode = 'login' | 'register' | 'reset'
 
@@ -40,12 +48,29 @@ function AccountAccess() {
   const [sendingCode, setSendingCode] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [loginLock, setLoginLock] = useState<AccountLock | null>(null)
+  const [lockClock, setLockClock] = useState(Date.now())
 
   useEffect(() => {
     if (cooldown <= 0) return
     const timer = window.setInterval(() => setCooldown((value) => Math.max(0, value - 1)), 1000)
     return () => window.clearInterval(timer)
   }, [cooldown])
+
+  useEffect(() => {
+    if (!loginLock) return
+    const update = () => {
+      const now = Date.now()
+      if (accountLockRemaining(loginLock, now) <= 0) {
+        setLoginLock(null)
+        return
+      }
+      setLockClock(now)
+    }
+    update()
+    const timer = window.setInterval(update, 1000)
+    return () => window.clearInterval(timer)
+  }, [loginLock?.deadline])
 
   const changeMode = (next: Mode) => {
     setMode(next)
@@ -83,21 +108,36 @@ function AccountAccess() {
     setPending(true)
     try {
       if (mode === 'login') {
+        if (loginLock && normalizeLoginIdentifier(identifier) === loginLock.identifier && accountLockRemaining(loginLock) > 0) return
         await login(identifier, password, remember)
       } else if (mode === 'register') {
         await register({ email, code, username, password, remember })
       } else {
         await resetPassword({ email, code, password })
         setIdentifier(email)
+        setLoginLock(null)
         changeMode('login')
         setMessage('密码已重设，请使用新密码登录。')
       }
     } catch (caught) {
-      setError(errorMessage(caught))
+      const lock = mode === 'login' ? accountLockFromError(caught, identifier) : null
+      if (lock) {
+        setLoginLock(lock)
+        setLockClock(Date.now())
+        setError('')
+      } else {
+        setError(errorMessage(caught))
+      }
     } finally {
       setPending(false)
     }
   }
+
+  const activeLoginLock = mode === 'login'
+    && loginLock
+    && normalizeLoginIdentifier(identifier) === loginLock.identifier
+    && accountLockRemaining(loginLock, lockClock) > 0
+  const lockRemaining = activeLoginLock ? accountLockRemaining(loginLock, lockClock) : 0
 
   return (
     <div className="page account-page">
@@ -137,10 +177,16 @@ function AccountAccess() {
             {mode !== 'login' && <PasswordField label="确认密码" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />}
             {mode !== 'reset' && <label className="remember-row"><input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} /><span>在此设备保持登录</span></label>}
             {message && <div className="form-message success"><CheckCircle2 size={15} />{message}</div>}
+            {activeLoginLock && (
+              <div className="form-message locked" role="alert">
+                <ShieldAlert size={16} />
+                <div><strong>账号临时封禁</strong><span>剩余 {formatAccountLockRemaining(lockRemaining)}，预计 {new Date(loginLock.lockedUntil).toLocaleString('zh-CN', { hour12: false })} 解封。</span></div>
+              </div>
+            )}
             {error && <div className="form-message error" role="alert">{error}</div>}
-            <button className="button button-primary account-submit" disabled={pending || (mode === 'login' ? !identifier.trim() || !password : !email.trim() || !password || !confirmPassword || code.length !== 6)}>
+            <button className="button button-primary account-submit" disabled={pending || Boolean(activeLoginLock) || (mode === 'login' ? !identifier.trim() || !password : !email.trim() || !password || !confirmPassword || code.length !== 6)}>
               {pending ? <LoaderCircle className="spin" size={16} /> : mode === 'login' ? <LogIn size={16} /> : <ShieldCheck size={16} />}
-              {pending ? '正在提交' : mode === 'login' ? '登录账号' : mode === 'register' ? '完成注册' : '重设密码'}
+              {pending ? '正在提交' : activeLoginLock ? '账号封禁中' : mode === 'login' ? '登录账号' : mode === 'register' ? '完成注册' : '重设密码'}
             </button>
           </form>
         </div>
