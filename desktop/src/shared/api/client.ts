@@ -1,160 +1,180 @@
-import { platformFetch } from '@shared/lib/platform'
+import type {
+  Article,
+  CommentPage,
+  DesktopLoginResponse,
+  HomePayload,
+  Language,
+  MusicTrack,
+  PageResponse,
+  Project,
+  PublicUser,
+  PublicTheme,
+  SearchResult,
+} from './types'
 
-export interface ApiErrorBody {
-  code?: string
-  message?: string
-  error?: string
-  requestId?: string
-  fields?: Record<string, string>
+type RequestOptions = {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  body?: unknown
+  signal?: AbortSignal
+  token?: string | null
 }
 
 export class ApiError extends Error {
   readonly status: number
-  readonly code?: string
   readonly requestId?: string
-  readonly retryAfterSeconds?: number
-  readonly fields?: Record<string, string>
 
-  constructor(message: string, options: {
-    status: number
-    code?: string
-    requestId?: string
-    retryAfterSeconds?: number
-    fields?: Record<string, string>
-  }) {
+  constructor(message: string, status: number, requestId?: string) {
     super(message)
     this.name = 'ApiError'
-    this.status = options.status
-    this.code = options.code
-    this.requestId = options.requestId
-    this.retryAfterSeconds = options.retryAfterSeconds
-    this.fields = options.fields
+    this.status = status
+    this.requestId = requestId
   }
 }
 
-export interface ApiRequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-  body?: unknown
-  signal?: AbortSignal
-  timeoutMs?: number
-  auth?: boolean
-  headers?: Record<string, string>
-}
+export function normalizeServerUrl(raw: string): string {
+  const value = raw.trim()
+  if (!value) throw new Error('请输入服务器地址')
+  const withProtocol = /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `https://${value}`
+  const parsed = new URL(withProtocol)
 
-interface ApiClientOptions {
-  getToken?: () => string | null
-  onUnauthorized?: () => void
-}
-
-export class ApiClient {
-  readonly origin: string
-  private readonly getToken?: () => string | null
-  private readonly onUnauthorized?: () => void
-
-  constructor(origin: string, options: ApiClientOptions = {}) {
-    this.origin = normalizeServerOrigin(origin)
-    this.getToken = options.getToken
-    this.onUnauthorized = options.onUnauthorized
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error('服务器地址只支持 HTTP 或 HTTPS')
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error('服务器地址不能包含账号、查询参数或锚点')
   }
 
-  async request<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-    const controller = new AbortController()
-    const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs ?? 12_000)
-    const headers = new Headers(options.headers)
-    const token = options.auth === false ? null : this.getToken?.()
-    if (token) headers.set('Authorization', `Bearer ${token}`)
-
-    let body: BodyInit | undefined
-    if (options.body instanceof FormData || typeof options.body === 'string' || options.body instanceof Blob) {
-      body = options.body
-    } else if (options.body !== undefined) {
-      headers.set('Content-Type', 'application/json')
-      body = JSON.stringify(options.body)
-    }
-
-    const onAbort = () => controller.abort()
-    options.signal?.addEventListener('abort', onAbort, { once: true })
-
-    try {
-      const response = await platformFetch(this.url(path), {
-        method: options.method ?? 'GET',
-        headers,
-        body,
-        signal: controller.signal,
-      })
-      const requestId = response.headers.get('X-Request-ID') ?? undefined
-      if (!response.ok) {
-        const payload = await parseError(response)
-        if (response.status === 401 && options.auth !== false) this.onUnauthorized?.()
-        throw new ApiError(payload.message || payload.error || defaultErrorMessage(response.status), {
-          status: response.status,
-          code: payload.code,
-          requestId: payload.requestId || requestId,
-          retryAfterSeconds: parseRetryAfter(response.headers.get('Retry-After')),
-          fields: payload.fields,
-        })
-      }
-      if (response.status === 204) return undefined as T
-      const contentType = response.headers.get('content-type') || ''
-      if (contentType.includes('application/json')) return response.json() as Promise<T>
-      return response.text() as Promise<T>
-    } catch (error) {
-      if (error instanceof ApiError) throw error
-      if (controller.signal.aborted) throw new ApiError('请求超时或已取消', { status: 0, code: 'REQUEST_ABORTED' })
-      throw new ApiError(error instanceof Error ? error.message : '无法连接服务器', { status: 0, code: 'NETWORK_ERROR' })
-    } finally {
-      window.clearTimeout(timeout)
-      options.signal?.removeEventListener('abort', onAbort)
-    }
-  }
-
-  url(path: string): string {
-    if (!path.startsWith('/')) throw new Error('API path 必须以 / 开头')
-    return new URL(path, `${this.origin}/`).toString()
-  }
+  const path = parsed.pathname.replace(/\/+$/, '')
+  return `${parsed.origin}${path === '/' ? '' : path}`
 }
 
-export function normalizeServerOrigin(value: string): string {
-  const input = value.trim()
-  if (!input) throw new Error('请输入服务器地址')
-  const withProtocol = /^[a-z][a-z\d+.-]*:/i.test(input) ? input : `https://${input}`
-  const url = new URL(withProtocol)
-  if (url.username || url.password || url.search || url.hash) throw new Error('服务器地址不能包含账号、查询参数或片段')
-  if (url.pathname !== '/' && url.pathname !== '') throw new Error('服务器地址只能填写站点根地址')
-  const isDevLoopback = import.meta.env.DEV && url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-  if (url.protocol !== 'https:' && !isDevLoopback) throw new Error('正式服务器必须使用 HTTPS')
-  return url.origin
-}
-
-export function resolveAssetUrl(origin: string, value?: string | null): string {
+export function resolveServerUrl(serverUrl: string, value?: string | null): string {
   if (!value) return ''
-  const url = new URL(value, `${normalizeServerOrigin(origin)}/`)
-  if (!['https:', 'http:'].includes(url.protocol)) throw new Error('资源地址协议无效')
-  if (url.origin !== normalizeServerOrigin(origin)) throw new Error('拒绝加载其他服务器的资源')
-  return url.toString()
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  if (/^(data:|blob:)/i.test(trimmed)) return trimmed
+  return new URL(trimmed, `${normalizeServerUrl(serverUrl)}/`).toString()
 }
 
-async function parseError(response: Response): Promise<ApiErrorBody> {
-  try {
-    return await response.clone().json() as ApiErrorBody
-  } catch {
-    const text = await response.text().catch(() => '')
-    return { message: text.slice(0, 300) }
+export function isSecureServerUrl(serverUrl: string): boolean {
+  const url = new URL(normalizeServerUrl(serverUrl))
+  return url.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+}
+
+async function runtimeFetch(input: string, init: RequestInit): Promise<Response> {
+  if (window.__TAURI_INTERNALS__) {
+    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http')
+    return tauriFetch(input, init)
   }
+  return window.fetch(input, init)
 }
 
-function parseRetryAfter(value: string | null): number | undefined {
-  if (!value) return undefined
-  const seconds = Number(value)
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined
+async function requestJson<T>(serverUrl: string, path: string, options: RequestOptions = {}): Promise<T> {
+  const url = resolveServerUrl(serverUrl, path)
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'X-Request-ID': crypto.randomUUID(),
+  }
+  if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+  if (options.token) headers.Authorization = `Bearer ${options.token}`
+
+  let response: Response
+  try {
+    response = await runtimeFetch(url, {
+      method: options.method ?? 'GET',
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      signal: options.signal,
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    throw new ApiError('无法连接服务器，请检查地址与网络', 0)
+  }
+
+  const requestId = response.headers.get('X-Request-ID') ?? undefined
+  const contentType = response.headers.get('content-type') ?? ''
+  const payload = contentType.includes('application/json')
+    ? await response.json().catch(() => null)
+    : null
+
+  if (!response.ok) {
+    const message = payload && typeof payload === 'object' && 'message' in payload
+      ? String(payload.message)
+      : `服务器返回 ${response.status}`
+    throw new ApiError(message, response.status, requestId)
+  }
+  return payload as T
 }
 
-function defaultErrorMessage(status: number): string {
-  if (status === 401) return '登录状态已失效'
-  if (status === 403) return '当前账号无权执行此操作'
-  if (status === 404) return '请求的资源不存在'
-  if (status === 409) return '数据已在其他位置更新'
-  if (status === 429) return '请求过于频繁，请稍后重试'
-  if (status >= 500) return '服务器暂时不可用'
-  return `请求失败（HTTP ${status}）`
+export const publicApi = {
+  health: (serverUrl: string, signal?: AbortSignal) =>
+    requestJson<unknown>(serverUrl, '/api/health', { signal }),
+  home: (serverUrl: string, language: Language, signal?: AbortSignal) =>
+    requestJson<HomePayload>(serverUrl, `/api/public/home?lang=${language}`, { signal }),
+  articles: (
+    serverUrl: string,
+    params: { page: number; size?: number; q?: string; tag?: string; category?: string },
+    signal?: AbortSignal,
+  ) => {
+    const query = new URLSearchParams({
+      page: String(params.page),
+      size: String(params.size ?? 10),
+    })
+    if (params.q) query.set('q', params.q)
+    if (params.tag) query.set('tag', params.tag)
+    if (params.category) query.set('category', params.category)
+    return requestJson<PageResponse<Article>>(serverUrl, `/api/public/articles?${query}`, { signal })
+  },
+  article: (serverUrl: string, id: string | number, signal?: AbortSignal) =>
+    requestJson<Article>(serverUrl, `/api/public/articles/${id}`, { signal }),
+  unlockArticle: (serverUrl: string, id: string | number, password: string) =>
+    requestJson<Article>(serverUrl, `/api/public/articles/${id}/unlock`, {
+      method: 'POST',
+      body: { password },
+    }),
+  comments: (serverUrl: string, id: string | number, page = 0, signal?: AbortSignal) =>
+    requestJson<CommentPage>(serverUrl, `/api/public/articles/${id}/comments?page=${page}&size=20`, { signal }),
+  projects: (serverUrl: string, signal?: AbortSignal) =>
+    requestJson<Project[]>(serverUrl, '/api/public/projects', { signal }),
+  categories: (serverUrl: string, signal?: AbortSignal) =>
+    requestJson<string[] | null>(serverUrl, '/api/public/categories', { signal }),
+  tags: (serverUrl: string, signal?: AbortSignal) =>
+    requestJson<string[] | null>(serverUrl, '/api/public/tags', { signal }),
+  search: (serverUrl: string, query: string, signal?: AbortSignal) =>
+    requestJson<SearchResult[]>(serverUrl, `/api/public/search?q=${encodeURIComponent(query)}`, { signal }),
+  theme: (serverUrl: string, signal?: AbortSignal) =>
+    requestJson<PublicTheme>(serverUrl, '/api/public/theme', { signal }),
+}
+
+export const userApi = {
+  desktopLogin: (serverUrl: string, identifier: string, password: string) =>
+    requestJson<DesktopLoginResponse>(serverUrl, '/api/user-auth/desktop/login', {
+      method: 'POST', body: { identifier: identifier.trim(), password },
+    }),
+  requestCode: (serverUrl: string, email: string, purpose: 'register' | 'reset') =>
+    requestJson<{ message: string; expiresIn?: number; retryAfter?: number }>(serverUrl, '/api/user-auth/code', {
+      method: 'POST', body: { email: email.trim(), purpose },
+    }),
+  register: (serverUrl: string, input: { email: string; code: string; username: string; password: string }) =>
+    requestJson<PublicUser>(serverUrl, '/api/user-auth/register', {
+      method: 'POST', body: { ...input, email: input.email.trim(), code: input.code.trim(), username: input.username.trim() },
+    }),
+  resetPassword: (serverUrl: string, input: { email: string; code: string; password: string }) =>
+    requestJson<{ message: string }>(serverUrl, '/api/user-auth/password/reset', {
+      method: 'POST', body: { ...input, email: input.email.trim(), code: input.code.trim() },
+    }),
+  me: (serverUrl: string, token: string, signal?: AbortSignal) =>
+    requestJson<PublicUser>(serverUrl, '/api/account/me', { token, signal }),
+  logout: (serverUrl: string, token: string) =>
+    requestJson<{ message: string }>(serverUrl, '/api/account/logout', { method: 'POST', token }),
+  updateUsername: (serverUrl: string, token: string, username: string) =>
+    requestJson<PublicUser>(serverUrl, '/api/account/username', { method: 'PUT', token, body: { username: username.trim() } }),
+  createComment: (serverUrl: string, token: string, input: { articleId: number; parentId?: number; content: string }) =>
+    requestJson<CommentPage['comments'][number]>(serverUrl, '/api/user/comments', { method: 'POST', token, body: input }),
+  updateComment: (serverUrl: string, token: string, id: number, content: string) =>
+    requestJson<{ id: number; content: string; updatedAt: string }>(serverUrl, `/api/user/comments/${id}`, { method: 'PUT', token, body: { content } }),
+  deleteComment: (serverUrl: string, token: string, id: number) =>
+    requestJson<{ message: string }>(serverUrl, `/api/user/comments/${id}`, { method: 'DELETE', token }),
+  music: (serverUrl: string, token: string, signal?: AbortSignal) =>
+    requestJson<MusicTrack[]>(serverUrl, '/api/public/music', { token, signal }),
 }

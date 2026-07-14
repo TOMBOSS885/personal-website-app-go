@@ -1,13 +1,13 @@
 [package]
-name = "personal-website-studio"
+name = "personal-blog"
 version = "0.1.0"
-description = "Desktop administration client for Personal Website"
+description = "Desktop client for Personal Blog"
 authors = ["Personal Website contributors"]
 edition = "2021"
 rust-version = "1.77.2"
 
 [lib]
-name = "personal_website_studio_lib"
+name = "personal_blog_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -16,7 +16,6 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 keyring = "3"
 tauri = { version = "2", features = [] }
-tauri-plugin-dialog = "2"
 tauri-plugin-http = "2"
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"

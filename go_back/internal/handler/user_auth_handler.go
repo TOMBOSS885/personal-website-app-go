@@ -287,25 +287,66 @@ func RegisterUserByEmailCode(c *gin.Context) {
 		response.Error(c, http.StatusConflict, "邮箱或用户名已被使用")
 		return
 	}
-	if !completeUserLogin(c, user, "register", "邮箱验证后完成注册") {
+	if _, ok := completeUserLogin(c, user, "register", "邮箱验证后完成注册", true); !ok {
 		return
 	}
 	response.Success(c, publicUser(user))
 }
 
 func LoginUserByPassword(c *gin.Context) {
+	user, ok := authenticateUserPassword(c)
+	if !ok {
+		return
+	}
+	if _, ok := completeUserLogin(c, user, "login", "用户名或邮箱密码登录", true); !ok {
+		return
+	}
+	response.Success(c, publicUser(user))
+}
+
+func LoginDesktopUserByPassword(c *gin.Context) {
+	user, ok := authenticateUserPassword(c)
+	if !ok {
+		return
+	}
+	session, ok := completeUserLogin(c, user, "desktop_login", "桌面客户端密码登录", false)
+	if !ok {
+		return
+	}
+	response.Success(c, newDesktopLoginResponse(session, user))
+}
+
+type desktopLoginResponse struct {
+	AccessToken string `json:"accessToken"`
+	TokenType   string `json:"tokenType"`
+	ExpiresAt   string `json:"expiresAt"`
+	ExpiresIn   int64  `json:"expiresIn"`
+	User        gin.H  `json:"user"`
+}
+
+func newDesktopLoginResponse(session middleware.UserAccessToken, user *model.User) desktopLoginResponse {
+	return desktopLoginResponse{
+		AccessToken: session.Token,
+		TokenType:   "Bearer",
+		ExpiresAt:   session.ExpiresAt.UTC().Format(time.RFC3339),
+		ExpiresIn:   int64(session.ExpiresAt.Sub(session.IssuedAt) / time.Second),
+		User:        publicUser(user),
+	}
+}
+
+func authenticateUserPassword(c *gin.Context) (*model.User, bool) {
 	var req struct {
 		Identifier string `json:"identifier" binding:"required"`
 		Password   string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.Error(c, http.StatusBadRequest, "请输入用户名或邮箱和密码")
-		return
+		return nil, false
 	}
 	identifier := strings.TrimSpace(req.Identifier)
 	if identifier == "" || len(identifier) > 254 || len([]byte(req.Password)) == 0 || len([]byte(req.Password)) > 72 {
 		response.Error(c, http.StatusBadRequest, "用户名、邮箱或密码格式错误")
-		return
+		return nil, false
 	}
 	user, findErr := repository.GetMemberUserByIdentifier(identifier)
 	lookupFailed := findErr != nil && !errors.Is(findErr, gorm.ErrRecordNotFound)
@@ -325,23 +366,20 @@ func LoginUserByPassword(c *gin.Context) {
 	}
 	if !middleware.AllowLoginAttempt(c.ClientIP(), loginIdentity) {
 		response.Error(c, http.StatusTooManyRequests, "登录失败次数过多，请稍后再试")
-		return
+		return nil, false
 	}
 	passwordMatches := bcrypt.CompareHashAndPassword(passwordHash, []byte(req.Password)) == nil
 	if lookupFailed {
 		response.Error(c, http.StatusInternalServerError, "登录服务暂时不可用")
-		return
+		return nil, false
 	}
 	if !passwordMatches || !eligible {
 		middleware.RecordLoginFailure(c.ClientIP(), loginIdentity)
 		response.Error(c, http.StatusUnauthorized, "用户名、邮箱或密码错误")
-		return
+		return nil, false
 	}
 	middleware.RecordLoginSuccess(c.ClientIP(), loginIdentity)
-	if !completeUserLogin(c, user, "login", "用户名或邮箱密码登录") {
-		return
-	}
-	response.Success(c, publicUser(user))
+	return user, true
 }
 
 func ResetUserPasswordByEmailCode(c *gin.Context) {
@@ -399,22 +437,24 @@ func ResetUserPasswordByEmailCode(c *gin.Context) {
 	response.Success(c, gin.H{"message": "密码已设置，请使用新密码登录"})
 }
 
-func completeUserLogin(c *gin.Context, user *model.User, action, detail string) bool {
+func completeUserLogin(c *gin.Context, user *model.User, action, detail string, setCookie bool) (middleware.UserAccessToken, bool) {
 	now := time.Now()
 	if err := repository.RecordUserLogin(user.ID, now); err != nil {
 		response.Error(c, http.StatusInternalServerError, "登录状态保存失败")
-		return false
+		return middleware.UserAccessToken{}, false
 	}
 	user.LastLoginAt, user.LastActiveAt = &now, &now
 	user.LoginCount++
-	token, err := middleware.GenerateUserToken(user)
+	session, err := middleware.GenerateUserAccessToken(user)
 	if err != nil {
 		response.Error(c, http.StatusInternalServerError, "登录会话生成失败")
-		return false
+		return middleware.UserAccessToken{}, false
 	}
-	middleware.SetUserSessionCookie(c, token)
+	if setCookie {
+		middleware.SetUserSessionCookie(c, session.Token)
+	}
 	recordUserActivity(c, user, action, "account", detail)
-	return true
+	return session, true
 }
 
 func GetCurrentUser(c *gin.Context) {

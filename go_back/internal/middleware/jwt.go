@@ -34,6 +34,12 @@ type AdminSessionInfo struct {
 	ExpiresAt string `json:"expiresAt"`
 }
 
+type UserAccessToken struct {
+	Token     string
+	IssuedAt  time.Time
+	ExpiresAt time.Time
+}
+
 type adminClaims struct {
 	UserID              uint64 `json:"uid"`
 	Role                string `json:"role"`
@@ -77,10 +83,16 @@ func GenerateToken(user *model.User) (string, error) {
 }
 
 func GenerateUserToken(user *model.User) (string, error) {
+	session, err := GenerateUserAccessToken(user)
+	return session.Token, err
+}
+
+func GenerateUserAccessToken(user *model.User) (UserAccessToken, error) {
 	if user == nil || user.ID == 0 || strings.TrimSpace(user.Email) == "" {
-		return "", errors.New("cannot generate a token for an empty user")
+		return UserAccessToken{}, errors.New("cannot generate a token for an empty user")
 	}
-	now := time.Now()
+	now := time.Now().UTC().Truncate(time.Second)
+	expiresAt := now.Add(time.Duration(config.AppConfig.JWTExpireMs) * time.Millisecond).Truncate(time.Second)
 	version := user.TokenVersion
 	if version == 0 {
 		version = 1
@@ -96,11 +108,15 @@ func GenerateUserToken(user *model.User) (string, error) {
 			ID:        uuid.NewString(),
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now.Add(-5 * time.Second)),
-			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(config.AppConfig.JWTExpireMs) * time.Millisecond)),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(config.AppConfig.JWTSecret))
+	raw, err := token.SignedString([]byte(config.AppConfig.JWTSecret))
+	if err != nil {
+		return UserAccessToken{}, err
+	}
+	return UserAccessToken{Token: raw, IssuedAt: now, ExpiresAt: expiresAt}, nil
 }
 
 func JWTAuth() gin.HandlerFunc {
@@ -254,25 +270,28 @@ func ClearUserSessionCookie(c *gin.Context) {
 }
 
 func authenticateUser(c *gin.Context) (*model.User, error) {
-	raw, err := c.Cookie(UserSessionCookie)
-	if err != nil || strings.TrimSpace(raw) == "" {
-		authHeader := c.GetHeader("Authorization")
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			raw = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	var raw string
+	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+	if authHeader != "" {
+		var ok bool
+		raw, ok = bearerToken(authHeader)
+		if !ok {
+			return nil, errors.New("invalid authorization header")
 		}
+	} else {
+		var err error
+		raw, err = c.Cookie(UserSessionCookie)
+		if err != nil {
+			return nil, errors.New("missing user session")
+		}
+		raw = strings.TrimSpace(raw)
 	}
 	if raw == "" {
 		return nil, errors.New("missing user session")
 	}
-	claims := &userClaims{}
-	token, err := jwt.ParseWithClaims(raw, claims, func(token *jwt.Token) (interface{}, error) {
-		if token.Method != jwt.SigningMethodHS256 {
-			return nil, errors.New("unexpected signing method")
-		}
-		return []byte(config.AppConfig.JWTSecret), nil
-	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(userJWTIssuer), jwt.WithAudience(userJWTAudience), jwt.WithExpirationRequired())
-	if err != nil || !token.Valid || claims.UserID == 0 || strings.ToUpper(claims.Role) != "USER" {
-		return nil, errors.New("invalid user session")
+	claims, err := parseUserToken(raw)
+	if err != nil {
+		return nil, err
 	}
 	user, err := repository.GetUserByEmail(claims.Subject)
 	if err != nil || user == nil || user.ID != claims.UserID {
@@ -281,14 +300,34 @@ func authenticateUser(c *gin.Context) (*model.User, error) {
 	if strings.ToLower(strings.TrimSpace(user.Status)) != "active" || strings.ToUpper(strings.TrimSpace(user.Role)) == "ADMIN" {
 		return nil, errors.New("user disabled")
 	}
-	version := user.TokenVersion
-	if version == 0 {
-		version = 1
-	}
-	if claims.TokenVersion != version {
+	if !userTokenVersionMatches(user.TokenVersion, claims.TokenVersion) {
 		return nil, errors.New("session revoked")
 	}
 	return user, nil
+}
+
+func parseUserToken(raw string) (*userClaims, error) {
+	claims := &userClaims{}
+	token, err := jwt.ParseWithClaims(strings.TrimSpace(raw), claims, func(token *jwt.Token) (interface{}, error) {
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(config.AppConfig.JWTSecret), nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(userJWTIssuer), jwt.WithAudience(userJWTAudience), jwt.WithExpirationRequired())
+	if err != nil || !token.Valid || claims.UserID == 0 || strings.ToUpper(claims.Role) != "USER" {
+		return nil, errors.New("invalid user token")
+	}
+	if strings.TrimSpace(claims.Subject) == "" || claims.ID == "" {
+		return nil, errors.New("invalid user token claims")
+	}
+	return claims, nil
+}
+
+func userTokenVersionMatches(userVersion, claimsVersion uint64) bool {
+	if userVersion == 0 {
+		userVersion = 1
+	}
+	return claimsVersion > 0 && userVersion == claimsVersion
 }
 
 func setCurrentUser(c *gin.Context, user *model.User) {
@@ -340,6 +379,11 @@ func isSameOriginMutation(c *gin.Context) bool {
 	if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead || c.Request.Method == http.MethodOptions {
 		return true
 	}
+	// Bearer credentials are not attached automatically by browsers, so API clients
+	// do not need the cookie session's same-origin CSRF check.
+	if _, ok := bearerToken(c.GetHeader("Authorization")); ok {
+		return true
+	}
 	origin := strings.TrimSpace(c.GetHeader("Origin"))
 	if origin != "" {
 		return requestOriginMatches(origin, c.Request.Host)
@@ -351,9 +395,15 @@ func isSameOriginMutation(c *gin.Context) bool {
 	if strings.EqualFold(strings.TrimSpace(c.GetHeader("Sec-Fetch-Site")), "same-origin") {
 		return true
 	}
-	// Non-browser API clients may use a user bearer token instead of a Cookie.
-	_, cookieErr := c.Cookie(UserSessionCookie)
-	return cookieErr != nil && strings.HasPrefix(c.GetHeader("Authorization"), "Bearer ")
+	return false
+}
+
+func bearerToken(header string) (string, bool) {
+	parts := strings.Fields(header)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || strings.TrimSpace(parts[1]) == "" {
+		return "", false
+	}
+	return parts[1], true
 }
 
 func requestOriginMatches(raw, host string) bool {

@@ -1,9 +1,8 @@
 node_modules/
 dist/
-src-tauri/target/
-src-tauri/gen/
+.env
 .playwright-cli/
 output/
+src-tauri/target/
+src-tauri/gen/
 *.tsbuildinfo
-*.log
-.env.local

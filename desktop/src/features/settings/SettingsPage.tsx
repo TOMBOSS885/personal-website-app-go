@@ -1,47 +1,102 @@
-import { useEffect, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { KeyRound, Server, SlidersHorizontal, Trash2, UserRound } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { Button, ConfirmDialog, ErrorNotice, Field, Input, LoadingState, PageHeader, StatusBadge } from '@shared/components/ui'
-import { useAuth } from '@features/auth/AuthContext'
+import { useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, Globe2, Monitor, Moon, Music2, Save, Server, Sun, TestTube2, TriangleAlert } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { isSecureServerUrl, normalizeServerUrl, publicApi } from '../../shared/api/client'
+import { useSettings, type ColorMode } from '../../shared/settings/SettingsContext'
 
-interface Meta { service: string; apiVersion: number; minDesktopVersion: string; serverTime: string }
-type UploadSettings = Record<string, number> & { id?: number }
-
-const uploadFields = [
-  ['articleImageMaxMB', '文章图片上限', 1, 100],
-  ['articleSiteZipMaxMB', '静态站点 ZIP 上限', 1, 500],
-  ['articleSiteTotalMB', '静态站点解压上限', 1, 1000],
-  ['articleSiteFileCount', '静态站点文件数', 1, 10000],
-  ['themeBackgroundMaxMB', '主题背景上限', 1, 100],
-  ['avatarImageMaxMB', '头像上限', 1, 50],
-  ['musicFileMaxMB', '单个音乐上限', 1, 1000],
-  ['lyricsFileMaxMB', '歌词上限', 1, 20],
-  ['musicBatchMaxCount', '音乐批量文件数', 1, 100],
-  ['live2DTotalMaxMB', 'Live2D 总大小', 1, 2000],
-  ['live2DFileMaxCount', 'Live2D 文件数', 1, 20000],
-] as const
+type TestState = { kind: 'idle' | 'testing' | 'success' | 'error'; message?: string }
 
 export function SettingsPage() {
-  const { api, profile, user, removeServer, logout } = useAuth()
-  const [tab, setTab] = useState<'application' | 'uploads' | 'account'>('application')
-  const [disconnect, setDisconnect] = useState(false)
-  const [uploadForm, setUploadForm] = useState<UploadSettings>({})
-  const [passwords, setPasswords] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
-  const [message, setMessage] = useState('')
-  const meta = useQuery({ queryKey: ['meta'], queryFn: () => api!.request<Meta>('/api/meta', { auth: false }), enabled: Boolean(api) })
-  const uploads = useQuery({ queryKey: ['settings', 'uploads'], queryFn: () => api!.request<UploadSettings>('/api/admin/upload-settings'), enabled: Boolean(api) && tab === 'uploads' })
-  useEffect(() => { if (uploads.data) setUploadForm(uploads.data) }, [uploads.data])
-  const saveUploads = useMutation({ mutationFn: () => api!.request<UploadSettings>('/api/admin/upload-settings', { method: 'PUT', body: uploadForm }), onSuccess: (data) => { setUploadForm(data); setMessage('上传限制已保存') } })
-  const changePassword = useMutation({ mutationFn: async () => {
-    if (passwords.newPassword !== passwords.confirmPassword) throw new Error('两次输入的新密码不一致')
-    if (passwords.newPassword.length < 8) throw new Error('新密码至少需要 8 位')
-    return api!.request<{ message: string }>('/api/admin/account/password', { method: 'PUT', body: { currentPassword: passwords.currentPassword, newPassword: passwords.newPassword } })
-  }, onSuccess: async () => { await logout() } })
+  const { settings, updateSettings } = useSettings()
+  const queryClient = useQueryClient()
+  const [serverDraft, setServerDraft] = useState(settings.serverUrl)
+  const [saved, setSaved] = useState(false)
+  const [test, setTest] = useState<TestState>({ kind: 'idle' })
 
-  const error = meta.error || uploads.error || saveUploads.error || changePassword.error
-  return <div><PageHeader title="设置" description="管理连接、上传限制和管理员账号" /><div className="mb-5 flex gap-1 border-b border-line"><Tab active={tab === 'application'} onClick={() => setTab('application')} icon={Server}>应用与连接</Tab><Tab active={tab === 'uploads'} onClick={() => setTab('uploads')} icon={SlidersHorizontal}>上传限制</Tab><Tab active={tab === 'account'} onClick={() => setTab('account')} icon={KeyRound}>账号安全</Tab></div>{error ? <div className="mb-4"><ErrorNotice error={error} /></div> : null}{tab === 'application' ? <section className="grid gap-5 xl:grid-cols-2"><div className="panel p-5"><h2 className="font-semibold">服务器连接</h2><dl className="mt-4 space-y-3 text-sm"><Info label="站点" value={profile?.name || '-'} /><Info label="地址" value={profile?.origin || '-'} /><Info label="服务" value={meta.data?.service || '-'} /><Info label="API 版本" value={meta.data ? String(meta.data.apiVersion) : '-'} /><Info label="最低桌面版本" value={meta.data?.minDesktopVersion || '-'} /></dl><Button variant="danger" className="mt-5" onClick={() => setDisconnect(true)}><Trash2 className="h-4 w-4" />移除服务器连接</Button></div><div className="panel p-5"><h2 className="font-semibold">管理员资料</h2><div className="mt-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center bg-[var(--color-surface-subtle)]" style={{ borderRadius: 999 }}><UserRound className="h-5 w-5" /></div><div><p className="font-medium">{user?.nickname || user?.username}</p><StatusBadge tone="success">{user?.role || 'ADMIN'}</StatusBadge></div></div><Link to="/settings/profile"><Button className="mt-5">编辑公开资料</Button></Link></div></section> : tab === 'uploads' ? (uploads.isPending ? <LoadingState /> : <section className="panel p-5"><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{uploadFields.map(([key, label, min, max]) => <Field key={key} label={`${label}（${key.includes('Count') ? '个' : 'MB'}）`}><Input type="number" min={min} max={max} value={Number(uploadForm[key] || 0)} onChange={(e) => { setMessage(''); setUploadForm((current) => ({ ...current, [key]: Number(e.target.value) })) }} /></Field>)}</div><div className="mt-5 flex items-center gap-3"><Button variant="primary" onClick={() => saveUploads.mutate()} disabled={saveUploads.isPending}>{saveUploads.isPending ? '保存中...' : '保存限制'}</Button>{message ? <span className="text-sm text-green-700 dark:text-green-300">{message}</span> : null}</div></section>) : <section className="panel max-w-xl p-5"><h2 className="font-semibold">修改管理员密码</h2><p className="mt-1 text-sm text-muted">修改成功后，所有旧管理员 JWT 会失效，需要重新登录。</p><div className="mt-5 space-y-4"><Field label="当前密码"><Input type="password" autoComplete="current-password" value={passwords.currentPassword} onChange={(e) => setPasswords({ ...passwords, currentPassword: e.target.value })} /></Field><Field label="新密码"><Input type="password" autoComplete="new-password" value={passwords.newPassword} onChange={(e) => setPasswords({ ...passwords, newPassword: e.target.value })} /></Field><Field label="确认新密码"><Input type="password" autoComplete="new-password" value={passwords.confirmPassword} onChange={(e) => setPasswords({ ...passwords, confirmPassword: e.target.value })} /></Field><Button variant="primary" onClick={() => changePassword.mutate()} disabled={changePassword.isPending}>{changePassword.isPending ? '修改中...' : '修改密码'}</Button></div></section>}<ConfirmDialog open={disconnect} title="移除服务器连接？" description="本机会删除保存的服务器信息和管理员令牌，本地草稿不会自动上传。" confirmLabel="移除" onCancel={() => setDisconnect(false)} onConfirm={() => void removeServer()} /></div>
+  useEffect(() => setServerDraft(settings.serverUrl), [settings.serverUrl])
+
+  const normalized = (() => {
+    try { return normalizeServerUrl(serverDraft) } catch { return null }
+  })()
+  const secure = normalized ? isSecureServerUrl(normalized) : false
+
+  const saveServer = () => {
+    if (!normalized) return
+    updateSettings({ serverUrl: normalized })
+    queryClient.removeQueries()
+    setSaved(true)
+    window.setTimeout(() => setSaved(false), 1800)
+  }
+  const testServer = async () => {
+    if (!normalized) return setTest({ kind: 'error', message: '服务器地址格式不正确' })
+    setTest({ kind: 'testing' })
+    try {
+      await publicApi.health(normalized)
+      setTest({ kind: 'success', message: '服务器连接正常' })
+    } catch (error) {
+      setTest({ kind: 'error', message: error instanceof Error ? error.message : '连接失败' })
+    }
+  }
+
+  return (
+    <div className="page settings-page">
+      <section className="settings-heading">
+        <span className="section-label">PREFERENCES</span>
+        <h2>应用设置</h2>
+      </section>
+
+      <section className="settings-section">
+        <div className="setting-title"><span><Server size={18} /></span><div><h3>内容服务器</h3><p>公开博客 API 与媒体资源的根地址</p></div></div>
+        <div className="server-setting-row">
+          <label className="text-field">
+            <span>服务器地址</span>
+            <input value={serverDraft} onChange={(event) => { setServerDraft(event.target.value); setTest({ kind: 'idle' }) }} placeholder="https://blog.example.com" />
+          </label>
+          <button className="button button-secondary" onClick={testServer} disabled={!normalized || test.kind === 'testing'}>
+            <TestTube2 size={16} /> {test.kind === 'testing' ? '测试中' : '测试连接'}
+          </button>
+          <button className="button button-primary" onClick={saveServer} disabled={!normalized}>
+            {saved ? <CheckCircle2 size={16} /> : <Save size={16} />} {saved ? '已保存' : '保存'}
+          </button>
+        </div>
+        {test.kind !== 'idle' && test.kind !== 'testing' && (
+          <div className={`setting-notice ${test.kind}`}>
+            {test.kind === 'success' ? <CheckCircle2 size={16} /> : <TriangleAlert size={16} />}{test.message}
+          </div>
+        )}
+        {normalized && !secure && <div className="setting-notice warning"><TriangleAlert size={16} />生产服务器应使用 HTTPS，避免内容在传输中被篡改。</div>}
+      </section>
+
+      <section className="settings-section split-settings">
+        <div>
+          <div className="setting-title"><span><Globe2 size={18} /></span><div><h3>内容语言</h3><p>优先读取服务器上的对应简介</p></div></div>
+          <div className="segmented-control">
+            <button className={settings.language === 'zh' ? 'active' : ''} onClick={() => { updateSettings({ language: 'zh' }); queryClient.removeQueries() }}>中文</button>
+            <button className={settings.language === 'en' ? 'active' : ''} onClick={() => { updateSettings({ language: 'en' }); queryClient.removeQueries() }}>English</button>
+          </div>
+        </div>
+        <div>
+          <div className="setting-title"><span><Monitor size={18} /></span><div><h3>外观</h3><p>选择阅读界面的明暗模式</p></div></div>
+          <div className="segmented-control icon-segments">
+            <ModeButton mode="system" value={settings.colorMode} icon={<Monitor size={15} />} label="跟随系统" onSelect={(colorMode) => updateSettings({ colorMode })} />
+            <ModeButton mode="light" value={settings.colorMode} icon={<Sun size={15} />} label="浅色" onSelect={(colorMode) => updateSettings({ colorMode })} />
+            <ModeButton mode="dark" value={settings.colorMode} icon={<Moon size={15} />} label="深色" onSelect={(colorMode) => updateSettings({ colorMode })} />
+          </div>
+        </div>
+      </section>
+
+      <section className="settings-section media-settings">
+        <div className="setting-title"><span><Music2 size={18} /></span><div><h3>桌面体验</h3><p>控制从服务器同步的可选媒体功能</p></div></div>
+        <div className="toggle-list">
+          <label><span><Music2 size={16} /><span><strong>音乐播放栏</strong><small>登录后加载 Web 端公开歌单</small></span></span><input type="checkbox" checked={settings.musicEnabled} onChange={(event) => updateSettings({ musicEnabled: event.target.checked })} /></label>
+        </div>
+      </section>
+
+      <section className="settings-meta"><span>Personal Blog Desktop</span><span>0.1.0</span><span>Tauri + React</span></section>
+    </div>
+  )
 }
 
-function Tab({ active, onClick, icon: Icon, children }: { active: boolean; onClick: () => void; icon: typeof Server; children: React.ReactNode }) { return <button type="button" onClick={onClick} className={`flex min-h-10 items-center gap-2 border-b-2 px-3 text-sm font-medium ${active ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-ink'}`}><Icon className="h-4 w-4" />{children}</button> }
-function Info({ label, value }: { label: string; value: string }) { return <div className="grid grid-cols-[120px_1fr] gap-3"><dt className="text-muted">{label}</dt><dd className="min-w-0 truncate font-medium">{value}</dd></div> }
+function ModeButton({ mode, value, icon, label, onSelect }: { mode: ColorMode; value: ColorMode; icon: ReactNode; label: string; onSelect: (mode: ColorMode) => void }) {
+  return <button className={value === mode ? 'active' : ''} onClick={() => onSelect(mode)}>{icon}{label}</button>
+}

@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #17191c;
+  background: #f5f6f8;
+  font-family: Inter, "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --color-bg: #f5f6f8;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #eef1f4;
+  --color-text: #17191c;
+  --color-text-muted: #636a74;
+  --color-border: #dfe3e8;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-success: #17803d;
+  --color-warning: #a85b08;
+  --color-danger: #c42a2f;
+  --sidebar-width: 232px;
+  --toolbar-height: 56px;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+}
+
+.dark {
+  color: #f2f4f7;
+  background: #111317;
+  --color-bg: #111317;
+  --color-surface: #191c21;
+  --color-surface-subtle: #22262c;
+  --color-text: #f2f4f7;
+  --color-text-muted: #aeb5bf;
+  --color-border: #31363e;
+  --color-primary: #6695ff;
+  --color-primary-hover: #7ca5ff;
+  --color-success: #4ebd72;
+  --color-warning: #e1a34b;
+  --color-danger: #f0787b;
+}
+
+* {
+  box-sizing: border-box;
+  letter-spacing: 0;
+}
+
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: #fff;
+  background: #2563eb;
+}
+
+@layer components {
+  .panel {
+    @apply border border-line bg-surface shadow-panel;
+    border-radius: var(--radius-panel);
+  }
+
+  .control {
+    @apply min-h-10 w-full border border-line bg-surface px-3 text-sm text-ink;
+    border-radius: var(--radius-control);
+  }
+
+  .control::placeholder {
+    color: color-mix(in srgb, var(--color-text-muted), transparent 30%);
+  }
+
+  .control:hover {
+    border-color: color-mix(in srgb, var(--color-border), var(--color-text-muted) 35%);
+  }
+
+  .control:focus {
+    border-color: var(--color-primary);
+    outline: 2px solid color-mix(in srgb, var(--color-primary), transparent 82%);
+  }
+
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-ink;
+  }
+
+  .table-cell {
+    @apply border-b border-line px-4 py-3 text-left align-middle text-sm;
+  }
+
+  .scrollbar-thin {
+    scrollbar-color: color-mix(in srgb, var(--color-text-muted), transparent 40%) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

@@ -94,6 +94,7 @@ func main() {
 		userAuth.POST("/code", middleware.RateLimit("email-code", 10, time.Minute), handler.RequestUserEmailCode)
 		userAuth.POST("/register", middleware.RateLimit("email-register", 10, time.Minute), handler.RegisterUserByEmailCode)
 		userAuth.POST("/login", middleware.RateLimit("email-login", 20, time.Minute), handler.LoginUserByPassword)
+		userAuth.POST("/desktop/login", middleware.RateLimit("email-login", 20, time.Minute), handler.LoginDesktopUserByPassword)
 		userAuth.POST("/password/reset", middleware.RateLimit("password-reset", 10, time.Minute), handler.ResetUserPasswordByEmailCode)
 		api.GET("/public/article-sites/:id/:siteKey/:version/:expires/:sign/*filepath", handler.ServeArticleSiteFile)
 
@@ -119,8 +120,8 @@ func main() {
 			public.GET("/theme/background-images", publicCache, handler.AdminListThemeBackgrounds)
 			public.GET("/live2d-model", publicCache, handler.GetLive2DModel)
 			public.GET("/music", middleware.UserAuthRequired(), middleware.RateLimit("music", config.AppConfig.MusicRateLimit, time.Minute), publicCache, handler.GetMusics)
-			public.GET("/music/:id/stream", middleware.PublicMediaAuth(), middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusic)
-			public.GET("/music/:id/lyrics", middleware.PublicMediaAuth(), middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusicLyrics)
+			public.GET("/music/:id/stream", middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusic)
+			public.GET("/music/:id/lyrics", middleware.RateLimit("music-stream", config.AppConfig.MusicStreamRateLimit, time.Minute), handler.StreamMusicLyrics)
 			public.GET("/search", handler.PublicSearch)
 		}
 

@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"personal-website-go/internal/config"
+	"personal-website-go/internal/middleware"
+	"personal-website-go/internal/model"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +49,28 @@ func TestValidUserPassword(t *testing.T) {
 		if validUserPassword(value) {
 			t.Fatalf("validUserPassword(%q) should fail", value)
 		}
+	}
+}
+
+func TestDesktopLoginResponseContract(t *testing.T) {
+	issuedAt := time.Date(2026, time.July, 14, 12, 0, 0, 0, time.UTC)
+	user := &model.User{ID: 42, Username: "reader", Email: "reader@example.com", Password: "must-not-leak", TokenVersion: 9, Status: "active"}
+	payload := newDesktopLoginResponse(middleware.UserAccessToken{
+		Token: "signed-user-jwt", IssuedAt: issuedAt, ExpiresAt: issuedAt.Add(24 * time.Hour),
+	}, user)
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(encoded)
+	for _, expected := range []string{`"accessToken":"signed-user-jwt"`, `"tokenType":"Bearer"`, `"expiresIn":86400`, `"user":{"createdAt"`} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("desktop login response is missing %s: %s", expected, body)
+		}
+	}
+	if strings.Contains(body, "must-not-leak") || strings.Contains(body, "tokenVersion") {
+		t.Fatalf("desktop login response leaked private user fields: %s", body)
 	}
 }
 

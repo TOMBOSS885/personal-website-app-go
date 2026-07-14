@@ -1,29 +1,32 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { fileURLToPath, URL } from 'node:url'
 
-const host = process.env.TAURI_DEV_HOST
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@app': fileURLToPath(new URL('./src/app', import.meta.url)),
-      '@features': fileURLToPath(new URL('./src/features', import.meta.url)),
-      '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)),
+  return {
+    plugins: [react()],
+    clearScreen: false,
+    server: {
+      host: '127.0.0.1',
+      port: 1420,
+      strictPort: true,
+      proxy: {
+        '/api': {
+          target: env.VITE_API_BASE_URL || 'http://127.0.0.1:8080',
+          changeOrigin: true,
+        },
+        '/uploads': {
+          target: env.VITE_API_BASE_URL || 'http://127.0.0.1:8080',
+          changeOrigin: true,
+        },
+      },
     },
-  },
-  clearScreen: false,
-  server: {
-    port: 1420,
-    strictPort: true,
-    host: host || false,
-    hmr: host ? { protocol: 'ws', host, port: 1421 } : undefined,
-    watch: { ignored: ['**/src-tauri/**'] },
-  },
-  build: {
-    target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
-    minify: process.env.TAURI_ENV_DEBUG ? false : 'esbuild',
-    sourcemap: Boolean(process.env.TAURI_ENV_DEBUG),
-  },
+    envPrefix: ['VITE_', 'TAURI_'],
+    build: {
+      target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
+      minify: process.env.TAURI_ENV_DEBUG ? false : 'esbuild',
+      sourcemap: Boolean(process.env.TAURI_ENV_DEBUG),
+    },
+  }
 })

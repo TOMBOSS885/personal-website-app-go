@@ -1,23 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeServerOrigin, resolveAssetUrl } from './client'
+import { isSecureServerUrl, normalizeServerUrl, resolveServerUrl } from './client'
 
-describe('normalizeServerOrigin', () => {
-  it('normalizes an HTTPS origin', () => {
-    expect(normalizeServerOrigin('https://example.com/')).toBe('https://example.com')
+describe('normalizeServerUrl', () => {
+  it('adds https and removes a trailing slash', () => {
+    expect(normalizeServerUrl(' blog.example.com/ ')).toBe('https://blog.example.com')
   })
 
-  it('rejects paths and embedded credentials', () => {
-    expect(() => normalizeServerOrigin('https://example.com/api')).toThrow()
-    expect(() => normalizeServerOrigin('https://user:pass@example.com')).toThrow()
+  it('keeps a deployment base path', () => {
+    expect(normalizeServerUrl('https://example.com/site/')).toBe('https://example.com/site')
+  })
+
+  it('rejects credentials and unsupported schemes', () => {
+    expect(() => normalizeServerUrl('ftp://example.com')).toThrow()
+    expect(() => normalizeServerUrl('https://user:pass@example.com')).toThrow()
   })
 })
 
-describe('resolveAssetUrl', () => {
-  it('resolves a same-origin relative upload URL', () => {
-    expect(resolveAssetUrl('https://example.com', '/uploads/a.webp')).toBe('https://example.com/uploads/a.webp')
+describe('resolveServerUrl', () => {
+  it('resolves server-relative media instead of the Tauri origin', () => {
+    expect(resolveServerUrl('https://blog.example.com', '/uploads/cover.webp'))
+      .toBe('https://blog.example.com/uploads/cover.webp')
   })
 
-  it('rejects cross-origin assets', () => {
-    expect(() => resolveAssetUrl('https://example.com', 'https://evil.example/a.webp')).toThrow()
+  it('preserves absolute media URLs', () => {
+    expect(resolveServerUrl('https://blog.example.com', 'https://cdn.example.com/a.png'))
+      .toBe('https://cdn.example.com/a.png')
+  })
+})
+
+describe('isSecureServerUrl', () => {
+  it('allows HTTPS and local development HTTP', () => {
+    expect(isSecureServerUrl('https://blog.example.com')).toBe(true)
+    expect(isSecureServerUrl('http://127.0.0.1:8080')).toBe(true)
+    expect(isSecureServerUrl('http://example.com')).toBe(false)
   })
 })

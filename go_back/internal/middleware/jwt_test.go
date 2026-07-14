@@ -61,6 +61,68 @@ func TestAdminSessionInfoUsesRegisteredClaims(t *testing.T) {
 	}
 }
 
+func TestGenerateUserAccessTokenUsesDesktopBearerClaims(t *testing.T) {
+	previous := config.AppConfig
+	config.AppConfig = &config.Config{JWTSecret: "test-secret-that-is-longer-than-thirty-two-bytes", JWTExpireMs: 90000}
+	t.Cleanup(func() { config.AppConfig = previous })
+
+	user := &model.User{ID: 84, Email: "Reader@Example.com", Role: "USER", Status: "active", TokenVersion: 7}
+	session, err := GenerateUserAccessToken(user)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := parseUserToken(session.Token)
+	if err != nil {
+		t.Fatalf("generated user access token is invalid: %v", err)
+	}
+	if claims.UserID != user.ID || claims.Subject != "reader@example.com" || claims.Role != "USER" || claims.TokenVersion != 7 {
+		t.Fatalf("unexpected user claims: %+v", claims)
+	}
+	if claims.Issuer != userJWTIssuer || len(claims.Audience) != 1 || claims.Audience[0] != userJWTAudience || claims.ID == "" {
+		t.Fatalf("registered user claims are incomplete: %+v", claims.RegisteredClaims)
+	}
+	if session.ExpiresAt.Sub(session.IssuedAt) != 90*time.Second {
+		t.Fatalf("token lifetime = %v", session.ExpiresAt.Sub(session.IssuedAt))
+	}
+}
+
+func TestParseUserTokenRejectsExpiredToken(t *testing.T) {
+	previous := config.AppConfig
+	config.AppConfig = &config.Config{JWTSecret: "test-secret-that-is-longer-than-thirty-two-bytes", JWTExpireMs: 60000}
+	t.Cleanup(func() { config.AppConfig = previous })
+
+	now := time.Now().UTC()
+	claims := userClaims{
+		UserID: 1, Role: "USER", TokenVersion: 1,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer: userJWTIssuer, Audience: jwt.ClaimStrings{userJWTAudience}, Subject: "reader@example.com", ID: "expired",
+			IssuedAt: jwt.NewNumericDate(now.Add(-2 * time.Minute)), ExpiresAt: jwt.NewNumericDate(now.Add(-time.Minute)),
+		},
+	}
+	raw, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.AppConfig.JWTSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := parseUserToken(raw); err == nil {
+		t.Fatalf("expired token should be rejected, got %v", err)
+	}
+}
+
+func TestUserTokenVersionRevokesAllEarlierSessions(t *testing.T) {
+	if !userTokenVersionMatches(4, 4) {
+		t.Fatal("current token version should remain valid")
+	}
+	if userTokenVersionMatches(5, 4) {
+		t.Fatal("incrementing the stored token version must revoke an earlier token")
+	}
+	if !userTokenVersionMatches(0, 1) {
+		t.Fatal("legacy zero database versions should normalize to version one")
+	}
+	if userTokenVersionMatches(1, 0) {
+		t.Fatal("tokens without an explicit token version must be rejected")
+	}
+}
+
 func TestSameOriginMutationRejectsCookieRequestWithoutOrigin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	context, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -92,5 +154,34 @@ func TestSameOriginMutationAllowsBearerClientWithoutBrowserHeaders(t *testing.T)
 
 	if !isSameOriginMutation(context) {
 		t.Fatal("non-browser bearer client should be accepted without browser origin headers")
+	}
+}
+
+func TestSameOriginMutationAllowsBearerEvenWithStaleCookieAndDesktopOrigin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	context, _ := gin.CreateTestContext(httptest.NewRecorder())
+	request := httptest.NewRequest(http.MethodDelete, "https://example.com/api/user/comments/1", nil)
+	request.Host = "example.com"
+	request.Header.Set("Authorization", "bearer desktop-token")
+	request.Header.Set("Origin", "http://tauri.localhost")
+	request.AddCookie(&http.Cookie{Name: UserSessionCookie, Value: "stale-cookie"})
+	context.Request = request
+
+	if !isSameOriginMutation(context) {
+		t.Fatal("explicit bearer credentials should not be subjected to cookie CSRF origin checks")
+	}
+}
+
+func TestBearerTokenRequiresExactlyOneCredential(t *testing.T) {
+	if token, ok := bearerToken("Bearer abc.def"); !ok || token != "abc.def" {
+		t.Fatalf("valid bearer header was not parsed: %q, %v", token, ok)
+	}
+	if token, ok := bearerToken("bearer abc.def"); !ok || token != "abc.def" {
+		t.Fatalf("auth scheme should be case-insensitive: %q, %v", token, ok)
+	}
+	for _, value := range []string{"", "Bearer", "Basic abc", "Bearer one two"} {
+		if _, ok := bearerToken(value); ok {
+			t.Fatalf("malformed bearer header %q should fail", value)
+		}
 	}
 }
