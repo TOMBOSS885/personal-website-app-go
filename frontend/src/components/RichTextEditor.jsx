@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
+import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
 import {
   Bold, Italic, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Link2,
-  Image, Table, Minus, Eye, EyeOff, Maximize2, Minimize2,
+  Image, Table, Sigma, Minus, Eye, EyeOff, Maximize2, Minimize2,
   UploadCloud, Loader, RefreshCw, Trash2, X
 } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
+import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
 
 const API_BASE = ''
 
@@ -104,6 +107,9 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
         } else {
           wrapSelection('`', '`', '代码')
         }
+        break
+      case 'formula':
+        wrapSelection('\n$$\n', '\n$$\n', '\\frac{a}{b}')
         break
       case 'link':
         insertText(`[${selectedText || '链接文本'}](url)`, selectedText ? 4 : 5)
@@ -217,6 +223,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
     { command: 'ol', icon: ListOrdered, title: '有序列表' },
     { command: 'quote', icon: Quote, title: '引用' },
     { command: 'code', icon: Code, title: '代码块' },
+    { command: 'formula', icon: Sigma, title: '块级数学公式' },
     { command: 'link', icon: Link2, title: '链接' },
     { command: 'image', icon: Image, title: '服务器图片' },
     { command: 'table', icon: Table, title: '表格' },
@@ -224,9 +231,10 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   ]
 
   const editorHeight = fullscreen ? 'calc(100vh - 112px)' : height
+  const normalizedValue = useMemo(() => normalizeMarkdownMath(value || ' '), [value])
   const previewContent = (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-      {value || ' '}
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}>
+      {normalizedValue}
     </ReactMarkdown>
   )
 
@@ -290,7 +298,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
               onChange={(e) => onChange(e.target.value)}
               spellCheck={false}
               className="markdown-editor-textarea"
-              placeholder={'开始编写文章内容...\n\n支持 Markdown：\n- **粗体** 和 *斜体*\n- # 标题\n- [链接](url)\n- 点击图片按钮上传或选择服务器图片\n- `代码` 和代码块\n- 表格、列表、引用'}
+              placeholder={'开始编写文章内容...\n\n支持 Markdown：\n- **粗体** 和 *斜体*\n- # 标题\n- [链接](url)\n- 行内公式 $E=mc^2$\n- 块级公式 $$\\frac{a}{b}$$\n- 点击图片按钮上传或选择服务器图片\n- `代码` 和代码块\n- 表格、列表、引用'}
             />
             {preview === 'live' && (
               <div className="hidden md:block h-full overflow-auto p-5 border-l border-gray-200 article-content article-editor-preview">

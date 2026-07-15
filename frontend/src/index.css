@@ -344,6 +344,40 @@ html.theme-dark {
   line-height: 1.75;
 }
 
+.article-content .katex {
+  max-width: 100%;
+  color: inherit;
+  font-size: 1.08em;
+}
+
+.article-content .katex-display {
+  max-width: 100%;
+  margin: 1.5rem 0;
+  padding: 1rem 0.75rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  color: #111827;
+  background: rgba(248, 250, 252, 0.78);
+  border-block: 1px solid #e5e7eb;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+
+.article-content .katex-display > .katex {
+  min-width: max-content;
+  text-align: center;
+}
+
+.article-content .katex-error {
+  color: #b42318;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .article-content .hljs-comment,
 .article-content .hljs-quote {
   color: #94a3b8;
@@ -469,6 +503,16 @@ html.theme-dark .article-content pre {
   box-shadow: 0 16px 35px rgba(0, 0, 0, 0.28);
 }
 
+html.theme-dark .article-content .katex-display {
+  color: #f8fafc;
+  background: rgba(15, 23, 42, 0.58);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+html.theme-dark .article-content .katex-error {
+  color: #fda4af;
+}
+
 html.theme-dark .article-content .article-table-wrap {
   border-color: rgba(148, 163, 184, 0.24);
 }
@@ -508,6 +552,15 @@ html.theme-dark .article-content img {
   .article-content pre {
     border-radius: 0.75rem;
     padding: 0.875rem;
+  }
+
+  .article-content .katex {
+    font-size: 1em;
+  }
+
+  .article-content .katex-display {
+    margin: 1.25rem -0.25rem;
+    padding: 0.875rem 0.5rem;
   }
 }
 

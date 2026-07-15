@@ -15,13 +15,16 @@ import {
 import { isValidElement, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Link, useParams } from 'react-router-dom'
+import rehypeKatex from 'rehype-katex'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
 import { publicApi, resolveServerUrl } from '../../shared/api/client'
 import type { Article } from '../../shared/api/types'
 import { ErrorState, LoadingState } from '../../shared/components/AsyncState'
 import { RemoteImage } from '../../shared/components/RemoteImage'
 import { formatDate, splitCommaList } from '../../shared/lib/format'
+import { KATEX_OPTIONS, normalizeMarkdownMath } from '../../shared/lib/markdownMath'
 import { openExternalUrl } from '../../shared/lib/platform'
 import { useSettings } from '../../shared/settings/SettingsContext'
 import { CommentsSection } from './CommentsSection'
@@ -52,6 +55,7 @@ export function ArticleDetailPage() {
 
   const article = unlocked ?? query.data
   const toc = useMemo(() => buildToc(article?.content), [article?.content])
+  const renderedContent = useMemo(() => normalizeMarkdownMath(article?.content), [article?.content])
   const headingIdsByLine = useMemo(() => new Map(
     parseToc(article?.content).map((item) => [item.sourceLine, item.id]),
   ), [article?.content])
@@ -118,8 +122,8 @@ export function ArticleDetailPage() {
         <div className={`reader-layout${toc.length ? '' : ' no-toc'}`}>
           <article className="markdown-body">
             <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeSanitize]}
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeSanitize, [rehypeKatex, KATEX_OPTIONS]]}
               components={{
                 a: ({ node: _node, href, children, ...props }) => {
                   if (href?.startsWith('#')) return <a href={href} {...props}>{children}</a>
@@ -134,7 +138,7 @@ export function ArticleDetailPage() {
                 h6: ({ node, children, ...props }) => <h6 id={resolveHeadingId(node, children)} {...props}>{children}</h6>,
               }}
             >
-              {article.content}
+              {renderedContent}
             </ReactMarkdown>
           </article>
           {toc.length > 0 && <ArticleTableOfContents items={toc} />}

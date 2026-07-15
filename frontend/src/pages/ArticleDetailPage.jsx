@@ -3,10 +3,13 @@ import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, Share2, Tag } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
+import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
 import OptimizedImage from '../components/OptimizedImage'
 import CommentSection from '../components/CommentSection'
+import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
@@ -17,6 +20,10 @@ export default function ArticleDetailPage() {
   const [unlocking, setUnlocking] = useState(false)
   const [unlockError, setUnlockError] = useState('')
   const tocItems = useMemo(() => buildToc(article?.content || ''), [article?.content])
+  const headingIdsByLine = useMemo(() => new Map(
+    parseToc(article?.content || '').map(item => [item.sourceLine, item.id]),
+  ), [article?.content])
+  const renderedContent = useMemo(() => normalizeMarkdownMath(article?.content || ''), [article?.content])
 
   useEffect(() => {
     setLoading(true)
@@ -175,7 +182,10 @@ export default function ArticleDetailPage() {
     )
   }
 
-  let headingRenderIndex = 0
+  const resolveHeadingId = (node, children) => {
+    const sourceLine = node?.position?.start?.line
+    return (sourceLine ? headingIdsByLine.get(sourceLine) : undefined) || headingIdFromChildren(children)
+  }
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -233,8 +243,8 @@ export default function ArticleDetailPage() {
             ) : (
             <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="article-content">
               <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeHighlight]}
+                remarkPlugins={[remarkGfm, remarkMath]}
+                rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}
                 components={{
                   a: ({ node, ...props }) => (
                     <a {...props} target="_blank" rel="noopener noreferrer" />
@@ -245,36 +255,26 @@ export default function ArticleDetailPage() {
                     </div>
                   ),
                   h2: ({ node, children, ...props }) => {
-                    const idValue = tocItems[headingRenderIndex]?.id || headingIdFromChildren(children)
-                    headingRenderIndex += 1
-                    return <h2 id={idValue} {...props}>{children}</h2>
+                    return <h2 id={resolveHeadingId(node, children)} {...props}>{children}</h2>
                   },
                   h3: ({ node, children, ...props }) => {
-                    const idValue = tocItems[headingRenderIndex]?.id || headingIdFromChildren(children)
-                    headingRenderIndex += 1
-                    return <h3 id={idValue} {...props}>{children}</h3>
+                    return <h3 id={resolveHeadingId(node, children)} {...props}>{children}</h3>
                   },
                   h4: ({ node, children, ...props }) => {
-                    const idValue = tocItems[headingRenderIndex]?.id || headingIdFromChildren(children)
-                    headingRenderIndex += 1
-                    return <h4 id={idValue} {...props}>{children}</h4>
+                    return <h4 id={resolveHeadingId(node, children)} {...props}>{children}</h4>
                   },
                   h5: ({ node, children, ...props }) => {
-                    const idValue = tocItems[headingRenderIndex]?.id || headingIdFromChildren(children)
-                    headingRenderIndex += 1
-                    return <h5 id={idValue} {...props}>{children}</h5>
+                    return <h5 id={resolveHeadingId(node, children)} {...props}>{children}</h5>
                   },
                   h6: ({ node, children, ...props }) => {
-                    const idValue = tocItems[headingRenderIndex]?.id || headingIdFromChildren(children)
-                    headingRenderIndex += 1
-                    return <h6 id={idValue} {...props}>{children}</h6>
+                    return <h6 id={resolveHeadingId(node, children)} {...props}>{children}</h6>
                   },
                   img: ({ node, ...props }) => (
                     <OptimizedImage {...props} loading="lazy" sizes="(min-width: 768px) 768px, 100vw" wrapperClassName="block" />
                   )
                 }}
               >
-                {article.content}
+                {renderedContent}
               </ReactMarkdown>
             </motion.article>
             )}
@@ -477,11 +477,17 @@ function TocTreeItem({ node, depth, activeId, collapsedIds, toggleBranch, handle
 }
 
 export function buildToc(markdown) {
+  return parseToc(markdown).map(({ sourceLine: _sourceLine, ...item }) => item)
+}
+
+function parseToc(markdown) {
   const counts = new Map()
   const items = []
   let fence = null
 
-  for (const line of String(markdown || '').split(/\r?\n/)) {
+  const lines = String(markdown || '').split(/\r?\n/)
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex]
     const fenceMatch = /^\s*(`{3,}|~{3,})/.exec(line)
     if (fenceMatch) {
       const marker = fenceMatch[1]
@@ -502,6 +508,7 @@ export function buildToc(markdown) {
       level: match[1].length,
       text,
       id: count ? `${baseId}-${count + 1}` : baseId,
+      sourceLine: lineIndex + 1,
     })
   }
 

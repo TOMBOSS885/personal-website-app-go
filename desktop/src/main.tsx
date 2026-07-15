@@ -5,6 +5,7 @@ import { HashRouter } from 'react-router-dom'
 import { App } from './app/App'
 import { SettingsProvider } from './shared/settings/SettingsContext'
 import { UserAuthProvider } from './features/account/UserAuthContext'
+import 'katex/dist/katex.min.css'
 import './styles/index.css'
 
 const queryClient = new QueryClient({

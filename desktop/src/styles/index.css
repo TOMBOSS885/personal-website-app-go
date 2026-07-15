@@ -255,6 +255,9 @@ kbd { padding: 3px 6px; color: var(--subtle); background: var(--surface); border
 .markdown-body blockquote { margin: 1.4em 0; padding: 12px 18px; color: var(--muted); background: var(--surface-soft); border-left: 3px solid var(--accent); }
 .markdown-body pre { max-width: 100%; overflow: auto; padding: 17px; color: #e7eee9; background: #171d1a; border-radius: 4px; font: 12px/1.65 Consolas, monospace; }
 .markdown-body :not(pre) > code { padding: 2px 5px; color: var(--accent-strong); background: var(--surface-soft); border-radius: 3px; font: .86em Consolas, monospace; }
+.markdown-body .katex { max-width: 100%; color: inherit; font-size: 1.08em; }
+.markdown-body .katex-display { max-width: 100%; margin: 1.5em 0; padding: 1em .75em; overflow-x: auto; overflow-y: hidden; color: var(--ink); background: color-mix(in srgb, var(--surface-soft) 78%, transparent); border-block: 1px solid var(--line); overscroll-behavior-inline: contain; scrollbar-gutter: stable; scrollbar-width: thin; touch-action: pan-x; -webkit-overflow-scrolling: touch; }
+.markdown-body .katex-display > .katex { min-width: max-content; text-align: center; }.markdown-body .katex-error { color: var(--accent-strong); font-family: Consolas, monospace; overflow-wrap: anywhere; white-space: normal; }
 .markdown-body table { display: block; width: 100%; overflow-x: auto; border-collapse: collapse; font-family: inherit; font-size: 13px; }
 .markdown-body th, .markdown-body td { padding: 8px 10px; border: 1px solid var(--line); }.markdown-body th { background: var(--surface-soft); }
 .article-toc { position: sticky; top: 20px; display: flex; min-width: 0; max-height: calc(100vh - 116px); align-self: start; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
