@@ -1,6 +1,18 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Check, Eye, KeyRound, LockKeyhole, Share2 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
+  Eye,
+  KeyRound,
+  ListTree,
+  LockKeyhole,
+  Share2,
+} from 'lucide-react'
+import { isValidElement, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Link, useParams } from 'react-router-dom'
 import rehypeSanitize from 'rehype-sanitize'
@@ -40,6 +52,9 @@ export function ArticleDetailPage() {
 
   const article = unlocked ?? query.data
   const toc = useMemo(() => buildToc(article?.content), [article?.content])
+  const headingIdsByLine = useMemo(() => new Map(
+    parseToc(article?.content).map((item) => [item.sourceLine, item.id]),
+  ), [article?.content])
 
   if (query.isPending) return <LoadingState label="正在打开文章" />
   if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />
@@ -53,7 +68,10 @@ export function ArticleDetailPage() {
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1800)
   }
-  let headingRenderIndex = 0
+  const resolveHeadingId = (node: { position?: { start?: { line?: number } } } | undefined, children: ReactNode) => {
+    const sourceLine = node?.position?.start?.line
+    return (sourceLine ? headingIdsByLine.get(sourceLine) : undefined) ?? slugify(childrenToText(children))
+  }
 
   return (
     <div className="page article-reader-page">
@@ -109,27 +127,17 @@ export function ArticleDetailPage() {
                   return <a href={target} {...props} onClick={(event) => { event.preventDefault(); void openExternalUrl(target) }}>{children}</a>
                 },
                 img: ({ node: _node, src, alt }) => <RemoteImage source={src} alt={alt || ''} loading="lazy" />,
-                h2: ({ node: _node, children, ...props }) => {
-                  const idValue = toc[headingRenderIndex]?.id || slugify(childrenToText(children))
-                  headingRenderIndex += 1
-                  return <h2 id={idValue} {...props}>{children}</h2>
-                },
-                h3: ({ node: _node, children, ...props }) => {
-                  const idValue = toc[headingRenderIndex]?.id || slugify(childrenToText(children))
-                  headingRenderIndex += 1
-                  return <h3 id={idValue} {...props}>{children}</h3>
-                },
+                h2: ({ node, children, ...props }) => <h2 id={resolveHeadingId(node, children)} {...props}>{children}</h2>,
+                h3: ({ node, children, ...props }) => <h3 id={resolveHeadingId(node, children)} {...props}>{children}</h3>,
+                h4: ({ node, children, ...props }) => <h4 id={resolveHeadingId(node, children)} {...props}>{children}</h4>,
+                h5: ({ node, children, ...props }) => <h5 id={resolveHeadingId(node, children)} {...props}>{children}</h5>,
+                h6: ({ node, children, ...props }) => <h6 id={resolveHeadingId(node, children)} {...props}>{children}</h6>,
               }}
             >
               {article.content}
             </ReactMarkdown>
           </article>
-          {toc.length > 0 && (
-            <aside className="article-toc">
-              <strong>文章目录</strong>
-              <nav>{toc.map((item) => <a key={`${item.level}-${item.id}`} className={item.level === 3 ? 'nested' : ''} href={`#${item.id}`}>{item.text}</a>)}</nav>
-            </aside>
-          )}
+          {toc.length > 0 && <ArticleTableOfContents items={toc} />}
         </div>
       )}
 
@@ -147,25 +155,237 @@ export function ArticleDetailPage() {
   )
 }
 
-function buildToc(markdown?: string) {
+export type TocItem = {
+  level: number
+  text: string
+  id: string
+}
+
+export type TocNode = TocItem & {
+  children: TocNode[]
+}
+
+type TocSourceItem = TocItem & {
+  sourceLine: number
+}
+
+type TocTreeItemProps = {
+  node: TocNode
+  depth: number
+  activeId: string
+  collapsedIds: Set<string>
+  onToggle: (id: string) => void
+  onHeadingClick: (event: MouseEvent<HTMLButtonElement>, id: string) => void
+}
+
+function ArticleTableOfContents({ items }: { items: TocItem[] }) {
+  const tree = useMemo(() => buildTocTree(items), [items])
+  const branchIds = useMemo(() => collectBranchIds(tree), [tree])
+  const ancestorMap = useMemo(() => buildAncestorMap(tree), [tree])
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
+  const [activeId, setActiveId] = useState('')
+
+  useEffect(() => {
+    setCollapsedIds(new Set())
+    setActiveId(items[0]?.id ?? '')
+  }, [items])
+
+  const toggleBranch = (id: string) => {
+    setCollapsedIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleHeadingClick = (event: MouseEvent<HTMLButtonElement>, id: string) => {
+    const heading = document.getElementById(id)
+    if (!heading) return
+
+    event.preventDefault()
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    heading.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+    setActiveId(id)
+    setCollapsedIds((current) => removeCollapsedAncestors(current, ancestorMap.get(id) ?? []))
+  }
+
+  return (
+    <aside className="article-toc">
+      <div className="article-toc-header">
+        <ListTree size={15} aria-hidden="true" />
+        <strong>文章目录</strong>
+        <span>{items.length}</span>
+        {branchIds.length > 0 && (
+          <div className="article-toc-actions">
+            <button type="button" onClick={() => setCollapsedIds(new Set())} aria-label="展开全部目录" title="展开全部">
+              <ChevronsDown size={15} />
+            </button>
+            <button type="button" onClick={() => setCollapsedIds(new Set(branchIds))} aria-label="折叠全部目录" title="折叠全部">
+              <ChevronsUp size={15} />
+            </button>
+          </div>
+        )}
+      </div>
+      <nav className="article-toc-scroll" aria-label="文章目录" tabIndex={0}>
+        <ul>
+          {tree.map((node) => (
+            <TocTreeItem
+              key={node.id}
+              node={node}
+              depth={0}
+              activeId={activeId}
+              collapsedIds={collapsedIds}
+              onToggle={toggleBranch}
+              onHeadingClick={handleHeadingClick}
+            />
+          ))}
+        </ul>
+      </nav>
+    </aside>
+  )
+}
+
+function TocTreeItem({ node, depth, activeId, collapsedIds, onToggle, onHeadingClick }: TocTreeItemProps) {
+  const hasChildren = node.children.length > 0
+  const collapsed = collapsedIds.has(node.id)
+  const active = activeId === node.id
+  const childrenId = `toc-children-${node.id}`
+
+  return (
+    <li>
+      <div className={`article-toc-row${active ? ' active' : ''}`} style={{ paddingInlineStart: `${Math.min(depth, 4) * 10}px` }}>
+        {hasChildren ? (
+          <button
+            type="button"
+            className="article-toc-toggle"
+            onClick={() => onToggle(node.id)}
+            aria-expanded={!collapsed}
+            aria-controls={childrenId}
+            aria-label={`${collapsed ? '展开' : '折叠'} ${node.text}`}
+            title={collapsed ? '展开子目录' : '折叠子目录'}
+          >
+            {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+          </button>
+        ) : <span className="article-toc-toggle-spacer" aria-hidden="true" />}
+        <button
+          type="button"
+          className="article-toc-link"
+          onClick={(event) => onHeadingClick(event, node.id)}
+          aria-current={active ? 'location' : undefined}
+          title={node.text}
+        >
+          {node.text}
+        </button>
+      </div>
+      {hasChildren && !collapsed && (
+        <ul id={childrenId}>
+          {node.children.map((child) => (
+            <TocTreeItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              activeId={activeId}
+              collapsedIds={collapsedIds}
+              onToggle={onToggle}
+              onHeadingClick={onHeadingClick}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+export function buildToc(markdown?: string): TocItem[] {
+  return parseToc(markdown).map(({ sourceLine: _sourceLine, ...item }) => item)
+}
+
+function parseToc(markdown?: string): TocSourceItem[] {
   const counts = new Map<string, number>()
-  return String(markdown ?? '').split(/\r?\n/).flatMap((line) => {
-    const match = /^(#{2,3})\s+(.+)$/.exec(line.trim())
-    if (!match) return []
-    const text = match[2].replace(/[#*_`~[\]()]/g, '').trim()
+  const items: TocSourceItem[] = []
+  let fence: { character: string; length: number } | null = null
+
+  const lines = String(markdown ?? '').split(/\r?\n/)
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex]
+    const fenceMatch = /^\s*(`{3,}|~{3,})/.exec(line)
+    if (fenceMatch) {
+      const marker = fenceMatch[1]
+      if (!fence) fence = { character: marker[0], length: marker.length }
+      else if (marker[0] === fence.character && marker.length >= fence.length) fence = null
+      continue
+    }
+    if (fence) continue
+
+    const match = /^\s*(#{2,6})[\t ]+(.+?)(?:[\t ]+#+[\t ]*)?$/.exec(line)
+    if (!match) continue
+    const text = stripMarkdown(match[2])
+    if (!text) continue
     const base = slugify(text)
     const count = counts.get(base) ?? 0
     counts.set(base, count + 1)
-    return [{ level: match[1].length, text, id: count ? `${base}-${count + 1}` : base }]
-  })
+    items.push({
+      level: match[1].length,
+      text,
+      id: count ? `${base}-${count + 1}` : base,
+      sourceLine: lineIndex + 1,
+    })
+  }
+
+  return items
+}
+
+export function buildTocTree(items: TocItem[]): TocNode[] {
+  const roots: TocNode[] = []
+  const stack: TocNode[] = []
+
+  for (const item of items) {
+    const node: TocNode = { ...item, children: [] }
+    while (stack.length > 0 && stack[stack.length - 1].level >= node.level) stack.pop()
+    if (stack.length > 0) stack[stack.length - 1].children.push(node)
+    else roots.push(node)
+    stack.push(node)
+  }
+
+  return roots
+}
+
+function collectBranchIds(nodes: TocNode[]): string[] {
+  return nodes.flatMap((node) => node.children.length > 0 ? [node.id, ...collectBranchIds(node.children)] : [])
+}
+
+function buildAncestorMap(nodes: TocNode[], ancestors: string[] = [], map = new Map<string, string[]>()) {
+  for (const node of nodes) {
+    map.set(node.id, ancestors)
+    buildAncestorMap(node.children, [...ancestors, node.id], map)
+  }
+  return map
+}
+
+function removeCollapsedAncestors(current: Set<string>, ancestors: string[]) {
+  if (!ancestors.some((id) => current.has(id))) return current
+  const next = new Set(current)
+  ancestors.forEach((id) => next.delete(id))
+  return next
 }
 
 function childrenToText(children: ReactNode): string {
   if (Array.isArray(children)) return children.map(childrenToText).join('')
   if (typeof children === 'string' || typeof children === 'number') return String(children)
+  if (isValidElement<{ children?: ReactNode }>(children)) return childrenToText(children.props.children)
   return ''
 }
 
 function slugify(value: string): string {
-  return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'section'
+  return stripMarkdown(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '') || 'section'
+}
+
+function stripMarkdown(value: string): string {
+  return String(value ?? '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, '')
+    .replace(/[#*_`~]/g, '')
+    .trim()
 }

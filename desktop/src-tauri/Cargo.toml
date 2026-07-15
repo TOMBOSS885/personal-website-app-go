@@ -1,6 +1,6 @@
 [package]
 name = "personal-blog"
-version = "0.1.0"
+version = "0.1.1"
 description = "Desktop client for Personal Blog"
 authors = ["Personal Website contributors"]
 edition = "2021"
