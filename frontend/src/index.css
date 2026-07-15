@@ -190,6 +190,19 @@ html.theme-dark {
   overflow-wrap: break-word;
 }
 
+.article-toc-scroll {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.article-toc-scroll:focus-visible {
+  outline: 2px solid var(--theme-primary);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+
 .article-content > * + * {
   margin-top: 1.25rem;
 }
@@ -197,7 +210,9 @@ html.theme-dark {
 .article-content h1,
 .article-content h2,
 .article-content h3,
-.article-content h4 {
+.article-content h4,
+.article-content h5,
+.article-content h6 {
   color: #111827;
   font-weight: 800;
   line-height: 1.25;
@@ -224,6 +239,16 @@ html.theme-dark {
 .article-content h4 {
   font-size: 1.125rem;
   margin-top: 1.5rem;
+}
+
+.article-content h5 {
+  font-size: 1rem;
+  margin-top: 1.25rem;
+}
+
+.article-content h6 {
+  font-size: 0.9375rem;
+  margin-top: 1.25rem;
 }
 
 .article-content p {
@@ -406,6 +431,8 @@ html.theme-dark .article-content h1,
 html.theme-dark .article-content h2,
 html.theme-dark .article-content h3,
 html.theme-dark .article-content h4,
+html.theme-dark .article-content h5,
+html.theme-dark .article-content h6,
 html.theme-dark .article-content strong {
   color: #f8fafc;
 }

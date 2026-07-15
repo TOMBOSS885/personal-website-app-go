@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, Lock, Share2, Tag } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, Share2, Tag } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
@@ -254,6 +254,21 @@ export default function ArticleDetailPage() {
                     headingRenderIndex += 1
                     return <h3 id={idValue} {...props}>{children}</h3>
                   },
+                  h4: ({ node, children, ...props }) => {
+                    const idValue = tocItems[headingRenderIndex]?.id || headingIdFromChildren(children)
+                    headingRenderIndex += 1
+                    return <h4 id={idValue} {...props}>{children}</h4>
+                  },
+                  h5: ({ node, children, ...props }) => {
+                    const idValue = tocItems[headingRenderIndex]?.id || headingIdFromChildren(children)
+                    headingRenderIndex += 1
+                    return <h5 id={idValue} {...props}>{children}</h5>
+                  },
+                  h6: ({ node, children, ...props }) => {
+                    const idValue = tocItems[headingRenderIndex]?.id || headingIdFromChildren(children)
+                    headingRenderIndex += 1
+                    return <h6 id={idValue} {...props}>{children}</h6>
+                  },
                   img: ({ node, ...props }) => (
                     <OptimizedImage {...props} loading="lazy" sizes="(min-width: 768px) 768px, 100vw" wrapperClassName="block" />
                   )
@@ -267,20 +282,7 @@ export default function ArticleDetailPage() {
 
           {article.contentType !== 'static' && tocItems.length > 0 && (
             <aside className="hidden lg:col-start-3 lg:block">
-              <div className="sticky top-28 rounded-2xl border border-white/60 bg-white/70 p-4 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60">
-                <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">文章目录</div>
-                <nav className="mt-3 space-y-1">
-                  {tocItems.map(item => (
-                    <a
-                      key={item.id}
-                      href={`#${item.id}`}
-                      className={`block rounded-lg px-2 py-1.5 text-sm text-gray-500 transition hover:bg-indigo-50 hover:text-indigo-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-indigo-300 ${item.level === 3 ? 'pl-5' : ''}`}
-                    >
-                      {item.text}
-                    </a>
-                  ))}
-                </nav>
-              </div>
+              <ArticleTableOfContents items={tocItems} />
             </aside>
           )}
         </div>
@@ -311,24 +313,231 @@ export default function ArticleDetailPage() {
   )
 }
 
-function buildToc(markdown) {
-  const counts = new Map()
-  return String(markdown || '')
-    .split(/\r?\n/)
-    .map(line => {
-      const match = /^(#{2,3})\s+(.+)$/.exec(line.trim())
-      if (!match) return null
-      const text = stripMarkdown(match[2])
-      const baseId = slugify(text)
-      const count = counts.get(baseId) || 0
-      counts.set(baseId, count + 1)
-      return {
-        level: match[1].length,
-        text,
-        id: count ? `${baseId}-${count + 1}` : baseId,
+function ArticleTableOfContents({ items }) {
+  const tree = useMemo(() => buildTocTree(items), [items])
+  const branchIds = useMemo(() => collectBranchIds(tree), [tree])
+  const ancestorMap = useMemo(() => buildAncestorMap(tree), [tree])
+  const [collapsedIds, setCollapsedIds] = useState(() => new Set())
+  const [activeId, setActiveId] = useState('')
+
+  useEffect(() => {
+    setCollapsedIds(new Set())
+    const syncHash = () => {
+      let hash = ''
+      try {
+        hash = decodeURIComponent(window.location.hash.slice(1))
+      } catch {
+        hash = ''
       }
+      const nextActiveId = items.some(item => item.id === hash) ? hash : (items[0]?.id || '')
+      setActiveId(nextActiveId)
+      const ancestors = ancestorMap.get(nextActiveId) || []
+      if (ancestors.length) {
+        setCollapsedIds(current => {
+          if (!ancestors.some(ancestorId => current.has(ancestorId))) return current
+          const next = new Set(current)
+          ancestors.forEach(ancestorId => next.delete(ancestorId))
+          return next
+        })
+      }
+    }
+    syncHash()
+    window.addEventListener('hashchange', syncHash)
+    return () => window.removeEventListener('hashchange', syncHash)
+  }, [ancestorMap, items])
+
+  const toggleBranch = id => {
+    setCollapsedIds(current => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
     })
-    .filter(Boolean)
+  }
+
+  const handleHeadingClick = (event, id) => {
+    const heading = document.getElementById(id)
+    if (!heading) return
+    event.preventDefault()
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    heading.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+    window.history.replaceState(null, '', `#${encodeURIComponent(id)}`)
+    setActiveId(id)
+    const ancestors = ancestorMap.get(id) || []
+    if (ancestors.length) {
+      setCollapsedIds(current => {
+        if (!ancestors.some(ancestorId => current.has(ancestorId))) return current
+        const next = new Set(current)
+        ancestors.forEach(ancestorId => next.delete(ancestorId))
+        return next
+      })
+    }
+  }
+
+  return (
+    <div className="sticky top-40 flex max-h-[calc(100vh-11rem)] min-h-0 flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/70 p-4 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60">
+      <div className="flex shrink-0 items-center gap-2 border-b border-gray-100 pb-3 dark:border-slate-800">
+        <ListTree className="h-4 w-4 text-indigo-500" aria-hidden="true" />
+        <div className="min-w-0 flex-1 text-sm font-semibold text-gray-900 dark:text-slate-100">文章目录</div>
+        <span className="text-xs tabular-nums text-gray-400 dark:text-slate-500">{items.length}</span>
+        {branchIds.length > 0 && (
+          <div className="flex items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => setCollapsedIds(new Set())}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-indigo-300"
+              aria-label="展开全部目录"
+              title="展开全部"
+            >
+              <ChevronsDown className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCollapsedIds(new Set(branchIds))}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition hover:bg-indigo-50 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-500 dark:hover:bg-slate-800 dark:hover:text-indigo-300"
+              aria-label="折叠全部目录"
+              title="折叠全部"
+            >
+              <ChevronsUp className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      <nav className="article-toc-scroll mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1" aria-label="文章目录" tabIndex={0}>
+        <ul className="space-y-0.5">
+          {tree.map(node => (
+            <TocTreeItem
+              key={node.id}
+              node={node}
+              depth={0}
+              activeId={activeId}
+              collapsedIds={collapsedIds}
+              toggleBranch={toggleBranch}
+              handleHeadingClick={handleHeadingClick}
+            />
+          ))}
+        </ul>
+      </nav>
+    </div>
+  )
+}
+
+function TocTreeItem({ node, depth, activeId, collapsedIds, toggleBranch, handleHeadingClick }) {
+  const hasChildren = node.children.length > 0
+  const collapsed = collapsedIds.has(node.id)
+  const childrenId = `toc-children-${node.id}`
+  const active = activeId === node.id
+
+  return (
+    <li>
+      <div className={`flex items-start rounded-lg transition-colors ${active ? 'bg-indigo-50 dark:bg-indigo-500/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800/80'}`} style={{ paddingInlineStart: `${Math.min(depth, 4) * 0.7}rem` }}>
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => toggleBranch(node.id)}
+            className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-slate-500 dark:hover:text-indigo-300"
+            aria-expanded={!collapsed}
+            aria-controls={childrenId}
+            aria-label={`${collapsed ? '展开' : '折叠'} ${node.text}`}
+            title={collapsed ? '展开子目录' : '折叠子目录'}
+          >
+            {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+          </button>
+        ) : (
+          <span className="h-6 w-6 shrink-0" aria-hidden="true" />
+        )}
+        <a
+          href={`#${encodeURIComponent(node.id)}`}
+          onClick={event => handleHeadingClick(event, node.id)}
+          aria-current={active ? 'location' : undefined}
+          title={node.text}
+          className={`min-w-0 flex-1 break-words px-1.5 py-1.5 text-sm leading-5 transition-colors focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${active ? 'font-medium text-indigo-700 dark:text-indigo-300' : 'text-gray-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-300'}`}
+        >
+          {node.text}
+        </a>
+      </div>
+      {hasChildren && !collapsed && (
+        <ul id={childrenId} className="space-y-0.5">
+          {node.children.map(child => (
+            <TocTreeItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              activeId={activeId}
+              collapsedIds={collapsedIds}
+              toggleBranch={toggleBranch}
+              handleHeadingClick={handleHeadingClick}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  )
+}
+
+export function buildToc(markdown) {
+  const counts = new Map()
+  const items = []
+  let fence = null
+
+  for (const line of String(markdown || '').split(/\r?\n/)) {
+    const fenceMatch = /^\s*(`{3,}|~{3,})/.exec(line)
+    if (fenceMatch) {
+      const marker = fenceMatch[1]
+      if (!fence) fence = { char: marker[0], length: marker.length }
+      else if (marker[0] === fence.char && marker.length >= fence.length) fence = null
+      continue
+    }
+    if (fence) continue
+
+    const match = /^\s*(#{2,6})[\t ]+(.+?)(?:[\t ]+#+[\t ]*)?$/.exec(line)
+    if (!match) continue
+    const text = stripMarkdown(match[2])
+    if (!text) continue
+    const baseId = slugify(text)
+    const count = counts.get(baseId) || 0
+    counts.set(baseId, count + 1)
+    items.push({
+      level: match[1].length,
+      text,
+      id: count ? `${baseId}-${count + 1}` : baseId,
+    })
+  }
+
+  return items
+}
+
+export function buildTocTree(items) {
+  const roots = []
+  const stack = []
+  for (const item of items) {
+    const node = { ...item, children: [] }
+    while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop()
+    if (stack.length) stack[stack.length - 1].children.push(node)
+    else roots.push(node)
+    stack.push(node)
+  }
+  return roots
+}
+
+function collectBranchIds(nodes) {
+  const ids = []
+  for (const node of nodes) {
+    if (node.children.length) {
+      ids.push(node.id)
+      ids.push(...collectBranchIds(node.children))
+    }
+  }
+  return ids
+}
+
+function buildAncestorMap(nodes, ancestors = [], map = new Map()) {
+  for (const node of nodes) {
+    map.set(node.id, ancestors)
+    buildAncestorMap(node.children, [...ancestors, node.id], map)
+  }
+  return map
 }
 
 function headingIdFromChildren(children) {
@@ -346,7 +555,12 @@ function childrenToText(children) {
 }
 
 function stripMarkdown(text) {
-  return String(text || '').replace(/[#*_`~[\]()]/g, '').trim()
+  return String(text || '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]*>/g, '')
+    .replace(/[#*_`~]/g, '')
+    .trim()
 }
 
 function slugify(text) {

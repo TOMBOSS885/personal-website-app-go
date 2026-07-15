@@ -31,6 +31,7 @@ const IMAGE_POSITION_OPTIONS = [
 
 export default function HomeBackgroundCustomizer() {
 	const location = useLocation()
+  const isArticleDetail = /^\/blog\/[^/]+\/?$/.test(location.pathname)
   const { setCustomTheme, getActiveTheme } = useTheme()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -96,7 +97,7 @@ export default function HomeBackgroundCustomizer() {
   }
 
   return (
-    <div className="fixed bottom-24 right-4 z-[60] sm:right-6">
+    <div className={`fixed bottom-24 right-4 z-[60] sm:right-6 ${isArticleDetail ? 'lg:left-6 lg:right-auto' : ''}`}>
       <motion.button
         type="button"
         onClick={() => setOpen(value => !value)}
@@ -122,7 +123,7 @@ export default function HomeBackgroundCustomizer() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-            className="absolute bottom-14 right-0 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl"
+            className={`absolute bottom-14 right-0 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl ${isArticleDetail ? 'lg:left-0 lg:right-auto' : ''}`}
           >
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">

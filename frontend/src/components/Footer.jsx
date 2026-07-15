@@ -1,6 +1,6 @@
 import { Github, Twitter, Linkedin, Mail, Heart, Coffee, ExternalLink } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import { safeExternalHref } from '../utils/safeUrl'
@@ -10,6 +10,8 @@ export default function Footer({ profile }) {
   const currentYear = new Date().getFullYear()
   const { language } = useLanguage()
   const { t } = useTranslation()
+  const location = useLocation()
+  const isArticleDetail = /^\/blog\/[^/]+\/?$/.test(location.pathname)
   const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com')
 
   const footerLinks = [
@@ -192,7 +194,7 @@ export default function Footer({ profile }) {
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        className="fixed bottom-8 right-8 p-3 rounded-full text-white hover:shadow-xl transition-shadow z-50"
+        className={`fixed bottom-8 right-8 z-50 rounded-full p-3 text-white transition-shadow hover:shadow-xl ${isArticleDetail ? 'lg:left-8 lg:right-auto' : ''}`}
         style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
