@@ -2,8 +2,10 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type articleRequest struct {
@@ -26,7 +29,7 @@ type articleRequest struct {
 	StaticSiteKey  string `json:"staticSiteKey"`
 	StaticSiteName string `json:"staticSiteName"`
 	IsLocked       bool   `json:"isLocked"`
-	RequiresLogin  bool   `json:"requiresLogin"`
+	RequiresLogin  *bool  `json:"requiresLogin"`
 	AccessPassword string `json:"accessPassword"`
 }
 
@@ -67,7 +70,7 @@ func AdminCreateArticleSecure(c *gin.Context) {
 		StaticSiteKey:      siteKey,
 		StaticSiteName:     siteName,
 		IsLocked:           payload.IsLocked,
-		RequiresLogin:      payload.RequiresLogin,
+		RequiresLogin:      payload.RequiresLogin != nil && *payload.RequiresLogin,
 		AccessPasswordHash: hash,
 	}
 	if err := repository.CreateArticle(&article); err != nil {
@@ -121,7 +124,9 @@ func AdminUpdateArticleSecure(c *gin.Context) {
 	existing.StaticSiteKey = siteKey
 	existing.StaticSiteName = siteName
 	existing.IsLocked = payload.IsLocked
-	existing.RequiresLogin = payload.RequiresLogin
+	if payload.RequiresLogin != nil {
+		existing.RequiresLogin = *payload.RequiresLogin
+	}
 	existing.AccessPasswordHash = hash
 
 	if err := repository.UpdateArticle(existing); err != nil {
@@ -165,12 +170,19 @@ func AdminUpdateArticlesAccess(c *gin.Context) {
 
 	updated, err := repository.UpdateArticlesRequiresLogin(unique, *payload.RequiresLogin)
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.Error(c, http.StatusConflict, "部分文章已不存在，请刷新列表后重试")
+			return
+		}
 		response.Error(c, http.StatusInternalServerError, "批量更新文章访问权限失败")
 		return
 	}
 	for _, id := range unique {
 		invalidateArticleSiteAccess(id)
 	}
+	username, _ := c.Get("username")
+	middleware.LogOperation(c, fmt.Sprint(username), "batch_update_article_access",
+		fmt.Sprintf("ids=%v requiresLogin=%t", unique, *payload.RequiresLogin), http.StatusOK)
 	response.Success(c, gin.H{
 		"requested":     len(unique),
 		"updated":       updated,

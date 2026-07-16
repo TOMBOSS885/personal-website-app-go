@@ -112,7 +112,7 @@ export default function MusicPlayer() {
 
 		const controller = new AbortController()
 		const timeout = window.setTimeout(() => controller.abort(), 6000)
-		playlistRefreshPromiseRef.current = authFetch('/api/public/music', { signal: controller.signal })
+		playlistRefreshPromiseRef.current = authFetch('/api/public/music', { signal: controller.signal, clearSessionOnUnauthorized: true })
 			.then(async res => {
 				if (!res.ok) {
 					throw new Error(res.status === 401 || res.status === 403 ? '登录状态已失效' : '歌曲加载失败，请稍后重试')

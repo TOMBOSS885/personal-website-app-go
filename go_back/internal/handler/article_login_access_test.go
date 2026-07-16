@@ -16,7 +16,7 @@ func TestPublicArticlePayloadRequiresLoginBeforePassword(t *testing.T) {
 		RequiresLogin: true,
 	}
 
-	payload := publicArticlePayload(article, false, true)
+	payload := publicArticlePayload(article, false, true, "127.0.0.1")
 	if payload["content"] != "" || payload["staticSiteUrl"] != "" {
 		t.Fatal("login-required payload leaked protected content")
 	}
@@ -30,7 +30,7 @@ func TestPublicArticlePayloadRequiresLoginBeforePassword(t *testing.T) {
 
 func TestPublicArticlePayloadRequiresPasswordAfterLogin(t *testing.T) {
 	article := &model.Article{IsLocked: true, RequiresLogin: true, Content: "secret body"}
-	payload := publicArticlePayload(article, false, false)
+	payload := publicArticlePayload(article, false, false, "127.0.0.1")
 	if payload["requiresPassword"] != true || payload["loginRequired"] != false {
 		t.Fatal("authenticated reader should be prompted for the article password")
 	}

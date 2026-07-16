@@ -13,7 +13,7 @@ func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if err := recover(); err != nil {
-				log.Printf("panic recovered: %v\n%s", err, debug.Stack())
+				log.Printf("panic recovered requestId=%s error=%v\n%s", GetRequestID(c), err, debug.Stack())
 				response.Error(c, http.StatusInternalServerError, "服务内部错误")
 				c.Abort()
 			}

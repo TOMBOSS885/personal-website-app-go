@@ -63,7 +63,7 @@ func GetMusics(c *gin.Context) {
 	if user, ok := middleware.CurrentUser(c); ok {
 		recordUserActivity(c, user, "view_music_list", "music", fmt.Sprintf("%d songs", len(musics)))
 	}
-	response.Success(c, signMusicList(musics, "public"))
+	response.Success(c, signMusicList(musics, "public", c.ClientIP()))
 }
 
 func AdminGetMusics(c *gin.Context) {
@@ -75,7 +75,7 @@ func AdminGetMusics(c *gin.Context) {
 			response.Error(c, http.StatusInternalServerError, "鑾峰彇闊充箰鍒楄〃澶辫触")
 			return
 		}
-		response.Page(c, signMusicList(musics, "admin"), total, size, page)
+		response.Page(c, signMusicList(musics, "admin", c.ClientIP()), total, size, page)
 		return
 	}
 	musics, err := repository.GetMusics()
@@ -83,7 +83,7 @@ func AdminGetMusics(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "获取音乐列表失败")
 		return
 	}
-	response.Success(c, signMusicList(musics, "admin"))
+	response.Success(c, signMusicList(musics, "admin", c.ClientIP()))
 }
 
 func StreamMusic(c *gin.Context) {
@@ -113,7 +113,7 @@ func StreamMusic(c *gin.Context) {
 		response.Error(c, http.StatusNotFound, "music not found")
 		return
 	}
-	if !validMusicSignature(music, scope, expires, c.Query("sign")) {
+	if !validMusicSignature(music, scope, expires, c.ClientIP(), c.Query("sign")) {
 		response.Error(c, http.StatusForbidden, "invalid music link")
 		return
 	}
@@ -174,7 +174,7 @@ func StreamMusicLyrics(c *gin.Context) {
 		response.Error(c, http.StatusNotFound, "lyrics not found")
 		return
 	}
-	if !validLyricsSignature(music, scope, expires, c.Query("sign")) {
+	if !validLyricsSignature(music, scope, expires, c.ClientIP(), c.Query("sign")) {
 		response.Error(c, http.StatusForbidden, "invalid lyrics link")
 		return
 	}
@@ -260,10 +260,10 @@ func AdminUploadMusic(c *gin.Context) {
 	}
 
 	if singleUpload {
-		response.Success(c, signMusicItem(uploaded[0], "admin"))
+		response.Success(c, signMusicItem(uploaded[0], "admin", c.ClientIP()))
 		return
 	}
-	response.Success(c, signMusicList(uploaded, "admin"))
+	response.Success(c, signMusicList(uploaded, "admin", c.ClientIP()))
 }
 
 func AdminUpdateMusic(c *gin.Context) {
@@ -287,7 +287,7 @@ func AdminUpdateMusic(c *gin.Context) {
 		response.Error(c, http.StatusInternalServerError, "save music settings failed")
 		return
 	}
-	response.Success(c, signMusicItem(*music, "admin"))
+	response.Success(c, signMusicItem(*music, "admin", c.ClientIP()))
 }
 
 func AdminDeleteMusic(c *gin.Context) {
@@ -375,7 +375,7 @@ func AdminUploadMusicLyrics(c *gin.Context) {
 		_ = removeUploadedLyrics(oldLyricsURL)
 	}
 
-	response.Success(c, signMusicItem(*music, "admin"))
+	response.Success(c, signMusicItem(*music, "admin", c.ClientIP()))
 }
 
 func AdminDeleteMusicLyrics(c *gin.Context) {
@@ -395,7 +395,7 @@ func AdminDeleteMusicLyrics(c *gin.Context) {
 		return
 	}
 	_ = removeUploadedLyrics(oldLyricsURL)
-	response.Success(c, signMusicItem(*music, "admin"))
+	response.Success(c, signMusicItem(*music, "admin", c.ClientIP()))
 }
 
 func prepareMusicFile(file *multipart.FileHeader, settings *model.UploadSettings) (preparedMusicFile, error) {
@@ -455,60 +455,64 @@ func validateLyricsFile(file *multipart.FileHeader, settings *model.UploadSettin
 	return nil
 }
 
-func signMusicList(musics []model.Music, scope string) []model.Music {
+func signMusicList(musics []model.Music, scope, clientIP string) []model.Music {
 	signed := make([]model.Music, 0, len(musics))
 	for _, music := range musics {
-		signed = append(signed, signMusicItem(music, scope))
+		signed = append(signed, signMusicItem(music, scope, clientIP))
 	}
 	return signed
 }
 
-func signMusicItem(music model.Music, scope string) model.Music {
+func signMusicItem(music model.Music, scope, clientIP string) model.Music {
 	if music.ID == 0 {
 		return music
 	}
 	expires := time.Now().Add(mediaURLTTL()).Unix()
 	if music.FileURL != "" {
-		music.FileURL = signedMusicURL(&music, scope, expires)
+		music.FileURL = signedMusicURL(&music, scope, expires, clientIP)
 	}
 	if music.LyricsURL != "" {
-		music.LyricsURL = signedLyricsURL(&music, scope, expires)
+		music.LyricsURL = signedLyricsURL(&music, scope, expires, clientIP)
 	}
 	return music
 }
 
-func signedMusicURL(music *model.Music, scope string, expires int64) string {
-	sign := signMediaValue(musicSignaturePayload(music.ID, scope, music.FileURL, expires))
+func signedMusicURL(music *model.Music, scope string, expires int64, clientIP string) string {
+	sign := signMediaValue(musicSignaturePayload(music.ID, scope, music.FileURL, expires, clientIP))
 	return fmt.Sprintf("/api/public/music/%d/stream?scope=%s&expires=%d&sign=%s", music.ID, scope, expires, sign)
 }
 
-func validMusicSignature(music *model.Music, scope string, expires int64, signature string) bool {
+func validMusicSignature(music *model.Music, scope string, expires int64, clientIP, signature string) bool {
 	if strings.TrimSpace(signature) == "" {
 		return false
 	}
-	expected := signMediaValue(musicSignaturePayload(music.ID, scope, music.FileURL, expires))
+	expected := signMediaValue(musicSignaturePayload(music.ID, scope, music.FileURL, expires, clientIP))
 	return hmac.Equal([]byte(expected), []byte(signature))
 }
 
-func signedLyricsURL(music *model.Music, scope string, expires int64) string {
-	sign := signMediaValue(lyricsSignaturePayload(music.ID, scope, music.LyricsURL, expires))
+func signedLyricsURL(music *model.Music, scope string, expires int64, clientIP string) string {
+	sign := signMediaValue(lyricsSignaturePayload(music.ID, scope, music.LyricsURL, expires, clientIP))
 	return fmt.Sprintf("/api/public/music/%d/lyrics?scope=%s&expires=%d&sign=%s", music.ID, scope, expires, sign)
 }
 
-func validLyricsSignature(music *model.Music, scope string, expires int64, signature string) bool {
+func validLyricsSignature(music *model.Music, scope string, expires int64, clientIP, signature string) bool {
 	if strings.TrimSpace(signature) == "" {
 		return false
 	}
-	expected := signMediaValue(lyricsSignaturePayload(music.ID, scope, music.LyricsURL, expires))
+	expected := signMediaValue(lyricsSignaturePayload(music.ID, scope, music.LyricsURL, expires, clientIP))
 	return hmac.Equal([]byte(expected), []byte(signature))
 }
 
-func lyricsSignaturePayload(id uint64, scope, lyricsURL string, expires int64) string {
-	return fmt.Sprintf("lyrics|%d|%s|%s|%d", id, scope, lyricsURL, expires)
+func lyricsSignaturePayload(id uint64, scope, lyricsURL string, expires int64, clientIP string) string {
+	return fmt.Sprintf("lyrics|%d|%s|%s|%d|%s", id, scope, lyricsURL, expires, normalizedMediaClientIP(clientIP))
 }
 
-func musicSignaturePayload(id uint64, scope, fileURL string, expires int64) string {
-	return fmt.Sprintf("%d|%s|%s|%d", id, scope, fileURL, expires)
+func musicSignaturePayload(id uint64, scope, fileURL string, expires int64, clientIP string) string {
+	return fmt.Sprintf("%d|%s|%s|%d|%s", id, scope, fileURL, expires, normalizedMediaClientIP(clientIP))
+}
+
+func normalizedMediaClientIP(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func signMediaValue(value string) string {

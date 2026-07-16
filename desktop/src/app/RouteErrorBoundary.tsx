@@ -11,7 +11,7 @@ export class RouteErrorBoundary extends Component<{ children: ReactNode }, State
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Uncaught desktop UI error', error, info.componentStack)
+    if (import.meta.env.DEV) console.error('Uncaught desktop UI error', error, info.componentStack)
   }
 
   render() {

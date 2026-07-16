@@ -42,13 +42,10 @@ export default function ArticleDetailPage() {
         }
       })
       .catch(() => {
-        import('../api/mockApi').then(module => {
-          const foundArticle = module.default.getArticles().find(item => item.id === parseInt(id, 10))
-          if (active) {
-            setArticle(foundArticle || null)
-            setLoading(false)
-          }
-        })
+        if (active) {
+          setArticle(null)
+          setLoading(false)
+        }
       })
     return () => { active = false }
   }, [id, authLoading, authFetch, user?.id])

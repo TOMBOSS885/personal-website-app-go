@@ -49,19 +49,19 @@ describe('desktop user API', () => {
 
 describe('protected article API', () => {
   it('adds bearer authorization to article, unlock, and comment requests', async () => {
-    const fetchMock = vi.spyOn(window, 'fetch').mockResolvedValue(new Response(JSON.stringify({
-      id: 3,
-      title: 'Protected',
-      summary: '',
-      content: '',
-      createdAt: '2026-07-16T00:00:00Z',
-      comments: [],
-      total: 0,
-      totalThreads: 0,
-      page: 0,
-      size: 20,
-      hasMore: false,
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const fetchMock = vi.spyOn(window, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+        id: 3,
+        title: 'Protected',
+        summary: '',
+        content: '',
+        createdAt: '2026-07-16T00:00:00Z',
+        comments: [],
+        total: 0,
+        totalThreads: 0,
+        page: 0,
+        size: 20,
+        hasMore: false,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
 
     const token = 'user.header.payload'
     await publicApi.article('https://blog.example.com', 3, token)

@@ -145,7 +145,7 @@ func ServeArticleSiteFile(c *gin.Context) {
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
-	expected := signMediaValue(articleSiteSignaturePayload(id, siteKey, version, expires))
+	expected := signMediaValue(articleSiteSignaturePayload(id, siteKey, version, expires, c.ClientIP()))
 	if !hmac.Equal([]byte(expected), []byte(c.Param("sign"))) {
 		c.AbortWithStatus(http.StatusForbidden)
 		return
@@ -190,7 +190,7 @@ func ServeArticleSiteFile(c *gin.Context) {
 	http.ServeFile(c.Writer, c.Request, target)
 }
 
-func signedArticleSiteURL(article *model.Article) string {
+func signedArticleSiteURL(article *model.Article, clientIP string) string {
 	if article == nil || normalizeArticleContentType(article.ContentType) != "static" || !validArticleSiteKey(article.StaticSiteKey) {
 		return ""
 	}
@@ -203,7 +203,7 @@ func signedArticleSiteURL(article *model.Article) string {
 	}
 	expires := articleSiteExpiry(time.Now(), ttl).Unix()
 	version := article.UpdatedAt.UnixNano()
-	signature := signMediaValue(articleSiteSignaturePayload(article.ID, article.StaticSiteKey, version, expires))
+	signature := signMediaValue(articleSiteSignaturePayload(article.ID, article.StaticSiteKey, version, expires, clientIP))
 	return articleSiteBaseURL(article.ID, article.StaticSiteKey, version, expires, signature) + "index.html"
 }
 
@@ -211,8 +211,8 @@ func articleSiteBaseURL(id uint64, siteKey string, version, expires int64, signa
 	return fmt.Sprintf("/api/public/article-sites/%d/%s/%d/%d/%s/", id, siteKey, version, expires, signature)
 }
 
-func articleSiteSignaturePayload(id uint64, siteKey string, version, expires int64) string {
-	return fmt.Sprintf("article-site|%d|%s|%d|%d", id, siteKey, version, expires)
+func articleSiteSignaturePayload(id uint64, siteKey string, version, expires int64, clientIP string) string {
+	return fmt.Sprintf("article-site|%d|%s|%d|%d|%s", id, siteKey, version, expires, normalizedMediaClientIP(clientIP))
 }
 
 func articleSiteURLTTL() time.Duration {

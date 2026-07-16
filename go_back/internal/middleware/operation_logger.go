@@ -30,6 +30,7 @@ func OperationLogger() gin.HandlerFunc {
 			IP:        c.ClientIP(),
 			UserAgent: c.Request.UserAgent(),
 			Status:    c.Writer.Status(),
+			RequestID: GetRequestID(c),
 		})
 	}
 }
@@ -44,6 +45,7 @@ func LogOperation(c *gin.Context, username, action, message string, status int) 
 		UserAgent: c.Request.UserAgent(),
 		Status:    status,
 		Message:   message,
+		RequestID: GetRequestID(c),
 	})
 }
 

@@ -23,6 +23,7 @@ export function CommentsSection({ articleId }: { articleId: number }) {
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) => publicApi.comments(settings.serverUrl, articleId, pageParam, auth.accessToken, signal),
     getNextPageParam: (last) => last.hasMore ? last.page + 1 : undefined,
+    maxPages: 10,
   })
   const refresh = () => queryClient.invalidateQueries({ queryKey })
   const handleAuthError = async (error: unknown) => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
@@ -231,7 +231,8 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   ]
 
   const editorHeight = fullscreen ? 'calc(100vh - 112px)' : height
-  const normalizedValue = useMemo(() => normalizeMarkdownMath(value || ' '), [value])
+  const deferredValue = useDeferredValue(preview === 'edit' ? ' ' : (value || ' '))
+  const normalizedValue = useMemo(() => normalizeMarkdownMath(deferredValue), [deferredValue])
   const previewContent = (
     <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}>
       {normalizedValue}

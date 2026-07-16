@@ -40,11 +40,12 @@ export function UserAuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   const authFetch = useCallback(async (input, options = {}) => {
+    const { clearSessionOnUnauthorized = false, ...fetchOptions } = options
     const response = await fetch(input, {
-      ...options,
+      ...fetchOptions,
       credentials: 'same-origin',
     })
-    if (response.status === 401) {
+    if (response.status === 401 && clearSessionOnUnauthorized) {
       setUser(null)
     }
     return response

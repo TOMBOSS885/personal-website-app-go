@@ -33,15 +33,15 @@ var localRateStore = struct {
 	entries: map[string]localRateEntry{},
 }
 
-func RateLimit(name string, limit int, window time.Duration) gin.HandlerFunc {
+func RateLimit(name string, fallbackLimit int, window time.Duration) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		settings := currentRateLimitSettings()
 		if !settings.Enabled {
 			c.Next()
 			return
 		}
-		limit = limitForCategory(settings, name, limit)
-		if limit <= 0 {
+		currentLimit := limitForCategory(settings, name, fallbackLimit)
+		if currentLimit <= 0 {
 			c.Next()
 			return
 		}
@@ -51,9 +51,9 @@ func RateLimit(name string, limit int, window time.Duration) gin.HandlerFunc {
 
 		identity := requestRateIdentity(c)
 		recordAccess(c, name)
-		ok, count, remaining := allowRequest(name, identity, limit, window)
+		ok, count, remaining := allowRequest(name, identity, currentLimit, window)
 		if !ok {
-			recordLimit(c, name, count, limit, remaining)
+			recordLimit(c, name, count, currentLimit, remaining)
 			limitResponse(c, name, int64(remaining.Seconds()))
 			return
 		}

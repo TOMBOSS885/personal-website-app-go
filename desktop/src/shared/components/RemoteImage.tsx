@@ -1,6 +1,6 @@
 import { ImageOff } from 'lucide-react'
 import { useState, type ImgHTMLAttributes } from 'react'
-import { resolveServerUrl } from '../api/client'
+import { resolveSameOriginServerUrl } from '../api/client'
 import { useSettings } from '../settings/SettingsContext'
 
 type Props = ImgHTMLAttributes<HTMLImageElement> & {
@@ -11,7 +11,7 @@ type Props = ImgHTMLAttributes<HTMLImageElement> & {
 export function RemoteImage({ source, fallbackLabel, className, alt = '', ...props }: Props) {
   const { settings } = useSettings()
   const [failed, setFailed] = useState(false)
-  const src = resolveServerUrl(settings.serverUrl, source)
+  const src = resolveSameOriginServerUrl(settings.serverUrl, source)
 
   if (!src || failed) {
     return (
@@ -22,5 +22,5 @@ export function RemoteImage({ source, fallbackLabel, className, alt = '', ...pro
     )
   }
 
-  return <img {...props} className={className} src={src} alt={alt} onError={() => setFailed(true)} />
+  return <img {...props} referrerPolicy="no-referrer" className={className} src={src} alt={alt} onError={() => setFailed(true)} />
 }

@@ -12,7 +12,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 60_000,
-      gcTime: 30 * 60_000,
+      gcTime: 10 * 60_000,
       retry: (failureCount, error) => {
         const status = typeof error === 'object' && error && 'status' in error
           ? Number(error.status)

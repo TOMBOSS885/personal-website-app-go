@@ -44,29 +44,35 @@ var articleUnlockLocalStore = struct {
 }
 
 func GetProtectedArticle(c *gin.Context) {
+	setPrivateArticleResponseHeaders(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	article, err := repository.GetArticleByID(id)
+	article, err := repository.GetArticleAccessByID(id)
 	if err != nil || !article.Published {
 		response.Error(c, http.StatusNotFound, "文章不存在")
 		return
 	}
 	if article.RequiresLogin {
 		if _, authenticated := middleware.CurrentUser(c); !authenticated {
-			response.Success(c, publicArticlePayload(article, false, true))
+			response.Success(c, publicArticlePayload(article, false, true, c.ClientIP()))
 			return
 		}
 	}
 	if article.IsLocked {
-		response.Success(c, publicArticlePayload(article, false, false))
+		response.Success(c, publicArticlePayload(article, false, false, c.ClientIP()))
+		return
+	}
+	if err := repository.LoadArticleContent(article); err != nil {
+		response.Error(c, http.StatusInternalServerError, "文章加载失败")
 		return
 	}
 	incrementArticleViews(article)
-	response.Success(c, publicArticlePayload(article, true, false))
+	response.Success(c, publicArticlePayload(article, true, false, c.ClientIP()))
 }
 
 func UnlockArticle(c *gin.Context) {
+	setPrivateArticleResponseHeaders(c)
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-	article, err := repository.GetArticleByID(id)
+	article, err := repository.GetArticleAccessByID(id)
 	if err != nil || !article.Published {
 		response.Error(c, http.StatusNotFound, "文章不存在")
 		return
@@ -110,9 +116,19 @@ func UnlockArticle(c *gin.Context) {
 		}
 		clearArticleUnlockFailures(c.ClientIP(), article.ID)
 	}
+	if err := repository.LoadArticleContent(article); err != nil {
+		response.Error(c, http.StatusInternalServerError, "文章加载失败")
+		return
+	}
 
 	incrementArticleViews(article)
-	response.Success(c, publicArticlePayload(article, true, false))
+	response.Success(c, publicArticlePayload(article, true, false, c.ClientIP()))
+}
+
+func setPrivateArticleResponseHeaders(c *gin.Context) {
+	c.Header("Cache-Control", "private, no-store")
+	c.Header("Pragma", "no-cache")
+	c.Header("Vary", "Cookie, Authorization")
 }
 
 func incrementArticleViews(article *model.Article) {
@@ -123,13 +139,13 @@ func incrementArticleViews(article *model.Article) {
 	article.Views++
 }
 
-func publicArticlePayload(article *model.Article, includeContent, loginRequired bool) gin.H {
+func publicArticlePayload(article *model.Article, includeContent, loginRequired bool, clientIP string) gin.H {
 	content := ""
 	staticSiteURL := ""
 	summary := article.Summary
 	if includeContent {
 		if normalizeArticleContentType(article.ContentType) == "static" {
-			staticSiteURL = signedArticleSiteURL(article)
+			staticSiteURL = signedArticleSiteURL(article, clientIP)
 		} else {
 			content = article.Content
 		}

@@ -66,22 +66,8 @@ export default function BlogPage() {
       })
 	  .catch((error) => {
 		if (error.name === 'AbortError') return
-        import('../api/mockApi').then(module => {
-          const api = module.default
-          const allArticles = api.getArticles()
-
-          // 如果有选中的标签，在 mock 数据中也过滤
-          const result = selectedTag
-            ? allArticles.filter(a => a.tags?.includes(selectedTag))
-            : allArticles
-
-          setArticles(result)
-          
-          const cats = new Set(result.map(a => a.category).filter(Boolean))
-          const allCats = [t('common.all'), ...Array.from(cats)]
-          setCategories(allCats)
-          setSelectedCategory(t('common.all'))
-        })
+		setArticles([])
+		setTotalPages(0)
       })
 	return () => controller.abort()
   }, [page, language, selectedTag, selectedCategory, debouncedSearch])
@@ -339,19 +325,21 @@ export default function BlogPage() {
             className="flex justify-center mt-16"
           >
             <div className="flex items-center space-x-2">
-              {Array.from({ length: totalPages }, (_, i) => (
+              {paginationItems(totalPages, page).map((item, index) => item === null ? (
+                <span key={`ellipsis-${index}`} className="px-1 text-gray-400" aria-hidden="true">...</span>
+              ) : (
                 <motion.button
-                  key={i}
+                  key={item}
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.9 }}
-                  onClick={() => setPage(i)}
+                  onClick={() => setPage(item)}
                   className={`w-10 h-10 rounded-xl font-medium transition-all ${
-                    page === i
+                    page === item
                       ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white shadow-lg'
                       : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
                   }`}
                 >
-                  {i + 1}
+                  {item + 1}
                 </motion.button>
               ))}
             </div>
@@ -360,4 +348,14 @@ export default function BlogPage() {
       </div>
     </div>
   )
+}
+
+function paginationItems(totalPages, currentPage) {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index)
+  const items = new Set([0, totalPages - 1])
+  for (let index = currentPage - 2; index <= currentPage + 2; index += 1) {
+    if (index > 0 && index < totalPages - 1) items.add(index)
+  }
+  const sorted = Array.from(items).sort((left, right) => left - right)
+  return sorted.flatMap((item, index) => index > 0 && item - sorted[index - 1] > 1 ? [null, item] : [item])
 }

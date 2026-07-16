@@ -15,6 +15,7 @@ import { useUserAuth } from '../contexts/UserAuthContext'
 
 const MAX_COMMENT_LENGTH = 1000
 const COMMENT_PAGE_SIZE = 20
+const MAX_COMMENTS_IN_MEMORY = 300
 
 export default function CommentSection({ articleId }) {
   const { user, loading: authLoading, authFetch } = useUserAuth()
@@ -51,7 +52,7 @@ export default function CommentSection({ articleId }) {
 			const data = await response.json()
 			if (requestSequence !== requestSequenceRef.current) return
 			const nextComments = normalizeComments(data)
-			setComments(current => prepend ? mergeComments(nextComments, current) : nextComments)
+			setComments(current => (prepend ? mergeComments(nextComments, current) : nextComments).slice(0, MAX_COMMENTS_IN_MEMORY))
 			setTotal(Number.isFinite(Number(data?.total)) ? Number(data.total) : nextComments.length)
 			setPage(nextPage)
 			setHasMore(Boolean(data?.hasMore))

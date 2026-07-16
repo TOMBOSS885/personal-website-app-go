@@ -50,7 +50,7 @@ FROM alpine:3.22
 
 LABEL maintainer="Claw"
 LABEL description="Personal Website - Go Backend + Frontend"
-LABEL version="2.0"
+LABEL version="1.2.1"
 
 RUN apk add --no-cache nginx supervisor wget tzdata \
     && addgroup -S app \

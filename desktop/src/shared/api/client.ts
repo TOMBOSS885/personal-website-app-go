@@ -19,6 +19,9 @@ type RequestOptions = {
   token?: string | null
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 20_000
+const MAX_JSON_RESPONSE_BYTES = 12 * 1024 * 1024
+
 export class ApiError extends Error {
   readonly status: number
   readonly requestId?: string
@@ -58,6 +61,14 @@ export function resolveServerUrl(serverUrl: string, value?: string | null): stri
   return new URL(trimmed, `${normalizeServerUrl(serverUrl)}/`).toString()
 }
 
+export function resolveSameOriginServerUrl(serverUrl: string, value?: string | null): string {
+  const resolved = resolveServerUrl(serverUrl, value)
+  if (!resolved) return ''
+  const expected = new URL(normalizeServerUrl(serverUrl))
+  const actual = new URL(resolved)
+  return actual.origin === expected.origin ? actual.toString() : ''
+}
+
 export function isSecureServerUrl(serverUrl: string): boolean {
   const url = new URL(normalizeServerUrl(serverUrl))
   return url.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
@@ -80,23 +91,34 @@ async function requestJson<T>(serverUrl: string, path: string, options: RequestO
   if (options.body !== undefined) headers['Content-Type'] = 'application/json'
   if (options.token) headers.Authorization = `Bearer ${options.token}`
 
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
+  const abortFromCaller = () => controller.abort()
+  options.signal?.addEventListener('abort', abortFromCaller, { once: true })
   let response: Response
   try {
     response = await runtimeFetch(url, {
       method: options.method ?? 'GET',
       headers,
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      signal: options.signal,
+      signal: controller.signal,
     })
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    if (controller.signal.aborted) throw new ApiError('请求超时或已取消', 0)
     throw new ApiError('无法连接服务器，请检查地址与网络', 0)
+  } finally {
+    window.clearTimeout(timeout)
+    options.signal?.removeEventListener('abort', abortFromCaller)
   }
 
   const requestId = response.headers.get('X-Request-ID') ?? undefined
   const contentType = response.headers.get('content-type') ?? ''
+  const contentLength = Number(response.headers.get('content-length') || 0)
+  if (contentLength > MAX_JSON_RESPONSE_BYTES) throw new ApiError('服务器响应过大', 0, requestId)
+  const raw = contentType.includes('application/json') ? await response.text() : ''
+  if (new Blob([raw]).size > MAX_JSON_RESPONSE_BYTES) throw new ApiError('服务器响应过大', 0, requestId)
   const payload = contentType.includes('application/json')
-    ? await response.json().catch(() => null)
+    ? (() => { try { return JSON.parse(raw) } catch { return null } })()
     : null
 
   if (!response.ok) {

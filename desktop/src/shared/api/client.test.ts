@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSecureServerUrl, normalizeServerUrl, resolveServerUrl } from './client'
+import { isSecureServerUrl, normalizeServerUrl, resolveSameOriginServerUrl, resolveServerUrl } from './client'
 
 describe('normalizeServerUrl', () => {
   it('adds https and removes a trailing slash', () => {
@@ -33,5 +33,14 @@ describe('isSecureServerUrl', () => {
     expect(isSecureServerUrl('https://blog.example.com')).toBe(true)
     expect(isSecureServerUrl('http://127.0.0.1:8080')).toBe(true)
     expect(isSecureServerUrl('http://example.com')).toBe(false)
+  })
+})
+
+describe('resolveSameOriginServerUrl', () => {
+  it('allows resources from the configured server and rejects third-party origins', () => {
+    expect(resolveSameOriginServerUrl('https://blog.example.com', '/uploads/cover.webp'))
+      .toBe('https://blog.example.com/uploads/cover.webp')
+    expect(resolveSameOriginServerUrl('https://blog.example.com', 'https://tracker.example.net/pixel.png'))
+      .toBe('')
   })
 })

@@ -13,6 +13,7 @@ type OperationLog struct {
 	UserAgent string    `gorm:"column:user_agent;size:500" json:"userAgent"`
 	Status    int       `gorm:"column:status" json:"status"`
 	Message   string    `gorm:"column:message;size:500" json:"message"`
+	RequestID string    `gorm:"column:request_id;size:128;index" json:"requestId"`
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime;index;index:idx_operation_logs_action_time,priority:2;index:idx_operation_logs_ip_time,priority:2;index:idx_operation_logs_user_time,priority:2" json:"createdAt"`
 }
 

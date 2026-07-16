@@ -18,11 +18,13 @@ import {
 import { useEffect, useState, type ReactNode } from 'react'
 import { isSecureServerUrl, normalizeServerUrl, publicApi } from '../../shared/api/client'
 import { DEFAULT_SERVER_URL, useSettings, type ColorMode } from '../../shared/settings/SettingsContext'
+import { useUserAuth } from '../account/UserAuthContext'
 
 type TestState = { kind: 'idle' | 'testing' | 'success' | 'error'; message?: string }
 
 export function SettingsPage() {
   const { settings, updateSettings } = useSettings()
+  const auth = useUserAuth()
   const queryClient = useQueryClient()
   const [serverDraft, setServerDraft] = useState(settings.serverUrl)
   const [editingServer, setEditingServer] = useState(false)
@@ -36,9 +38,10 @@ export function SettingsPage() {
   })()
   const secure = normalized ? isSecureServerUrl(normalized) : false
 
-  const saveServer = () => {
-    if (!normalized) return
+  const saveServer = async () => {
+    if (!normalized || !secure) return
     if (normalized !== settings.serverUrl && !window.confirm('更改内容服务器会切换全部博客数据，并退出当前服务器的登录状态。确定继续吗？')) return
+    if (normalized !== settings.serverUrl) await auth.clearSession()
     updateSettings({ serverUrl: normalized })
     queryClient.removeQueries()
     setEditingServer(false)
@@ -47,7 +50,7 @@ export function SettingsPage() {
   }
 
   const testServer = async () => {
-    if (!normalized) return setTest({ kind: 'error', message: '服务器地址格式不正确' })
+    if (!normalized || !secure) return setTest({ kind: 'error', message: '远程服务器必须使用 HTTPS' })
     setTest({ kind: 'testing' })
     try {
       await publicApi.health(normalized)
@@ -105,8 +108,8 @@ export function SettingsPage() {
               <label className="text-field"><span>服务器地址</span><input value={serverDraft} onChange={(event) => { setServerDraft(event.target.value); setTest({ kind: 'idle' }) }} autoComplete="off" spellCheck={false} /></label>
               <div className="server-editor-actions">
                 <button className="button button-ghost" onClick={() => { setServerDraft(DEFAULT_SERVER_URL); setTest({ kind: 'idle' }) }}><RotateCcw size={15} /> 恢复默认</button>
-                <button className="button button-secondary" onClick={testServer} disabled={!normalized || test.kind === 'testing'}><TestTube2 size={15} /> {test.kind === 'testing' ? '测试中' : '测试连接'}</button>
-                <button className="button button-primary" onClick={saveServer} disabled={!normalized}><Save size={15} /> 确认更改</button>
+                <button className="button button-secondary" onClick={testServer} disabled={!normalized || !secure || test.kind === 'testing'}><TestTube2 size={15} /> {test.kind === 'testing' ? '测试中' : '测试连接'}</button>
+                <button className="button button-primary" onClick={() => void saveServer()} disabled={!normalized || !secure}><Save size={15} /> 确认更改</button>
                 <button className="button button-ghost" onClick={cancelServerEdit}>取消</button>
               </div>
               {test.kind !== 'idle' && test.kind !== 'testing' && <div className={`setting-notice ${test.kind}`}>{test.kind === 'success' ? <CheckCircle2 size={15} /> : <TriangleAlert size={15} />}{test.message}</div>}

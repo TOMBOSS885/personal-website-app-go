@@ -20,7 +20,7 @@ import rehypeKatex from 'rehype-katex'
 import rehypeSanitize from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
-import { publicApi, resolveServerUrl } from '../../shared/api/client'
+import { publicApi, resolveSameOriginServerUrl, resolveServerUrl } from '../../shared/api/client'
 import type { Article } from '../../shared/api/types'
 import { ErrorState, LoadingState } from '../../shared/components/AsyncState'
 import { RemoteImage } from '../../shared/components/RemoteImage'
@@ -69,7 +69,7 @@ export function ArticleDetailPage() {
 
   const loginRequired = Boolean(article.loginRequired || (article.requiresLogin && !auth.isAuthenticated))
   const requiresPassword = !loginRequired && article.requiresPassword && !unlocked
-  const staticUrl = resolveServerUrl(settings.serverUrl, article.staticSiteUrl)
+  const staticUrl = resolveSameOriginServerUrl(settings.serverUrl, article.staticSiteUrl)
   const share = async () => {
     const url = resolveServerUrl(settings.serverUrl, `/blog/${article.id}`)
     await navigator.clipboard.writeText(url)
@@ -125,7 +125,7 @@ export function ArticleDetailPage() {
             <iframe
               title={article.title}
               src={staticUrl}
-              sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock allow-popups allow-downloads allow-presentation"
+              sandbox="allow-scripts"
               referrerPolicy="no-referrer"
             />
           </section>

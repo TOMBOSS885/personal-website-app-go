@@ -5,13 +5,13 @@ import "time"
 type Comment struct {
 	ID        uint64     `gorm:"primaryKey" json:"id"`
 	ArticleID uint64     `gorm:"column:article_id;not null;index:idx_comments_article_status_time,priority:1;index" json:"articleId"`
-	UserID    uint64     `gorm:"column:user_id;not null;index" json:"userId"`
+	UserID    uint64     `gorm:"column:user_id;not null;index;index:idx_comments_user_time_deleted,priority:1" json:"userId"`
 	ParentID  *uint64    `gorm:"column:parent_id;index" json:"parentId,omitempty"`
 	Content   string     `gorm:"column:content;type:varchar(1200);not null" json:"content"`
 	Status    string     `gorm:"column:status;size:20;default:visible;not null;index:idx_comments_article_status_time,priority:2;index" json:"status"`
-	CreatedAt time.Time  `gorm:"column:created_at;autoCreateTime;index:idx_comments_article_status_time,priority:3" json:"createdAt"`
+	CreatedAt time.Time  `gorm:"column:created_at;autoCreateTime;index:idx_comments_article_status_time,priority:3;index:idx_comments_user_time_deleted,priority:2" json:"createdAt"`
 	UpdatedAt time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`
-	DeletedAt *time.Time `gorm:"column:deleted_at;index" json:"-"`
+	DeletedAt *time.Time `gorm:"column:deleted_at;index;index:idx_comments_user_time_deleted,priority:3" json:"-"`
 }
 
 func (Comment) TableName() string { return "comments" }

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ListMusic, Pause, Play, SkipBack, SkipForward, Volume2, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { resolveServerUrl, userApi } from '../../shared/api/client'
+import { resolveSameOriginServerUrl, userApi } from '../../shared/api/client'
 import { useSettings } from '../../shared/settings/SettingsContext'
 import { useUserAuth } from '../account/UserAuthContext'
 
@@ -23,7 +23,7 @@ export function MusicPlayer() {
   })
   const tracks = query.data ?? []
   const track = tracks[index % Math.max(1, tracks.length)]
-  const source = resolveServerUrl(settings.serverUrl, track?.fileUrl)
+  const source = resolveSameOriginServerUrl(settings.serverUrl, track?.fileUrl)
 
   useEffect(() => {
     if (index >= tracks.length && tracks.length) setIndex(0)

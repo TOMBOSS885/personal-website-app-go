@@ -17,6 +17,7 @@ import (
 const maxCommentRunes = 1000
 
 func GetArticleComments(c *gin.Context) {
+	setPrivateArticleResponseHeaders(c)
 	articleID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil || articleID == 0 {
 		response.Error(c, http.StatusBadRequest, "文章参数无效")

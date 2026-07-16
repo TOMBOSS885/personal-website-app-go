@@ -6,6 +6,8 @@ import OptimizedImage from '../../components/OptimizedImage'
 const API_BASE = ''
 const RichTextEditor = lazy(() => import('../../components/RichTextEditor'))
 const NEW_ARTICLE_DRAFT_KEY = 'article-draft-new'
+const MAX_PERSISTED_DRAFT_BYTES = 2 * 1024 * 1024
+const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export default function ArticleManager() {
   const [articles, setArticles] = useState([])
@@ -27,6 +29,7 @@ export default function ArticleManager() {
   const [batchUpdating, setBatchUpdating] = useState(false)
   const coverFileInputRef = useRef(null)
   const siteFileInputRef = useRef(null)
+  const listRequestRef = useRef(null)
   const [form, setForm] = useState({ 
     title: '', 
     summary: '', 
@@ -55,13 +58,25 @@ export default function ArticleManager() {
     if (!showModal) return undefined
     const key = getDraftKey(editingArticle)
     const timer = window.setTimeout(() => {
-      localStorage.setItem(key, JSON.stringify({ ...draftSafeForm(form), savedAt: Date.now() }))
-      setDraftNotice(`已自动保存 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`)
+      try {
+        const serialized = JSON.stringify({ ...draftSafeForm(form), savedAt: Date.now() })
+        if (new Blob([serialized]).size > MAX_PERSISTED_DRAFT_BYTES) {
+          setDraftNotice('文章较长，已暂停本地自动保存')
+          return
+        }
+        sessionStorage.setItem(key, serialized)
+        setDraftNotice(`已在当前会话保存 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`)
+      } catch {
+        setDraftNotice('本地自动保存不可用')
+      }
     }, 700)
     return () => window.clearTimeout(timer)
   }, [form, showModal, editingArticle])
 
   const fetchArticles = async () => {
+    listRequestRef.current?.abort()
+    const controller = new AbortController()
+    listRequestRef.current = controller
     setLoading(true)
     try {
       const tokenValue = sessionStorage.getItem('token')
@@ -70,12 +85,10 @@ export default function ArticleManager() {
         headers['Authorization'] = `Bearer ${tokenValue}`
       }
       
-      const res = await fetch(`${API_BASE}/api/admin/articles?page=${page}&size=${size}`, { headers })
+      const res = await fetch(`${API_BASE}/api/admin/articles?page=${page}&size=${size}`, { headers, signal: controller.signal })
       
       if (!res.ok) {
         console.error('获取文章列表失败:', res.status)
-        const text = await res.text()
-        console.error('Error response:', text)
         setArticles([])
         return
       }
@@ -85,7 +98,7 @@ export default function ArticleManager() {
       try {
         data = JSON.parse(text)
       } catch {
-        console.error('Invalid JSON response:', text)
+        console.error('文章列表返回了无效数据')
         setArticles([])
         return
       }
@@ -93,10 +106,11 @@ export default function ArticleManager() {
       setArticles(Array.isArray(data) ? data : (data.content || []))
       setTotal(Number(data.totalElements || 0))
     } catch (err) {
+      if (err.name === 'AbortError') return
       console.error('获取文章列表失败:', err)
       setArticles([])
     } finally {
-      setLoading(false)
+      if (listRequestRef.current === controller) setLoading(false)
     }
   }
 
@@ -237,7 +251,7 @@ export default function ArticleManager() {
       })
       
       if (res.ok) {
-        localStorage.removeItem(getDraftKey(editingArticle))
+        sessionStorage.removeItem(getDraftKey(editingArticle))
         setDraftNotice('')
         setShowModal(false)
         setEditingArticle(null)
@@ -985,11 +999,17 @@ function getDraftKey(article) {
 
 function loadDraft(key) {
   try {
-    const raw = localStorage.getItem(key)
+    const legacy = localStorage.getItem(key)
+    if (legacy) localStorage.removeItem(key)
+    const raw = sessionStorage.getItem(key)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return null
     const { savedAt, ...draft } = parsed
+    if (!Number.isFinite(savedAt) || Date.now() - savedAt > DRAFT_MAX_AGE_MS) {
+      sessionStorage.removeItem(key)
+      return null
+    }
     const hasContent = draft.title || draft.summary || draft.content || draft.coverImage || draft.category || draft.tags?.length || draft.staticSiteKey
     return hasContent ? draft : null
   } catch {

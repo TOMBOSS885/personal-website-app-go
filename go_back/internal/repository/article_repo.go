@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/model"
 )
@@ -69,6 +70,24 @@ func GetArticleByID(id uint64) (*model.Article, error) {
 	return &article, nil
 }
 
+func GetArticleAccessByID(id uint64) (*model.Article, error) {
+	var article model.Article
+	err := db.DB.
+		Select("id", "title", "summary", "cover_image", "category", "tags", "views", "published", "content_type", "static_site_key", "static_site_name", "is_locked", "requires_login", "access_password_hash", "created_at", "updated_at").
+		First(&article, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &article, nil
+}
+
+func LoadArticleContent(article *model.Article) error {
+	if article == nil || article.ID == 0 || article.ContentType == "static" {
+		return nil
+	}
+	return db.DB.Model(&model.Article{}).Select("content").Where("id = ?", article.ID).Scan(article).Error
+}
+
 func GetArticleCommentAccessByID(id uint64) (*model.Article, error) {
 	var article model.Article
 	err := db.DB.
@@ -100,13 +119,28 @@ func UpdateArticle(article *model.Article) error {
 }
 
 func UpdateArticlesRequiresLogin(ids []uint64, required bool) (int64, error) {
-	result := db.DB.Model(&model.Article{}).
-		Where("id IN ?", ids).
-		Updates(map[string]interface{}{
-			"requires_login": required,
-			"updated_at":     time.Now(),
-		})
-	return result.RowsAffected, result.Error
+	var updated int64
+	err := db.DB.Transaction(func(tx *gorm.DB) error {
+		var existing []uint64
+		if err := tx.Model(&model.Article{}).
+			Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id IN ?", ids).
+			Pluck("id", &existing).Error; err != nil {
+			return err
+		}
+		if len(existing) != len(ids) {
+			return gorm.ErrRecordNotFound
+		}
+		result := tx.Model(&model.Article{}).
+			Where("id IN ?", ids).
+			Updates(map[string]interface{}{
+				"requires_login": required,
+				"updated_at":     time.Now(),
+			})
+		updated = result.RowsAffected
+		return result.Error
+	})
+	return updated, err
 }
 
 func DeleteArticle(id uint64) error {

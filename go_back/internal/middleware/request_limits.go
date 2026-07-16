@@ -1,11 +1,23 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+func LocalhostOnly() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := net.ParseIP(strings.TrimSpace(c.ClientIP()))
+		if ip == nil || !ip.IsLoopback() {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "not found"})
+			return
+		}
+		c.Next()
+	}
+}
 
 const (
 	maxRequestBodyBytes = int64(300 << 20)
