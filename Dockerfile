@@ -46,7 +46,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY go_back/ ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/personal-website-api ./cmd/server
 
-FROM alpine:3.22
+FROM alpine:3.24
 
 LABEL maintainer="Claw"
 LABEL description="Personal Website - Go Backend + Frontend"
