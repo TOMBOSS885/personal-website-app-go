@@ -150,6 +150,7 @@ func main() {
 			admin.GET("/session", handler.AdminSession)
 			admin.GET("/articles", handler.AdminGetArticles)
 			admin.POST("/articles", handler.AdminCreateArticleSecure)
+			admin.PATCH("/articles/access", handler.AdminUpdateArticlesAccess)
 			admin.PUT("/articles/:id", handler.AdminUpdateArticleSecure)
 			admin.DELETE("/articles/:id", handler.AdminDeleteArticleSecure)
 			admin.POST("/article-sites", handler.AdminUploadArticleSite)

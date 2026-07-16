@@ -127,15 +127,16 @@ export const publicApi = {
     if (params.category) query.set('category', params.category)
     return requestJson<PageResponse<Article>>(serverUrl, `/api/public/articles?${query}`, { signal })
   },
-  article: (serverUrl: string, id: string | number, signal?: AbortSignal) =>
-    requestJson<Article>(serverUrl, `/api/public/articles/${id}`, { signal }),
-  unlockArticle: (serverUrl: string, id: string | number, password: string) =>
+  article: (serverUrl: string, id: string | number, token?: string | null, signal?: AbortSignal) =>
+    requestJson<Article>(serverUrl, `/api/public/articles/${id}`, { token, signal }),
+  unlockArticle: (serverUrl: string, id: string | number, password: string, token?: string | null) =>
     requestJson<Article>(serverUrl, `/api/public/articles/${id}/unlock`, {
       method: 'POST',
       body: { password },
+      token,
     }),
-  comments: (serverUrl: string, id: string | number, page = 0, signal?: AbortSignal) =>
-    requestJson<CommentPage>(serverUrl, `/api/public/articles/${id}/comments?page=${page}&size=20`, { signal }),
+  comments: (serverUrl: string, id: string | number, page = 0, token?: string | null, signal?: AbortSignal) =>
+    requestJson<CommentPage>(serverUrl, `/api/public/articles/${id}/comments?page=${page}&size=20`, { token, signal }),
   projects: (serverUrl: string, signal?: AbortSignal) =>
     requestJson<Project[]>(serverUrl, '/api/public/projects', { signal }),
   categories: (serverUrl: string, signal?: AbortSignal) =>

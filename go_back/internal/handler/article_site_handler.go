@@ -198,6 +198,9 @@ func signedArticleSiteURL(article *model.Article) string {
 	if article.IsLocked && ttl > 10*time.Minute {
 		ttl = 10 * time.Minute
 	}
+	if article.RequiresLogin && ttl > 2*time.Minute {
+		ttl = 2 * time.Minute
+	}
 	expires := articleSiteExpiry(time.Now(), ttl).Unix()
 	version := article.UpdatedAt.UnixNano()
 	signature := signMediaValue(articleSiteSignaturePayload(article.ID, article.StaticSiteKey, version, expires))

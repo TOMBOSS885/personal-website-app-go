@@ -22,10 +22,16 @@ func GetArticleComments(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "文章参数无效")
 		return
 	}
-	article, err := repository.GetArticleByID(articleID)
+	article, err := repository.GetArticleCommentAccessByID(articleID)
 	if err != nil || !article.Published || normalizeArticleContentType(article.ContentType) == "static" {
 		response.Error(c, http.StatusNotFound, "评论区不可用")
 		return
+	}
+	if article.RequiresLogin {
+		if _, authenticated := middleware.CurrentUser(c); !authenticated {
+			response.Error(c, http.StatusUnauthorized, "登录后才能查看该文章评论")
+			return
+		}
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "0"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
@@ -61,7 +67,7 @@ func CreateArticleComment(c *gin.Context) {
 		response.Error(c, http.StatusBadRequest, "评论参数无效")
 		return
 	}
-	article, err := repository.GetArticleByID(req.ArticleID)
+	article, err := repository.GetArticleCommentAccessByID(req.ArticleID)
 	if err != nil || !article.Published {
 		response.Error(c, http.StatusNotFound, "文章不存在")
 		return

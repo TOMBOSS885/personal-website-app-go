@@ -9,6 +9,7 @@ import {
   Eye,
   KeyRound,
   ListTree,
+  LogIn,
   LockKeyhole,
   Share2,
 } from 'lucide-react'
@@ -27,21 +28,23 @@ import { formatDate, splitCommaList } from '../../shared/lib/format'
 import { KATEX_OPTIONS, normalizeMarkdownMath } from '../../shared/lib/markdownMath'
 import { openExternalUrl } from '../../shared/lib/platform'
 import { useSettings } from '../../shared/settings/SettingsContext'
+import { useUserAuth } from '../account/UserAuthContext'
 import { CommentsSection } from './CommentsSection'
 
 export function ArticleDetailPage() {
   const { id = '' } = useParams()
   const { settings } = useSettings()
+  const auth = useUserAuth()
   const [unlocked, setUnlocked] = useState<Article | null>(null)
   const [password, setPassword] = useState('')
   const [copied, setCopied] = useState(false)
   const query = useQuery({
-    queryKey: ['article', settings.serverUrl, id],
-    queryFn: ({ signal }) => publicApi.article(settings.serverUrl, id, signal),
-    enabled: Boolean(id),
+    queryKey: ['article', settings.serverUrl, id, auth.user?.id ?? 'guest'],
+    queryFn: ({ signal }) => publicApi.article(settings.serverUrl, id, auth.accessToken, signal),
+    enabled: Boolean(id) && !auth.loading,
   })
   const unlock = useMutation({
-    mutationFn: () => publicApi.unlockArticle(settings.serverUrl, id, password),
+    mutationFn: () => publicApi.unlockArticle(settings.serverUrl, id, password, auth.accessToken),
     onSuccess: (article) => {
       setUnlocked(article)
       setPassword('')
@@ -64,7 +67,8 @@ export function ArticleDetailPage() {
   if (query.isError) return <ErrorState error={query.error} onRetry={() => query.refetch()} />
   if (!article) return null
 
-  const requiresPassword = article.requiresPassword && !unlocked
+  const loginRequired = Boolean(article.loginRequired || (article.requiresLogin && !auth.isAuthenticated))
+  const requiresPassword = !loginRequired && article.requiresPassword && !unlocked
   const staticUrl = resolveServerUrl(settings.serverUrl, article.staticSiteUrl)
   const share = async () => {
     const url = resolveServerUrl(settings.serverUrl, `/blog/${article.id}`)
@@ -89,12 +93,20 @@ export function ArticleDetailPage() {
             <span><Eye size={15} /> {article.views ?? 0} 次阅读</span>
             {article.contentType === 'static' && <span>交互式页面</span>}
             {article.isLocked && <span><LockKeyhole size={14} /> 受保护</span>}
+            {article.requiresLogin && <span><LogIn size={14} /> 登录可见</span>}
           </div>
         </div>
         {article.coverImage && <RemoteImage className="article-header-cover" source={article.coverImage} alt={article.title} />}
       </header>
 
-      {requiresPassword ? (
+      {loginRequired ? (
+        <section className="unlock-panel">
+          <span className="unlock-icon"><LogIn size={24} /></span>
+          <h3>登录后查看文章</h3>
+          <p>作者已将正文和评论设为登录后可见，登录账号即可继续阅读。</p>
+          <Link className="button button-primary" to="/account"><LogIn size={16} /> 登录账号</Link>
+        </section>
+      ) : requiresPassword ? (
         <section className="unlock-panel">
           <span className="unlock-icon"><KeyRound size={24} /></span>
           <h3>输入访问密码</h3>
@@ -145,9 +157,9 @@ export function ArticleDetailPage() {
         </div>
       )}
 
-      {!requiresPassword && article.contentType !== 'static' && <CommentsSection articleId={article.id} />}
+      {!loginRequired && !requiresPassword && article.contentType !== 'static' && <CommentsSection articleId={article.id} />}
 
-      {!requiresPassword && (
+      {!loginRequired && !requiresPassword && (
         <footer className="article-footer">
           <div className="tag-row">{splitCommaList(article.tags).map((tag) => <span key={tag}>#{tag}</span>)}</div>
           <button className="button button-secondary" onClick={share}>

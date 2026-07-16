@@ -15,12 +15,13 @@ import (
 )
 
 type SearchResult struct {
-	Type        string    `json:"type"`
-	ID          uint64    `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	URL         string    `json:"url"`
-	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
+	Type          string    `json:"type"`
+	ID            uint64    `json:"id"`
+	Title         string    `json:"title"`
+	Description   string    `json:"description"`
+	URL           string    `json:"url"`
+	UpdatedAt     time.Time `json:"updatedAt,omitempty"`
+	RequiresLogin bool      `json:"requiresLogin,omitempty"`
 }
 
 func AdminDashboardStats(c *gin.Context) {
@@ -148,7 +149,7 @@ func searchAll(keyword string, includeDrafts bool) ([]SearchResult, error) {
 
 	var articles []model.Article
 	articleQuery := db.DB.Model(&model.Article{}).
-		Select("id", "title", "summary", "category", "tags", "published", "updated_at")
+		Select("id", "title", "summary", "category", "tags", "published", "requires_login", "updated_at")
 	if !includeDrafts {
 		articleQuery = articleQuery.
 			Where("title LIKE ? OR summary LIKE ? OR category LIKE ? OR tags LIKE ?", like, like, like, like).
@@ -161,12 +162,13 @@ func searchAll(keyword string, includeDrafts bool) ([]SearchResult, error) {
 	}
 	for _, item := range articles {
 		results = append(results, SearchResult{
-			Type:        "article",
-			ID:          item.ID,
-			Title:       item.Title,
-			Description: firstNonEmpty(item.Summary, item.Category, item.Tags),
-			URL:         "/blog/" + strconv.FormatUint(item.ID, 10),
-			UpdatedAt:   item.UpdatedAt,
+			Type:          "article",
+			ID:            item.ID,
+			Title:         item.Title,
+			Description:   firstNonEmpty(item.Summary, item.Category, item.Tags),
+			URL:           "/blog/" + strconv.FormatUint(item.ID, 10),
+			UpdatedAt:     item.UpdatedAt,
+			RequiresLogin: item.RequiresLogin,
 		})
 	}
 

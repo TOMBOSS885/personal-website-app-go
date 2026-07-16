@@ -12,7 +12,7 @@ export function CommentsSection({ articleId }: { articleId: number }) {
   const { settings } = useSettings()
   const auth = useUserAuth()
   const queryClient = useQueryClient()
-  const queryKey = ['comments', settings.serverUrl, articleId]
+  const queryKey = ['comments', settings.serverUrl, articleId, auth.user?.id ?? 'guest']
   const [content, setContent] = useState('')
   const [replyTarget, setReplyTarget] = useState<CommentView | null>(null)
   const [editing, setEditing] = useState<CommentView | null>(null)
@@ -21,7 +21,7 @@ export function CommentsSection({ articleId }: { articleId: number }) {
   const query = useInfiniteQuery({
     queryKey,
     initialPageParam: 0,
-    queryFn: ({ pageParam, signal }) => publicApi.comments(settings.serverUrl, articleId, pageParam, signal),
+    queryFn: ({ pageParam, signal }) => publicApi.comments(settings.serverUrl, articleId, pageParam, auth.accessToken, signal),
     getNextPageParam: (last) => last.hasMore ? last.page + 1 : undefined,
   })
   const refresh = () => queryClient.invalidateQueries({ queryKey })

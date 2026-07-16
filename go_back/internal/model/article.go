@@ -16,6 +16,7 @@ type Article struct {
 	StaticSiteKey      string    `gorm:"column:static_site_key;size:64" json:"staticSiteKey,omitempty"`
 	StaticSiteName     string    `gorm:"column:static_site_name;size:255" json:"staticSiteName,omitempty"`
 	IsLocked           bool      `gorm:"column:is_locked;default:false;index" json:"isLocked"`
+	RequiresLogin      bool      `gorm:"column:requires_login;default:false;index" json:"requiresLogin"`
 	AccessPasswordHash string    `gorm:"column:access_password_hash;size:255" json:"-"`
 	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime;index:idx_articles_published_created,priority:2" json:"createdAt"`
 	UpdatedAt          time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updatedAt"`

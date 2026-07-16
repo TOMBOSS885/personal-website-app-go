@@ -26,6 +26,7 @@ type articleRequest struct {
 	StaticSiteKey  string `json:"staticSiteKey"`
 	StaticSiteName string `json:"staticSiteName"`
 	IsLocked       bool   `json:"isLocked"`
+	RequiresLogin  bool   `json:"requiresLogin"`
 	AccessPassword string `json:"accessPassword"`
 }
 
@@ -66,6 +67,7 @@ func AdminCreateArticleSecure(c *gin.Context) {
 		StaticSiteKey:      siteKey,
 		StaticSiteName:     siteName,
 		IsLocked:           payload.IsLocked,
+		RequiresLogin:      payload.RequiresLogin,
 		AccessPasswordHash: hash,
 	}
 	if err := repository.CreateArticle(&article); err != nil {
@@ -119,6 +121,7 @@ func AdminUpdateArticleSecure(c *gin.Context) {
 	existing.StaticSiteKey = siteKey
 	existing.StaticSiteName = siteName
 	existing.IsLocked = payload.IsLocked
+	existing.RequiresLogin = payload.RequiresLogin
 	existing.AccessPasswordHash = hash
 
 	if err := repository.UpdateArticle(existing); err != nil {
@@ -130,6 +133,49 @@ func AdminUpdateArticleSecure(c *gin.Context) {
 		_ = removeArticleSite(oldSiteKey)
 	}
 	response.Success(c, existing)
+}
+
+func AdminUpdateArticlesAccess(c *gin.Context) {
+	var payload struct {
+		IDs           []uint64 `json:"ids"`
+		RequiresLogin *bool    `json:"requiresLogin"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil || payload.RequiresLogin == nil {
+		response.Error(c, http.StatusBadRequest, "批量访问设置参数无效")
+		return
+	}
+	if len(payload.IDs) == 0 || len(payload.IDs) > 100 {
+		response.Error(c, http.StatusBadRequest, "每次请选择 1 到 100 篇文章")
+		return
+	}
+
+	unique := make([]uint64, 0, len(payload.IDs))
+	seen := make(map[uint64]struct{}, len(payload.IDs))
+	for _, id := range payload.IDs {
+		if id == 0 {
+			response.Error(c, http.StatusBadRequest, "文章参数无效")
+			return
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+
+	updated, err := repository.UpdateArticlesRequiresLogin(unique, *payload.RequiresLogin)
+	if err != nil {
+		response.Error(c, http.StatusInternalServerError, "批量更新文章访问权限失败")
+		return
+	}
+	for _, id := range unique {
+		invalidateArticleSiteAccess(id)
+	}
+	response.Success(c, gin.H{
+		"requested":     len(unique),
+		"updated":       updated,
+		"requiresLogin": *payload.RequiresLogin,
+	})
 }
 
 func AdminDeleteArticleSecure(c *gin.Context) {

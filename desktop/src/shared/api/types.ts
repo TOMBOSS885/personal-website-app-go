@@ -39,6 +39,8 @@ export interface Article {
   staticSiteUrl?: string
   staticSiteName?: string
   isLocked?: boolean
+  requiresLogin?: boolean
+  loginRequired?: boolean
   requiresPassword?: boolean
   createdAt: string
   updatedAt?: string
@@ -106,6 +108,7 @@ export interface SearchResult {
   description?: string
   url?: string
   updatedAt?: string
+  requiresLogin?: boolean
 }
 
 export interface CommentView {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"personal-website-go/internal/cache"
+	"personal-website-go/internal/middleware"
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
@@ -49,12 +50,18 @@ func GetProtectedArticle(c *gin.Context) {
 		response.Error(c, http.StatusNotFound, "文章不存在")
 		return
 	}
+	if article.RequiresLogin {
+		if _, authenticated := middleware.CurrentUser(c); !authenticated {
+			response.Success(c, publicArticlePayload(article, false, true))
+			return
+		}
+	}
 	if article.IsLocked {
-		response.Success(c, publicArticlePayload(article, false))
+		response.Success(c, publicArticlePayload(article, false, false))
 		return
 	}
 	incrementArticleViews(article)
-	response.Success(c, publicArticlePayload(article, true))
+	response.Success(c, publicArticlePayload(article, true, false))
 }
 
 func UnlockArticle(c *gin.Context) {
@@ -63,6 +70,12 @@ func UnlockArticle(c *gin.Context) {
 	if err != nil || !article.Published {
 		response.Error(c, http.StatusNotFound, "文章不存在")
 		return
+	}
+	if article.RequiresLogin {
+		if _, authenticated := middleware.CurrentUser(c); !authenticated {
+			response.Error(c, http.StatusUnauthorized, "登录后才能解锁这篇文章")
+			return
+		}
 	}
 
 	var req struct {
@@ -99,7 +112,7 @@ func UnlockArticle(c *gin.Context) {
 	}
 
 	incrementArticleViews(article)
-	response.Success(c, publicArticlePayload(article, true))
+	response.Success(c, publicArticlePayload(article, true, false))
 }
 
 func incrementArticleViews(article *model.Article) {
@@ -110,7 +123,7 @@ func incrementArticleViews(article *model.Article) {
 	article.Views++
 }
 
-func publicArticlePayload(article *model.Article, includeContent bool) gin.H {
+func publicArticlePayload(article *model.Article, includeContent, loginRequired bool) gin.H {
 	content := ""
 	staticSiteURL := ""
 	summary := article.Summary
@@ -137,7 +150,9 @@ func publicArticlePayload(article *model.Article, includeContent bool) gin.H {
 		"views":            article.Views,
 		"published":        article.Published,
 		"isLocked":         article.IsLocked,
-		"requiresPassword": article.IsLocked && !includeContent,
+		"requiresLogin":    article.RequiresLogin,
+		"loginRequired":    loginRequired,
+		"requiresPassword": article.IsLocked && !includeContent && !loginRequired,
 		"createdAt":        article.CreatedAt,
 		"updatedAt":        article.UpdatedAt,
 	}
@@ -145,9 +160,9 @@ func publicArticlePayload(article *model.Article, includeContent bool) gin.H {
 
 func sanitizePublicArticleSummaries(articles []model.Article) []model.Article {
 	for i := range articles {
+		articles[i].Content = ""
 		if articles[i].IsLocked {
 			articles[i].Summary = ""
-			articles[i].Content = ""
 		}
 	}
 	return articles

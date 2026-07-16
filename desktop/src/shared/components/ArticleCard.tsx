@@ -1,4 +1,4 @@
-import { ArrowUpRight, CalendarDays, CodeXml, Eye, LockKeyhole } from 'lucide-react'
+import { ArrowUpRight, CalendarDays, CodeXml, Eye, LockKeyhole, UserRoundCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Article } from '../api/types'
 import { formatDate, splitCommaList } from '../lib/format'
@@ -16,6 +16,7 @@ export function ArticleCard({ article, featured = false }: { article: Article; f
         />
         <div className="cover-badges">
           {article.isLocked && <span><LockKeyhole size={13} /> 加锁</span>}
+          {article.requiresLogin && <span><UserRoundCheck size={13} /> 登录可见</span>}
           {article.contentType === 'static' && <span><CodeXml size={13} /> 交互页面</span>}
         </div>
       </div>
@@ -25,7 +26,7 @@ export function ArticleCard({ article, featured = false }: { article: Article; f
           <span>{formatDate(article.createdAt)}</span>
         </div>
         <h3>{article.title}</h3>
-        <p>{article.summary || (article.isLocked ? '这是一篇受保护的文章，输入访问密码后可阅读。' : '打开文章阅读全文。')}</p>
+        <p>{article.summary || (article.isLocked ? '这是一篇受保护的文章，输入访问密码后可阅读。' : article.requiresLogin ? '登录账号后可阅读全文并参与评论。' : '打开文章阅读全文。')}</p>
         <div className="article-card-footer">
           <span className="tag-row">
             {splitCommaList(article.tags).slice(0, 2).map((tag) => <small key={tag}>#{tag}</small>)}

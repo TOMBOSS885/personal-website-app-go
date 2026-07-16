@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw, ChevronLeft, ChevronRight, Lock, Code2, FileArchive } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw, ChevronLeft, ChevronRight, Lock, Code2, FileArchive, UserRoundCheck, Globe2 } from 'lucide-react'
 import OptimizedImage from '../../components/OptimizedImage'
 
 const API_BASE = ''
@@ -23,6 +23,8 @@ export default function ArticleManager() {
   const [cleaningCoverImages, setCleaningCoverImages] = useState(false)
   const [draftNotice, setDraftNotice] = useState('')
   const [uploadingSite, setUploadingSite] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [batchUpdating, setBatchUpdating] = useState(false)
   const coverFileInputRef = useRef(null)
   const siteFileInputRef = useRef(null)
   const [form, setForm] = useState({ 
@@ -36,6 +38,7 @@ export default function ArticleManager() {
     contentType: 'markdown',
     staticSiteKey: '',
     staticSiteName: '',
+    requiresLogin: false,
     isLocked: false,
     accessPassword: ''
   })
@@ -45,6 +48,7 @@ export default function ArticleManager() {
 
   useEffect(() => {
     fetchArticles()
+    setSelectedIds(new Set())
   }, [page, size])
 
   useEffect(() => {
@@ -248,6 +252,7 @@ export default function ArticleManager() {
           contentType: 'markdown',
           staticSiteKey: '',
           staticSiteName: '',
+          requiresLogin: false,
           isLocked: false,
           accessPassword: ''
         })
@@ -277,6 +282,7 @@ export default function ArticleManager() {
       contentType: draft?.contentType ?? article.contentType ?? 'markdown',
       staticSiteKey: draft?.staticSiteKey ?? article.staticSiteKey ?? '',
       staticSiteName: draft?.staticSiteName ?? article.staticSiteName ?? '',
+      requiresLogin: draft?.requiresLogin ?? article.requiresLogin ?? false,
       isLocked: draft?.isLocked ?? article.isLocked ?? false,
       accessPassword: draft?.accessPassword ?? ''
     })
@@ -300,6 +306,57 @@ export default function ArticleManager() {
       }
     } catch (err) {
       console.error('删除文章失败:', err)
+    }
+  }
+
+  const toggleSelected = (id) => {
+    setSelectedIds(current => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const visibleIds = articles.map(article => article.id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id))
+  const someVisibleSelected = visibleIds.some(id => selectedIds.has(id))
+
+  const toggleAllVisible = () => {
+    setSelectedIds(current => {
+      const next = new Set(current)
+      if (visibleIds.every(id => next.has(id))) visibleIds.forEach(id => next.delete(id))
+      else visibleIds.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  const updateSelectedAccess = async (requiresLogin) => {
+    const ids = Array.from(selectedIds)
+    if (!ids.length || batchUpdating) return
+    const action = requiresLogin ? '设为登录后可查看' : '设为公开可查看'
+    if (!confirm(`确定将选中的 ${ids.length} 篇文章${action}吗？`)) return
+
+    setBatchUpdating(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/articles/access`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ ids, requiresLogin }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || '批量更新失败')
+      setArticles(current => current.map(article => (
+        selectedIds.has(article.id) ? { ...article, requiresLogin } : article
+      )))
+      setSelectedIds(new Set())
+    } catch (err) {
+      alert(err.message || '批量更新失败，请重试')
+    } finally {
+      setBatchUpdating(false)
     }
   }
 
@@ -328,6 +385,7 @@ export default function ArticleManager() {
               contentType: 'markdown',
               staticSiteKey: '',
               staticSiteName: '',
+              requiresLogin: false,
               isLocked: false,
               accessPassword: ''
             })
@@ -341,7 +399,39 @@ export default function ArticleManager() {
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex flex-col gap-3 rounded-xl border border-indigo-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-indigo-100 px-2 font-semibold text-indigo-700">{selectedIds.size}</span>
+            篇文章已选择
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={batchUpdating}
+              onClick={() => updateSelectedAccess(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {batchUpdating ? <Loader className="h-4 w-4 animate-spin" /> : <UserRoundCheck className="h-4 w-4" />}
+              设为登录可见
+            </button>
+            <button
+              type="button"
+              disabled={batchUpdating}
+              onClick={() => updateSelectedAccess(false)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              <Globe2 className="h-4 w-4" />
+              设为公开可见
+            </button>
+            <button type="button" disabled={batchUpdating} onClick={() => setSelectedIds(new Set())} className="p-2 text-gray-400 transition hover:text-gray-700 disabled:opacity-50" title="清除选择" aria-label="清除选择">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader className="w-6 h-6 animate-spin text-purple-500" />
@@ -353,9 +443,19 @@ export default function ArticleManager() {
             <p>暂无文章，点击上方按钮创建</p>
           </div>
         ) : (
-          <table className="w-full">
+          <table className="w-full min-w-[920px]">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
+                <th className="w-12 px-4 py-4 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    ref={input => { if (input) input.indeterminate = someVisibleSelected && !allVisibleSelected }}
+                    onChange={toggleAllVisible}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    aria-label="选择当前页全部文章"
+                  />
+                </th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">标题</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">分类</th>
                 <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">状态</th>
@@ -367,6 +467,15 @@ export default function ArticleManager() {
             <tbody className="divide-y divide-gray-100">
               {articles.map(article => (
                 <tr key={article.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-4 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(article.id)}
+                      onChange={() => toggleSelected(article.id)}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      aria-label={`选择文章：${article.title}`}
+                    />
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
                       <span>{article.title}</span>
@@ -380,6 +489,12 @@ export default function ArticleManager() {
                         <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
                           <Lock className="h-3 w-3" />
                           加锁
+                        </span>
+                      )}
+                      {article.requiresLogin && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                          <UserRoundCheck className="h-3 w-3" />
+                          登录可见
                         </span>
                       )}
                     </div>
@@ -633,6 +748,24 @@ export default function ArticleManager() {
                       )}
                     </span>
                   </label>
+
+                  <div className="rounded-xl border border-indigo-100 bg-white p-3">
+                    <label className="flex cursor-pointer items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(form.requiresLogin)}
+                        onChange={e => setForm({ ...form, requiresLogin: e.target.checked })}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <span>
+                        <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                          <UserRoundCheck className="h-4 w-4 text-indigo-500" />
+                          登录后可查看
+                        </span>
+                        <span className="mt-1 block text-xs leading-relaxed text-gray-500">未登录访客只能看到标题和摘要，正文、静态项目和评论均不可访问。</span>
+                      </span>
+                    </label>
+                  </div>
 
                   <div className="rounded-xl border border-amber-100 bg-white p-3">
                     <label className="flex cursor-pointer items-center gap-3">

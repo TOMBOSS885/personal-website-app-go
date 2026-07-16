@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"gorm.io/gorm"
 	"personal-website-go/internal/db"
 	"personal-website-go/internal/model"
@@ -50,7 +52,7 @@ func GetArticleSummaries(page, size int, tag, category, keyword string) ([]model
 
 	offset := page * size
 	err := query.
-		Select("id", "title", "summary", "cover_image", "category", "tags", "views", "published", "content_type", "is_locked", "created_at", "updated_at").
+		Select("id", "title", "summary", "cover_image", "category", "tags", "views", "published", "content_type", "is_locked", "requires_login", "created_at", "updated_at").
 		Order("created_at DESC").
 		Offset(offset).
 		Limit(size).
@@ -67,10 +69,21 @@ func GetArticleByID(id uint64) (*model.Article, error) {
 	return &article, nil
 }
 
+func GetArticleCommentAccessByID(id uint64) (*model.Article, error) {
+	var article model.Article
+	err := db.DB.
+		Select("id", "published", "content_type", "requires_login").
+		First(&article, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &article, nil
+}
+
 func GetArticleSiteAccessByID(id uint64) (*model.Article, error) {
 	var article model.Article
 	err := db.DB.
-		Select("id", "published", "content_type", "static_site_key", "updated_at").
+		Select("id", "published", "content_type", "static_site_key", "requires_login", "updated_at").
 		First(&article, id).Error
 	if err != nil {
 		return nil, err
@@ -84,6 +97,16 @@ func CreateArticle(article *model.Article) error {
 
 func UpdateArticle(article *model.Article) error {
 	return db.DB.Save(article).Error
+}
+
+func UpdateArticlesRequiresLogin(ids []uint64, required bool) (int64, error) {
+	result := db.DB.Model(&model.Article{}).
+		Where("id IN ?", ids).
+		Updates(map[string]interface{}{
+			"requires_login": required,
+			"updated_at":     time.Now(),
+		})
+	return result.RowsAffected, result.Error
 }
 
 func DeleteArticle(id uint64) error {
