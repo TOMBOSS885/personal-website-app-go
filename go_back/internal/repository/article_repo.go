@@ -81,11 +81,12 @@ func GetArticleAccessByID(id uint64) (*model.Article, error) {
 	return &article, nil
 }
 
-func LoadArticleContent(article *model.Article) error {
-	if article == nil || article.ID == 0 || article.ContentType == "static" {
-		return nil
-	}
-	return db.DB.Model(&model.Article{}).Select("content").Where("id = ?", article.ID).Scan(article).Error
+func GetArticleContent(id uint64) (string, error) {
+	var content string
+	err := db.DB.Model(&model.Article{}).
+		Where("id = ?", id).
+		Pluck("content", &content).Error
+	return content, err
 }
 
 func GetArticleCommentAccessByID(id uint64) (*model.Article, error) {

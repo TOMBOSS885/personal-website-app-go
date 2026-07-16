@@ -61,7 +61,7 @@ func GetProtectedArticle(c *gin.Context) {
 		response.Success(c, publicArticlePayload(article, false, false, c.ClientIP()))
 		return
 	}
-	if err := repository.LoadArticleContent(article); err != nil {
+	if err := loadArticleContent(article); err != nil {
 		response.Error(c, http.StatusInternalServerError, "文章加载失败")
 		return
 	}
@@ -116,13 +116,25 @@ func UnlockArticle(c *gin.Context) {
 		}
 		clearArticleUnlockFailures(c.ClientIP(), article.ID)
 	}
-	if err := repository.LoadArticleContent(article); err != nil {
+	if err := loadArticleContent(article); err != nil {
 		response.Error(c, http.StatusInternalServerError, "文章加载失败")
 		return
 	}
 
 	incrementArticleViews(article)
 	response.Success(c, publicArticlePayload(article, true, false, c.ClientIP()))
+}
+
+func loadArticleContent(article *model.Article) error {
+	if article == nil || article.ID == 0 || normalizeArticleContentType(article.ContentType) == "static" {
+		return nil
+	}
+	content, err := repository.GetArticleContent(article.ID)
+	if err != nil {
+		return err
+	}
+	article.Content = content
+	return nil
 }
 
 func setPrivateArticleResponseHeaders(c *gin.Context) {

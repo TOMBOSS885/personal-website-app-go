@@ -3,6 +3,7 @@ package handler
 import (
 	"personal-website-go/internal/model"
 	"testing"
+	"time"
 )
 
 func TestPublicArticlePayloadRequiresLoginBeforePassword(t *testing.T) {
@@ -25,6 +26,21 @@ func TestPublicArticlePayloadRequiresLoginBeforePassword(t *testing.T) {
 	}
 	if payload["requiresPassword"] != false {
 		t.Fatal("password prompt must not be exposed before login")
+	}
+}
+
+func TestPublicArticlePayloadPreservesMetadataWithContent(t *testing.T) {
+	createdAt := time.Date(2026, time.July, 16, 8, 30, 0, 0, time.UTC)
+	article := &model.Article{
+		ID: 12, Title: "Metadata must survive", Content: "body", ContentType: "markdown",
+		Views: 37, Published: true, CreatedAt: createdAt,
+	}
+	payload := publicArticlePayload(article, true, false, "127.0.0.1")
+	if payload["title"] != article.Title || payload["views"] != article.Views || payload["createdAt"] != createdAt {
+		t.Fatalf("article metadata was lost: %#v", payload)
+	}
+	if payload["content"] != "body" {
+		t.Fatal("article content is missing")
 	}
 }
 
