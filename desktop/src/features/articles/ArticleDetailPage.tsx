@@ -200,11 +200,33 @@ function ArticleTableOfContents({ items }: { items: TocItem[] }) {
   const ancestorMap = useMemo(() => buildAncestorMap(tree), [tree])
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
   const [activeId, setActiveId] = useState('')
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     setCollapsedIds(new Set())
     setActiveId(items[0]?.id ?? '')
+    setMobileOpen(false)
   }, [items])
+
+  useEffect(() => {
+    const headings = items
+      .map((item) => document.getElementById(item.id))
+      .filter((heading): heading is HTMLElement => Boolean(heading))
+    if (headings.length === 0 || typeof IntersectionObserver === 'undefined') return undefined
+
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)
+      const nextId = (visible[0]?.target as HTMLElement | undefined)?.id
+      if (!nextId) return
+      setActiveId(nextId)
+      setCollapsedIds((current) => removeCollapsedAncestors(current, ancestorMap.get(nextId) ?? []))
+    }, { root: document.querySelector('.content-scroll'), rootMargin: '-8% 0px -72% 0px', threshold: [0, 1] })
+
+    headings.forEach((heading) => observer.observe(heading))
+    return () => observer.disconnect()
+  }, [ancestorMap, items])
 
   const toggleBranch = (id: string) => {
     setCollapsedIds((current) => {
@@ -224,10 +246,11 @@ function ArticleTableOfContents({ items }: { items: TocItem[] }) {
     heading.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
     setActiveId(id)
     setCollapsedIds((current) => removeCollapsedAncestors(current, ancestorMap.get(id) ?? []))
+    setMobileOpen(false)
   }
 
   return (
-    <aside className="article-toc">
+    <aside className={`article-toc${mobileOpen ? ' mobile-expanded' : ''}`}>
       <div className="article-toc-header">
         <ListTree size={15} aria-hidden="true" />
         <strong>文章目录</strong>
@@ -242,8 +265,18 @@ function ArticleTableOfContents({ items }: { items: TocItem[] }) {
             </button>
           </div>
         )}
+        <button
+          type="button"
+          className="mobile-toc-disclosure"
+          onClick={() => setMobileOpen((open) => !open)}
+          aria-expanded={mobileOpen}
+          aria-controls="article-toc-navigation"
+          aria-label={mobileOpen ? '收起文章目录' : '展开文章目录'}
+        >
+          <ChevronDown size={18} />
+        </button>
       </div>
-      <nav className="article-toc-scroll" aria-label="文章目录" tabIndex={0}>
+      <nav id="article-toc-navigation" className="article-toc-scroll" aria-label="文章目录" tabIndex={0}>
         <ul>
           {tree.map((node) => (
             <TocTreeItem

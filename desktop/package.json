@@ -9,7 +9,12 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "android:init": "tauri android init",
+    "android:dev": "tauri android dev",
+    "android:build:debug": "node scripts/build-android.mjs --debug",
+    "android:build:test": "node scripts/build-android.mjs --test",
+    "android:build:release": "node scripts/build-android.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",

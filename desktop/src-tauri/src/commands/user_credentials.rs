@@ -1,5 +1,14 @@
 use url::{Host, Url};
 
+#[cfg(target_os = "android")]
+use serde::{Deserialize, Serialize};
+#[cfg(target_os = "android")]
+use tauri::{
+    plugin::{Builder as PluginBuilder, PluginHandle, TauriPlugin},
+    AppHandle, Manager, Runtime,
+};
+
+#[cfg(target_os = "windows")]
 const CREDENTIAL_SERVICE: &str = "com.personalwebsite.blog.user-session";
 const MAX_SERVER_URL_LENGTH: usize = 2 * 1024;
 const MAX_PROFILE_KEY_LENGTH: usize = 384;
@@ -71,6 +80,7 @@ fn validate_token(token: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 fn entry(server_url: &str) -> Result<keyring::Entry, String> {
     let profile_key = server_profile_key(server_url)?;
     keyring::Entry::new(CREDENTIAL_SERVICE, &profile_key)
@@ -78,6 +88,7 @@ fn entry(server_url: &str) -> Result<keyring::Entry, String> {
 }
 
 #[tauri::command]
+#[cfg(target_os = "windows")]
 pub async fn save_user_token(server_url: String, token: String) -> Result<(), String> {
     validate_token(&token)?;
     let profile_key = server_profile_key(&server_url)?;
@@ -93,6 +104,7 @@ pub async fn save_user_token(server_url: String, token: String) -> Result<(), St
 }
 
 #[tauri::command]
+#[cfg(target_os = "windows")]
 pub async fn load_user_token(server_url: String) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let entry = entry(&server_url)?;
@@ -107,6 +119,7 @@ pub async fn load_user_token(server_url: String) -> Result<Option<String>, Strin
 }
 
 #[tauri::command]
+#[cfg(target_os = "windows")]
 pub async fn delete_user_token(server_url: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let entry = entry(&server_url)?;
@@ -117,6 +130,121 @@ pub async fn delete_user_token(server_url: String) -> Result<(), String> {
     })
     .await
     .map_err(|_| "credential operation was interrupted".to_string())?
+}
+
+#[cfg(target_os = "android")]
+const ANDROID_PLUGIN_IDENTIFIER: &str = "com.personalwebsite.blog";
+
+#[cfg(target_os = "android")]
+struct AndroidCredentialStore<R: Runtime>(PluginHandle<R>);
+
+#[cfg(target_os = "android")]
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AndroidCredentialArgs<'a> {
+    profile_key: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    token: Option<&'a str>,
+}
+
+#[cfg(target_os = "android")]
+#[derive(Deserialize)]
+struct AndroidCredentialValue {
+    token: Option<String>,
+}
+
+#[cfg(target_os = "android")]
+pub fn android_plugin<R: Runtime>() -> TauriPlugin<R> {
+    PluginBuilder::new("credential-store")
+        .setup(|app, api| {
+            let handle =
+                api.register_android_plugin(ANDROID_PLUGIN_IDENTIFIER, "CredentialPlugin")?;
+            app.manage(AndroidCredentialStore(handle));
+            Ok(())
+        })
+        .build()
+}
+
+#[tauri::command]
+#[cfg(target_os = "android")]
+pub async fn save_user_token<R: Runtime>(
+    app: AppHandle<R>,
+    server_url: String,
+    token: String,
+) -> Result<(), String> {
+    validate_token(&token)?;
+    let profile_key = server_profile_key(&server_url)?;
+    app.state::<AndroidCredentialStore<R>>()
+        .0
+        .run_mobile_plugin(
+            "save",
+            AndroidCredentialArgs {
+                profile_key: &profile_key,
+                token: Some(&token),
+            },
+        )
+        .map_err(|_| "failed to save the user token securely".to_string())
+}
+
+#[tauri::command]
+#[cfg(target_os = "android")]
+pub async fn load_user_token<R: Runtime>(
+    app: AppHandle<R>,
+    server_url: String,
+) -> Result<Option<String>, String> {
+    let profile_key = server_profile_key(&server_url)?;
+    let value: AndroidCredentialValue = app
+        .state::<AndroidCredentialStore<R>>()
+        .0
+        .run_mobile_plugin(
+            "load",
+            AndroidCredentialArgs {
+                profile_key: &profile_key,
+                token: None,
+            },
+        )
+        .map_err(|_| "failed to load the user token securely".to_string())?;
+    if let Some(token) = value.token.as_deref() {
+        validate_token(token)?;
+    }
+    Ok(value.token)
+}
+
+#[tauri::command]
+#[cfg(target_os = "android")]
+pub async fn delete_user_token<R: Runtime>(
+    app: AppHandle<R>,
+    server_url: String,
+) -> Result<(), String> {
+    let profile_key = server_profile_key(&server_url)?;
+    app.state::<AndroidCredentialStore<R>>()
+        .0
+        .run_mobile_plugin(
+            "delete",
+            AndroidCredentialArgs {
+                profile_key: &profile_key,
+                token: None,
+            },
+        )
+        .map_err(|_| "failed to delete the user token securely".to_string())
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "android")))]
+#[tauri::command]
+pub async fn save_user_token(_server_url: String, _token: String) -> Result<(), String> {
+    Err("secure credential storage is unsupported on this platform".into())
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "android")))]
+#[tauri::command]
+pub async fn load_user_token(_server_url: String) -> Result<Option<String>, String> {
+    Ok(None)
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "android")))]
+#[tauri::command]
+pub async fn delete_user_token(_server_url: String) -> Result<(), String> {
+    Ok(())
 }
 
 #[cfg(test)]

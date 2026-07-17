@@ -18,7 +18,9 @@ export function SearchPage() {
     enabled: activeQuery.length >= 2,
   })
 
-  useEffect(() => inputRef.current?.focus(), [])
+  useEffect(() => {
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) inputRef.current?.focus()
+  }, [])
 
   return (
     <div className="page search-page">

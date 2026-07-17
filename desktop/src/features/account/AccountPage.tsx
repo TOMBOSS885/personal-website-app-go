@@ -144,8 +144,8 @@ function AccountAccess() {
       <section className="account-access">
         <aside className="account-intro">
           <span className="account-emblem"><ShieldCheck size={28} /></span>
-          <h2>把博客讨论与账号带到桌面</h2>
-          <p>使用与 Web 端相同的普通用户账号。登录凭据由 Windows 安全凭据库保存，不写入浏览器存储。</p>
+          <h2>把博客讨论与账号带到客户端</h2>
+          <p>使用与 Web 端相同的普通用户账号。登录凭据由系统安全存储保护，不写入浏览器存储。</p>
           <div className="account-benefits">
             <span><CheckCircle2 size={15} /> 发表评论与回复</span>
             <span><CheckCircle2 size={15} /> 使用受保护音乐</span>
@@ -165,11 +165,11 @@ function AccountAccess() {
           </div>
           <form className="account-form" onSubmit={submit}>
             {mode === 'login' ? (
-              <Field icon={<UserRound size={16} />} label="用户名或邮箱"><input value={identifier} onChange={(event) => setIdentifier(event.target.value)} autoComplete="username" placeholder="用户名或 name@example.com" required /></Field>
+              <Field icon={<UserRound size={16} />} label="用户名或邮箱"><input value={identifier} onChange={(event) => setIdentifier(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="用户名或 name@example.com" required /></Field>
             ) : (
               <>
-                <Field icon={<Mail size={16} />} label="邮箱地址"><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" placeholder="name@example.com" required /></Field>
-                {mode === 'register' && <Field icon={<AtSign size={16} />} label="用户名"><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" placeholder="2-30 位唯一用户名" required /></Field>}
+                <Field icon={<Mail size={16} />} label="邮箱地址"><input value={email} onChange={(event) => setEmail(event.target.value)} type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} placeholder="name@example.com" required /></Field>
+                {mode === 'register' && <Field icon={<AtSign size={16} />} label="用户名"><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="2-30 位唯一用户名" required /></Field>}
                 <label className="account-field"><span>邮箱验证码</span><div className="code-input"><input value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" placeholder="6 位验证码" required /><button type="button" onClick={sendCode} disabled={!email.trim() || cooldown > 0 || sendingCode}>{sendingCode ? <LoaderCircle className="spin" size={15} /> : <Send size={15} />}{cooldown > 0 ? `${cooldown} 秒` : '发送'}</button></div></label>
               </>
             )}
@@ -216,7 +216,7 @@ function AccountProfile() {
           {message && <div className="form-message success"><CheckCircle2 size={15} />{message}</div>}{error && <div className="form-message error">{error}</div>}
           <button className="button button-primary" disabled={pending || username.trim() === user.username} onClick={async () => { setPending(true); setError(''); try { await updateUsername(username); setMessage('用户名已更新。') } catch (caught) { setError(errorMessage(caught)) } finally { setPending(false) } }}><Save size={15} /> 保存用户名</button>
         </div>
-        <div className="account-setting-card session-card"><h3>当前会话</h3><p>账号令牌安全保存在 Windows 凭据库中。</p><dl><div><dt>账号状态</dt><dd>{user.status}</dd></div><div><dt>注册时间</dt><dd>{new Date(user.createdAt).toLocaleDateString('zh-CN')}</dd></div></dl><button className="button button-ghost logout-button" onClick={() => logout()}><LogOut size={15} /> 退出登录</button></div>
+        <div className="account-setting-card session-card"><h3>当前会话</h3><p>账号令牌安全保存在系统凭据存储中。</p><dl><div><dt>账号状态</dt><dd>{user.status}</dd></div><div><dt>注册时间</dt><dd>{new Date(user.createdAt).toLocaleDateString('zh-CN')}</dd></div></dl><button className="button button-ghost logout-button" onClick={() => logout()}><LogOut size={15} /> 退出登录</button></div>
       </section>
     </div>
   )

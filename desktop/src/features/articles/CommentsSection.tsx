@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError, publicApi, userApi } from '../../shared/api/client'
 import type { CommentView } from '../../shared/api/types'
+import { ErrorState, LoadingState } from '../../shared/components/AsyncState'
 import { formatDate } from '../../shared/lib/format'
 import { useSettings } from '../../shared/settings/SettingsContext'
 import { useUserAuth } from '../account/UserAuthContext'
@@ -67,7 +68,8 @@ export function CommentsSection({ articleId }: { articleId: number }) {
     return groups
   }, new Map<number, CommentView[]>()), [comments])
 
-  if (query.isPending || query.isError) return null
+  if (query.isPending) return <section className="comments-section"><LoadingState label="正在加载讨论" /></section>
+  if (query.isError) return <section className="comments-section"><ErrorState error={query.error} onRetry={() => query.refetch()} /></section>
 
   return (
     <section className="comments-section">
@@ -80,7 +82,7 @@ export function CommentsSection({ articleId }: { articleId: number }) {
             <span>{replyTarget ? `回复 ${replyTarget.username}` : `以 ${auth.user?.username} 的身份发表评论`}</span>
             {replyTarget && <button type="button" title="取消回复" onClick={() => setReplyTarget(null)}><X size={14} /></button>}
           </div>
-          <textarea value={content} onChange={(event) => setContent(event.target.value.slice(0, 1000))} placeholder="友善交流，分享你的想法..." rows={3} />
+          <textarea value={content} onChange={(event) => setContent(event.target.value.slice(0, 1000))} onFocus={(event) => event.currentTarget.scrollIntoView({ block: 'center' })} placeholder="友善交流，分享你的想法..." rows={3} />
           <div className="composer-footer"><span>{content.length}/1000</span><button className="button button-primary" disabled={!content.trim() || create.isPending}>{create.isPending ? <LoaderCircle className="spin" size={15} /> : <Send size={15} />}发布评论</button></div>
           {create.isError && <div className="form-message error">{errorMessage(create.error)}</div>}
         </form>

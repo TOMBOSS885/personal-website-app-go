@@ -1,7 +1,9 @@
 mod commands;
 
+#[cfg(desktop)]
 use tauri::Manager;
 
+#[cfg(desktop)]
 fn activate_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
@@ -12,10 +14,17 @@ fn activate_main_window(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            activate_main_window(app);
-        }))
+    let builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        activate_main_window(app);
+    }));
+
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(commands::user_credentials::android_plugin());
+
+    builder
         .plugin(
             tauri_plugin_log::Builder::new()
                 .max_file_size(2_000_000)
