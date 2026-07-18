@@ -123,6 +123,19 @@ function replaceInlineDelimiters(value: string): string {
   return value
     .replace(/\\\[([^\n]+?)\\\]/g, (_match, formula: string) => `$$${formula}$$`)
     .replace(/\\\(([^\n]+?)\\\)/g, (_match, formula: string) => `$${formula}$`)
+    .replace(/\(([^()\n]{1,240})\)/g, (match, formula: string, offset: number, source: string) => {
+      const previousCharacter = source[offset - 1] ?? ''
+      if (previousCharacter === ']' || !looksLikeParenthesizedMath(formula)) return match
+      return `$${formula.trim()}$`
+    })
+}
+
+function looksLikeParenthesizedMath(value: string): boolean {
+  const formula = value.trim()
+  if (!formula || /(?:https?:\/\/|[\u0000-\u001f])/.test(formula)) return false
+  if (/\\[A-Za-z]+/.test(formula)) return true
+  if (/[_^]\s*(?:\{[^}\n]{1,80}\}|[A-Za-z0-9])/.test(formula)) return true
+  return /(?:[=<>]|[∈∉∑∏√∞±×÷])/.test(formula) && /[A-Za-z\u00c0-\uFFFF]/.test(formula)
 }
 
 function leadingWhitespace(value: string): string {
