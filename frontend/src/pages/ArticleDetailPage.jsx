@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, LogIn, Share2, Tag } from 'lucide-react'
@@ -357,6 +357,7 @@ function ArticleTableOfContents({ items }) {
   const tree = useMemo(() => buildTocTree(items), [items])
   const branchIds = useMemo(() => collectBranchIds(tree), [tree])
   const ancestorMap = useMemo(() => buildAncestorMap(tree), [tree])
+  const tocScrollRef = useRef(null)
   const [collapsedIds, setCollapsedIds] = useState(() => new Set())
   const [activeId, setActiveId] = useState('')
 
@@ -385,6 +386,102 @@ function ArticleTableOfContents({ items }) {
     window.addEventListener('hashchange', syncHash)
     return () => window.removeEventListener('hashchange', syncHash)
   }, [ancestorMap, items])
+
+  useEffect(() => {
+    const headings = items
+      .map(item => document.getElementById(item.id))
+      .filter(Boolean)
+    const scrollingElement = document.scrollingElement || document.documentElement
+    if (!headings.length || !scrollingElement) return undefined
+
+    let headingOffsets = []
+    let updateFrame = 0
+    let measureFrame = 0
+    let disposed = false
+
+    const getScrollTop = () => Math.max(window.scrollY || 0, scrollingElement.scrollTop || 0)
+
+    const activateHeading = () => {
+      updateFrame = 0
+      if (disposed || !headingOffsets.length) return
+
+      const scrollTop = getScrollTop()
+      const documentHeight = Math.max(scrollingElement.scrollHeight, document.body?.scrollHeight || 0)
+      const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0
+      const atBottom = scrollTop + viewportHeight >= documentHeight - 2
+      const readingOffset = Math.min(Math.max(viewportHeight * 0.2, 96), 180)
+      const index = atBottom
+        ? headings.length - 1
+        : findActiveHeadingIndex(headingOffsets, scrollTop + readingOffset)
+      const nextId = headings[index]?.id
+      if (!nextId) return
+
+      setActiveId(current => current === nextId ? current : nextId)
+      const ancestors = ancestorMap.get(nextId) || []
+      if (ancestors.length) {
+        setCollapsedIds(current => {
+          if (!ancestors.some(ancestorId => current.has(ancestorId))) return current
+          const next = new Set(current)
+          ancestors.forEach(ancestorId => next.delete(ancestorId))
+          return next
+        })
+      }
+    }
+
+    const scheduleUpdate = () => {
+      if (disposed || updateFrame) return
+      updateFrame = window.requestAnimationFrame(activateHeading)
+    }
+
+    const measureHeadings = () => {
+      measureFrame = 0
+      if (disposed) return
+      const scrollTop = getScrollTop()
+      headingOffsets = headings.map(heading => heading.getBoundingClientRect().top + scrollTop)
+      scheduleUpdate()
+    }
+
+    const scheduleMeasure = () => {
+      if (disposed || measureFrame) return
+      measureFrame = window.requestAnimationFrame(measureHeadings)
+    }
+
+    window.addEventListener('scroll', scheduleUpdate, { passive: true })
+    window.addEventListener('resize', scheduleMeasure, { passive: true })
+
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleMeasure)
+    const articleBody = headings[0].closest('.article-content')
+    if (articleBody) resizeObserver?.observe(articleBody)
+    if (document.fonts?.ready) void document.fonts.ready.then(scheduleMeasure, scheduleMeasure)
+    scheduleMeasure()
+
+    return () => {
+      disposed = true
+      window.removeEventListener('scroll', scheduleUpdate)
+      window.removeEventListener('resize', scheduleMeasure)
+      resizeObserver?.disconnect()
+      if (updateFrame) window.cancelAnimationFrame(updateFrame)
+      if (measureFrame) window.cancelAnimationFrame(measureFrame)
+    }
+  }, [ancestorMap, items])
+
+  useEffect(() => {
+    const navigation = tocScrollRef.current
+    if (!navigation || navigation.clientHeight === 0) return undefined
+
+    const frame = window.requestAnimationFrame(() => {
+      const activeRow = navigation.querySelector('[aria-current="location"]')?.closest('.article-toc-row')
+      if (!activeRow) return
+      const navigationRect = navigation.getBoundingClientRect()
+      const rowRect = activeRow.getBoundingClientRect()
+      const topOverflow = rowRect.top - navigationRect.top
+      const bottomOverflow = rowRect.bottom - navigationRect.bottom
+      if (topOverflow < 0) navigation.scrollTop += topOverflow
+      else if (bottomOverflow > 0) navigation.scrollTop += bottomOverflow
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeId, collapsedIds])
 
   const toggleBranch = id => {
     setCollapsedIds(current => {
@@ -444,7 +541,7 @@ function ArticleTableOfContents({ items }) {
         )}
       </div>
 
-      <nav className="article-toc-scroll mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1" aria-label="文章目录" tabIndex={0}>
+      <nav ref={tocScrollRef} className="article-toc-scroll mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1" aria-label="文章目录" tabIndex={0}>
         <ul className="space-y-0.5">
           {tree.map(node => (
             <TocTreeItem
@@ -471,7 +568,7 @@ function TocTreeItem({ node, depth, activeId, collapsedIds, toggleBranch, handle
 
   return (
     <li>
-      <div className={`flex items-start rounded-lg transition-colors ${active ? 'bg-indigo-50 dark:bg-indigo-500/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800/80'}`} style={{ paddingInlineStart: `${Math.min(depth, 4) * 0.7}rem` }}>
+      <div className={`article-toc-row flex items-start rounded-lg transition-colors ${active ? 'bg-indigo-50 dark:bg-indigo-500/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800/80'}`} style={{ paddingInlineStart: `${Math.min(depth, 4) * 0.7}rem` }}>
         {hasChildren ? (
           <button
             type="button"
@@ -566,6 +663,23 @@ export function buildTocTree(items) {
     stack.push(node)
   }
   return roots
+}
+
+export function findActiveHeadingIndex(offsets, readingPosition) {
+  if (!offsets.length) return -1
+  let low = 0
+  let high = offsets.length - 1
+  let active = 0
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2)
+    if (offsets[middle] <= readingPosition) {
+      active = middle
+      low = middle + 1
+    } else {
+      high = middle - 1
+    }
+  }
+  return active
 }
 
 function collectBranchIds(nodes) {
