@@ -13,7 +13,7 @@ import {
   LockKeyhole,
   Share2,
 } from 'lucide-react'
-import { isValidElement, useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react'
+import { isValidElement, useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Link, useParams } from 'react-router-dom'
 import rehypeKatex from 'rehype-katex'
@@ -198,6 +198,7 @@ function ArticleTableOfContents({ items }: { items: TocItem[] }) {
   const tree = useMemo(() => buildTocTree(items), [items])
   const branchIds = useMemo(() => collectBranchIds(tree), [tree])
   const ancestorMap = useMemo(() => buildAncestorMap(tree), [tree])
+  const scrollRef = useRef<HTMLElement>(null)
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
   const [activeId, setActiveId] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -212,21 +213,85 @@ function ArticleTableOfContents({ items }: { items: TocItem[] }) {
     const headings = items
       .map((item) => document.getElementById(item.id))
       .filter((heading): heading is HTMLElement => Boolean(heading))
-    if (headings.length === 0 || typeof IntersectionObserver === 'undefined') return undefined
+    const root = document.querySelector<HTMLElement>('.content-scroll')
+    if (headings.length === 0 || !root) return undefined
 
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)
-      const nextId = (visible[0]?.target as HTMLElement | undefined)?.id
+    let headingOffsets: number[] = []
+    let updateFrame = 0
+    let measureFrame = 0
+    let disposed = false
+
+    const activateHeading = () => {
+      updateFrame = 0
+      if (disposed || headingOffsets.length === 0) return
+
+      const atBottom = root.scrollTop + root.clientHeight >= root.scrollHeight - 2
+      const readingOffset = Math.min(Math.max(root.clientHeight * 0.18, 72), 160)
+      const index = atBottom
+        ? headings.length - 1
+        : findActiveHeadingIndex(headingOffsets, root.scrollTop + readingOffset)
+      const nextId = headings[index]?.id
       if (!nextId) return
-      setActiveId(nextId)
-      setCollapsedIds((current) => removeCollapsedAncestors(current, ancestorMap.get(nextId) ?? []))
-    }, { root: document.querySelector('.content-scroll'), rootMargin: '-8% 0px -72% 0px', threshold: [0, 1] })
 
-    headings.forEach((heading) => observer.observe(heading))
-    return () => observer.disconnect()
+      setActiveId((current) => current === nextId ? current : nextId)
+      setCollapsedIds((current) => removeCollapsedAncestors(current, ancestorMap.get(nextId) ?? []))
+    }
+
+    const scheduleUpdate = () => {
+      if (disposed) return
+      if (!updateFrame) updateFrame = window.requestAnimationFrame(activateHeading)
+    }
+
+    const measureHeadings = () => {
+      measureFrame = 0
+      if (disposed) return
+      const rootTop = root.getBoundingClientRect().top
+      headingOffsets = headings.map((heading) => heading.getBoundingClientRect().top - rootTop + root.scrollTop)
+      scheduleUpdate()
+    }
+
+    const scheduleMeasure = () => {
+      if (disposed) return
+      if (!measureFrame) measureFrame = window.requestAnimationFrame(measureHeadings)
+    }
+
+    root.addEventListener('scroll', scheduleUpdate, { passive: true })
+    window.addEventListener('resize', scheduleMeasure, { passive: true })
+
+    const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleMeasure)
+    const articleBody = headings[0].closest('.markdown-body')
+    if (articleBody) resizeObserver?.observe(articleBody)
+    void document.fonts?.ready.then(scheduleMeasure)
+    scheduleMeasure()
+
+    return () => {
+      disposed = true
+      root.removeEventListener('scroll', scheduleUpdate)
+      window.removeEventListener('resize', scheduleMeasure)
+      resizeObserver?.disconnect()
+      if (updateFrame) window.cancelAnimationFrame(updateFrame)
+      if (measureFrame) window.cancelAnimationFrame(measureFrame)
+    }
   }, [ancestorMap, items])
+
+  useEffect(() => {
+    const navigation = scrollRef.current
+    if (!navigation || navigation.clientHeight === 0) return undefined
+
+    const frame = window.requestAnimationFrame(() => {
+      const activeRow = navigation.querySelector<HTMLElement>('[aria-current="location"]')?.closest<HTMLElement>('.article-toc-row')
+      if (!activeRow) return
+
+      const navigationRect = navigation.getBoundingClientRect()
+      const rowRect = activeRow.getBoundingClientRect()
+      const topOverflow = rowRect.top - navigationRect.top
+      const bottomOverflow = rowRect.bottom - navigationRect.bottom
+      if (topOverflow < 0) navigation.scrollTop += topOverflow
+      else if (bottomOverflow > 0) navigation.scrollTop += bottomOverflow
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [activeId, collapsedIds, mobileOpen])
 
   const toggleBranch = (id: string) => {
     setCollapsedIds((current) => {
@@ -276,7 +341,7 @@ function ArticleTableOfContents({ items }: { items: TocItem[] }) {
           <ChevronDown size={18} />
         </button>
       </div>
-      <nav id="article-toc-navigation" className="article-toc-scroll" aria-label="文章目录" tabIndex={0}>
+      <nav ref={scrollRef} id="article-toc-navigation" className="article-toc-scroll" aria-label="文章目录" tabIndex={0}>
         <ul>
           {tree.map((node) => (
             <TocTreeItem
@@ -417,6 +482,24 @@ function removeCollapsedAncestors(current: Set<string>, ancestors: string[]) {
   const next = new Set(current)
   ancestors.forEach((id) => next.delete(id))
   return next
+}
+
+export function findActiveHeadingIndex(offsets: number[], readingPosition: number): number {
+  if (offsets.length === 0) return -1
+
+  let low = 0
+  let high = offsets.length - 1
+  let active = 0
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2)
+    if (offsets[middle] <= readingPosition) {
+      active = middle
+      low = middle + 1
+    } else {
+      high = middle - 1
+    }
+  }
+  return active
 }
 
 function childrenToText(children: ReactNode): string {

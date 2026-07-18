@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildToc, buildTocTree } from './ArticleDetailPage'
+import { buildToc, buildTocTree, findActiveHeadingIndex } from './ArticleDetailPage'
 
 describe('desktop article table of contents', () => {
   it('builds unique H2-H6 entries and ignores fenced code blocks', () => {
@@ -39,5 +39,16 @@ describe('desktop article table of contents', () => {
     expect(tree[0].children.map((node) => node.id)).toEqual(['a-1', 'a-2'])
     expect(tree[0].children[0].children[0].id).toBe('a-1-1')
     expect(tree[1].id).toBe('b')
+  })
+
+  it('selects the last heading that has crossed the reading position', () => {
+    const offsets = [320, 760, 1420, 2200]
+
+    expect(findActiveHeadingIndex([], 500)).toBe(-1)
+    expect(findActiveHeadingIndex(offsets, 0)).toBe(0)
+    expect(findActiveHeadingIndex(offsets, 759)).toBe(0)
+    expect(findActiveHeadingIndex(offsets, 760)).toBe(1)
+    expect(findActiveHeadingIndex(offsets, 1900)).toBe(2)
+    expect(findActiveHeadingIndex(offsets, 9999)).toBe(3)
   })
 })
