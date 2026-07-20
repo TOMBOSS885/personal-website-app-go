@@ -123,6 +123,7 @@ function replaceInlineDelimiters(value) {
   return value
     .replace(/\\\[([^\n]+?)\\\]/g, (_match, formula) => `$$${formula}$$`)
     .replace(/\\\(([^\n]+?)\\\)/g, (_match, formula) => `$${formula}$`)
+    .replace(/(^|[^\w!\\\]])\((?=[^()\n]{0,240}\\[A-Za-z]+)([^()\n]{1,240})\)/g, (_match, prefix, formula) => `${prefix}$${formula}$`)
 }
 
 function leadingWhitespace(value) {

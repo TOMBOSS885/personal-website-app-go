@@ -11,6 +11,7 @@ import OptimizedImage from '../components/OptimizedImage'
 import CommentSection from '../components/CommentSection'
 import { useUserAuth } from '../contexts/UserAuthContext'
 import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
+import { remarkGithubAlerts, remarkSafeHtml } from '../utils/markdownPlugins'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
@@ -273,6 +274,7 @@ export default function ArticleDetailPage() {
                   sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock allow-popups allow-downloads allow-presentation"
                   allow="autoplay; fullscreen; picture-in-picture"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
                   className="h-[75vh] min-h-[480px] w-full rounded-2xl border-0 bg-white md:min-h-[620px]"
                 />
               ) : (
@@ -283,12 +285,14 @@ export default function ArticleDetailPage() {
             ) : (
             <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="article-content">
               <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath]}
+                remarkPlugins={[remarkGfm, remarkMath, remarkSafeHtml, remarkGithubAlerts]}
                 rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}
                 components={{
-                  a: ({ node, ...props }) => (
-                    <a {...props} target="_blank" rel="noopener noreferrer" />
-                  ),
+                  a: ({ node, href, children, ...props }) => {
+                    if (!isSafeMarkdownHref(href)) return <span>{children}</span>
+                    const external = /^https?:\/\//i.test(href || '')
+                    return <a {...props} href={href} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer nofollow' : undefined}>{children}</a>
+                  },
                   table: ({ node, ...props }) => (
                     <div className="article-table-wrap">
                       <table {...props} />
@@ -731,4 +735,11 @@ function slugify(text) {
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
   return slug || 'section'
+}
+
+function isSafeMarkdownHref(href) {
+  if (!href) return false
+  const value = String(href).trim()
+  if (value.startsWith('#') || (value.startsWith('/') && !value.startsWith('//')) || value.startsWith('./') || value.startsWith('../')) return true
+  return /^(?:https?:|mailto:|tel:)/i.test(value)
 }

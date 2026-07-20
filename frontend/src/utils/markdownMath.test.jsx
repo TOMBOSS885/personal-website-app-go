@@ -60,4 +60,18 @@ S/N(dB)
     expect(html).toContain('katex-display')
     expect(html).toContain('katex-html')
   })
+
+  it('normalizes common parenthesized TeX without changing ordinary prose or code', () => {
+    const input = [
+      String.raw`(\varepsilon) and ({\varepsilon}) and (a\in\Sigma)`,
+      'ordinary (a) text',
+      'Code: `(a\\in\\Sigma)`',
+    ].join('\n')
+    const normalized = normalizeMarkdownMath(input)
+
+    expect(normalized).toContain(String.raw`$\varepsilon$`)
+    expect(normalized).toContain(String.raw`$a\in\Sigma$`)
+    expect(normalized).toContain('ordinary (a) text')
+    expect(normalized).toContain('`(a\\in\\Sigma)`')
+  })
 })
