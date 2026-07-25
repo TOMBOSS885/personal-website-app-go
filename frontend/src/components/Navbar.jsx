@@ -156,11 +156,12 @@ export default function Navbar({ profile, clientDownload }) {
               {!userLoading && !user && (
                 <Link
                   to={`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
-                  className="hidden h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600 transition-colors hover:bg-indigo-100 dark:border-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-300 dark:hover:bg-indigo-900/70 sm:flex"
+                  className="hidden h-10 items-center justify-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-600 px-2.5 text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-indigo-400/20 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:ring-offset-slate-900 sm:inline-flex md:px-3.5"
                   title="登录"
                   aria-label="登录"
                 >
-                  <LogIn className="h-5 w-5" />
+                  <LogIn className="h-5 w-5 shrink-0" />
+                  <span className="hidden text-sm font-semibold md:inline">登录</span>
                 </Link>
               )}
 
