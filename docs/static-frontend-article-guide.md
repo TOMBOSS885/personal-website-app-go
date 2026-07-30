@@ -49,12 +49,12 @@ npm run build
 - 静态页面运行在 sandbox iframe 中，可以执行脚本、表单、弹窗、下载、全屏和音视频。
 - 为防止静态代码读取主站后台 token，不开放 `allow-same-origin`，因此静态页面不能使用主站的 Cookie、localStorage 或直接操作父页面。
 - 静态资源必须通过短期签名 URL 读取；`/uploads/article-sites` 直链被禁止，加锁文章不能通过文件地址绕过。
-- 静态前端签名默认有效 3600 秒，可通过 `ARTICLE_SITE_URL_TTL_SECONDS` 调整，允许范围为 300 至 86400 秒；较长时间运行且大量使用懒加载的应用可以适当增加。
+- 静态前端签名默认有效 3600 秒，可通过 `config/config.php` 中的 `article_site_url_ttl_seconds` 调整，允许范围为 300 至 86400 秒；加锁文章最长为 600 秒。
 - ZIP 会检查路径穿越、软链接、隐藏目录、文件类型、文件数量和解压总大小。
-- HTML 单文件最大 10 MB，其他单文件最大 256 MB，避免异常压缩包在访问时占用过多内存。
-- 资源地址会先完成 HMAC 验签，再读取文章状态；校验结果采用 Go 内存 L1、Redis L2、MySQL 最终校验的三级策略。文章更新、下架、换包或删除时会同步失效内存与 Redis 缓存；Redis 不可用时自动回退到短时内存缓存和 MySQL，不影响访问正确性。
+- HTML 单文件最大 2 MB，其他单文件最大 16 MB，避免共享主机解压或响应时占用过多资源。
+- 资源地址会先完成 HMAC 验签，再从 MySQL 检查文章状态和版本；不依赖 Go、Redis、常驻进程或定时任务。
 - 签名地址按短时间窗口复用，同一版本文章反复打开时可继续使用浏览器缓存，不会因为每次请求的秒数不同而重复下载全部静态资源。
-- 替换静态包或删除文章时会清理旧包；未保存的孤立包超过 24 小时后由维护任务清理。
+- 替换静态包或删除文章时会清理旧包；未保存的孤立包超过 24 小时后会在下一次上传时顺带清理。
 
 ## 上传限制
 
@@ -74,9 +74,9 @@ ALTER TABLE articles
   ADD INDEX idx_articles_content_type (content_type);
 
 ALTER TABLE upload_settings
-  ADD COLUMN article_site_zip_max_mb INT DEFAULT 30,
-  ADD COLUMN article_site_total_mb INT DEFAULT 100,
-  ADD COLUMN article_site_file_count INT DEFAULT 1000;
+  ADD COLUMN article_site_zip_max_mb INT DEFAULT 12,
+  ADD COLUMN article_site_total_mb INT DEFAULT 40,
+  ADD COLUMN article_site_file_count INT DEFAULT 400;
 ```
 
 ## 宝塔自定义 Nginx 注意事项
@@ -93,4 +93,4 @@ location ^~ /uploads/article-sites/ {
 }
 ```
 
-浏览器应只通过 `/api/public/article-sites/...` 访问静态前端资源，不要为 `article-sites` 单独配置公开目录。
+浏览器应只通过 PHP 的 `/api/public/article-sites/...` 访问静态前端资源，不要为 `article-sites` 单独配置公开目录。

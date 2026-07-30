@@ -6,8 +6,21 @@ frontend/node_modules/
 
 # Build output
 frontend/dist/
+desktop/dist/
+l2d-widget/dist/
+backend/target/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/schemas/
+desktop/output/
+output/
+release/
 go_back/personal-website-api
 go_back/*.exe
+*.tsbuildinfo
+
+# Local test and browser artifacts
+.playwright-cli/
+**/.playwright-cli/
 
 # IDE
 .idea/

@@ -1,6 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { preloadImage, resolveAssetUrl } from '../utils/assets'
-import { cancelIdle, fetchWithTimeout, isConstrainedConnection, isLowEndDevice, requestIdle } from '../utils/network'
+import {
+  cancelIdle,
+  fetchWithTimeout,
+  isConstrainedConnection,
+  isLowEndDevice,
+  requestIdle,
+} from '../utils/network'
 
 const API_BASE = ''
 
@@ -10,12 +15,15 @@ export default function Live2DWidget() {
   useEffect(() => {
     let cancelled = false
     let idleHandle = null
-    let retryTimer = null
-    let retryCount = 0
+    let startTimer = null
+    let removeLoadListener = null
+
+    const constrained = isConstrainedConnection()
+    const lowEnd = isLowEndDevice()
 
     async function loadModel() {
       try {
-        const res = await fetchWithTimeout(`${API_BASE}/api/public/live2d-model`, {}, 7000)
+        const res = await fetchWithTimeout(`${API_BASE}/api/public/live2d-model`, { priority: 'low' }, 12000)
         if (!res.ok) {
           return
         }
@@ -31,23 +39,10 @@ export default function Live2DWidget() {
           return
         }
 
-        const constrained = isConstrainedConnection()
-        const lowEnd = isLowEndDevice()
         const selectedModels = constrained || lowEnd ? models.slice(0, 1) : models
-        const prewarmed = await prewarmLive2DModels(selectedModels)
-        if (!prewarmed) {
-          if (retryCount < 2) {
-            retryCount += 1
-            retryTimer = window.setTimeout(() => {
-              if (!cancelled) {
-                void loadModel()
-              }
-            }, constrained ? 12000 : 5000)
-          }
-          return
-        }
 
-        const { createWidget } = await import('l2d-widget')
+        const engine = await import('l2d-widget')
+        const { createWidget } = engine
         if (cancelled) {
           return
         }
@@ -130,17 +125,39 @@ export default function Live2DWidget() {
       }
     }
 
-    idleHandle = requestIdle(() => {
-      void loadModel()
-    }, isConstrainedConnection() ? 3000 : 1200)
+    function scheduleLoad() {
+      if (cancelled) return
+
+      // Live2D is decorative. Keep its network, parsing, and WebGL work out of
+      // the critical path so the page is interactive before the model starts.
+      const delay = constrained || lowEnd ? 2500 : 1000
+      startTimer = window.setTimeout(() => {
+        idleHandle = requestIdle(() => {
+          idleHandle = null
+          void loadModel()
+        }, constrained || lowEnd ? 5000 : 2500)
+      }, delay)
+    }
+
+    if (document.readyState === 'complete') {
+      scheduleLoad()
+    } else {
+      const onLoad = () => {
+        removeLoadListener = null
+        scheduleLoad()
+      }
+      window.addEventListener('load', onLoad, { once: true })
+      removeLoadListener = () => window.removeEventListener('load', onLoad)
+    }
 
     return () => {
       cancelled = true
-      if (idleHandle) {
-        cancelIdle(idleHandle)
+      removeLoadListener?.()
+      if (startTimer) {
+        window.clearTimeout(startTimer)
       }
-      if (retryTimer) {
-        window.clearTimeout(retryTimer)
+      if (idleHandle !== null) {
+        cancelIdle(idleHandle)
       }
       if (widgetRef.current) {
         widgetRef.current.destroy()
@@ -150,60 +167,6 @@ export default function Live2DWidget() {
   }, [])
 
   return null
-}
-
-async function prewarmLive2DModels(models) {
-  if (!Array.isArray(models) || models.length === 0) {
-    return false
-  }
-  const results = await Promise.allSettled(models.slice(0, 1).map(prewarmLive2DModel))
-  return results.some(result => result.status === 'fulfilled' && result.value)
-}
-
-async function prewarmLive2DModel(model) {
-  if (!model?.modelPath) {
-    return false
-  }
-  const modelUrl = resolveAssetUrl(model.modelPath)
-  const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), 12000)
-
-  try {
-    const res = await fetch(modelUrl, {
-      cache: 'force-cache',
-      signal: controller.signal,
-    })
-    if (!res.ok) {
-      return false
-    }
-    const modelJson = await res.json()
-    const textures = getLive2DTextureUrls(modelJson, modelUrl)
-    if (textures.length === 0) {
-      return true
-    }
-    const textureResults = await Promise.allSettled(
-      textures.slice(0, 4).map(src => preloadImage(src, { timeout: 12000 }))
-    )
-    return textureResults.some(result => result.status === 'fulfilled' && result.value)
-  } catch (err) {
-    console.warn('Live2D prewarm failed:', err)
-    return false
-  } finally {
-    window.clearTimeout(timer)
-  }
-}
-
-function getLive2DTextureUrls(modelJson, modelUrl) {
-  const refs = modelJson?.FileReferences || {}
-  const textures = Array.isArray(refs.Textures)
-    ? refs.Textures
-    : Array.isArray(modelJson?.textures)
-      ? modelJson.textures
-      : []
-
-  return textures
-    .filter(item => typeof item === 'string' && item.trim())
-    .map(item => resolveAssetUrl(item, modelUrl))
 }
 
 function splitLines(value) {

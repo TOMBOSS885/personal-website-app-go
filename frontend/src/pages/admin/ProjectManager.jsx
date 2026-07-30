@@ -19,20 +19,12 @@ export default function ProjectManager() {
     displayOrder: 0 
   })
 
-  const token = sessionStorage.getItem('token')
-
   useEffect(() => { fetchProjects() }, [])
 
   const fetchProjects = async () => {
     setLoading(true)
     try {
-      const tokenValue = sessionStorage.getItem('token')
-      const headers = {}
-      if (tokenValue) {
-        headers['Authorization'] = `Bearer ${tokenValue}`
-      }
-      
-      const res = await fetch(`${API_BASE}/api/admin/projects`, { headers })
+      const res = await fetch(`${API_BASE}/api/admin/projects`)
       
       if (!res.ok) {
         console.error('获取项目列表失败:', res.status, res.statusText)
@@ -73,7 +65,7 @@ export default function ProjectManager() {
     try {
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           ...form, 
           displayOrder: Number(form.displayOrder) 
@@ -113,8 +105,7 @@ export default function ProjectManager() {
     if (!confirm('确定要删除这个项目吗？')) return
     try {
       await fetch(`${API_BASE}/api/admin/projects/${id}`, { 
-        method: 'DELETE', 
-        headers: { 'Authorization': `Bearer ${token}` } 
+        method: 'DELETE'
       })
       fetchProjects()
     } catch (err) {

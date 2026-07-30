@@ -1,40 +1,38 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, LogIn, Share2, Tag } from 'lucide-react'
+import 'katex/dist/katex.min.css'
+import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, Share2, Tag } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
 import OptimizedImage from '../components/OptimizedImage'
-import CommentSection from '../components/CommentSection'
-import { useUserAuth } from '../contexts/UserAuthContext'
 import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
 import { remarkGithubAlerts, remarkSafeHtml } from '../utils/markdownPlugins'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
-  const { user, loading: authLoading, authFetch, openLogin } = useUserAuth()
   const [article, setArticle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [shareStatus, setShareStatus] = useState('idle')
   const [password, setPassword] = useState('')
   const [unlocking, setUnlocking] = useState(false)
   const [unlockError, setUnlockError] = useState('')
-  const tocItems = useMemo(() => buildToc(article?.content || ''), [article?.content])
+  const isStaticArticle = article?.contentType === 'static'
+  const tocItems = useMemo(() => buildToc(isStaticArticle ? '' : article?.content || ''), [article?.content, isStaticArticle])
   const headingIdsByLine = useMemo(() => new Map(
     parseToc(article?.content || '').map(item => [item.sourceLine, item.id]),
   ), [article?.content])
-  const renderedContent = useMemo(() => normalizeMarkdownMath(article?.content || ''), [article?.content])
+  const renderedContent = useMemo(() => normalizeMarkdownMath(isStaticArticle ? '' : article?.content || ''), [article?.content, isStaticArticle])
 
   useEffect(() => {
-    if (authLoading) return undefined
     let active = true
     setLoading(true)
     setPassword('')
     setUnlockError('')
-    authFetch(`/api/public/articles/${id}`)
+    fetch(`/api/public/articles/${id}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (active) {
@@ -49,7 +47,7 @@ export default function ArticleDetailPage() {
         }
       })
     return () => { active = false }
-  }, [id, authLoading, authFetch, user?.id])
+  }, [id])
 
   const handleShare = async () => {
     const shareUrl = window.location.href
@@ -82,7 +80,7 @@ export default function ArticleDetailPage() {
     setUnlocking(true)
     setUnlockError('')
     try {
-      const res = await authFetch(`/api/public/articles/${id}/unlock`, {
+      const res = await fetch(`/api/public/articles/${id}/unlock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password })
@@ -130,40 +128,6 @@ export default function ArticleDetailPage() {
             <ArrowLeft className="h-4 w-4" />
             返回博客
           </Link>
-        </div>
-      </div>
-    )
-  }
-
-  if (article.loginRequired || (article.requiresLogin && !user)) {
-    return (
-      <div className="min-h-screen bg-transparent px-4 pb-12 pt-28">
-        <div className="mx-auto max-w-3xl rounded-3xl border border-white/60 bg-white/80 p-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/70 md:p-8">
-          <Link to="/blog" className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-100">
-            <ArrowLeft className="h-4 w-4" />
-            返回
-          </Link>
-          <div className="flex flex-col items-start gap-6 sm:flex-row">
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
-              <LogIn className="h-7 w-7" />
-            </div>
-            <div className="min-w-0 flex-1">
-              {article.category && (
-                <span className="mb-3 inline-block rounded-md bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-200">{article.category}</span>
-              )}
-              <h1 className="text-3xl font-bold leading-tight text-gray-900 dark:text-slate-100 md:text-4xl">{article.title}</h1>
-              {article.summary && <p className="mt-3 text-gray-600 dark:text-slate-300">{article.summary}</p>}
-              <p className="mt-5 text-sm leading-relaxed text-gray-500 dark:text-slate-400">作者已将这篇文章设为登录后可查看。登录后即可阅读正文并参与评论。</p>
-              <button
-                type="button"
-                onClick={() => openLogin(`/blog/${id}`)}
-                className="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 font-medium text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
-              >
-                <LogIn className="h-4 w-4" />
-                登录后查看
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     )
@@ -264,9 +228,9 @@ export default function ArticleDetailPage() {
         transition={{ delay: 0.2 }}
         className="mx-auto max-w-[92rem] px-4 pb-12 pt-8"
       >
-        <div className={article.contentType === 'static' ? '' : 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem]'}>
-          <div className={`rounded-3xl border border-white/60 bg-white/75 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 ${article.contentType === 'static' ? 'mx-auto max-w-[80rem] p-2 md:p-3' : 'px-5 py-6 md:px-8 md:py-8 lg:col-start-2'}`}>
-            {article.contentType === 'static' ? (
+        <div className={isStaticArticle ? '' : 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem]'}>
+          <div className={`rounded-3xl border border-white/60 bg-white/75 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 ${isStaticArticle ? 'mx-auto max-w-[80rem] p-2 md:p-3' : 'px-5 py-6 md:px-8 md:py-8 lg:col-start-2'}`}>
+            {isStaticArticle ? (
               article.staticSiteUrl ? (
                 <iframe
                   title={article.title}
@@ -278,12 +242,10 @@ export default function ArticleDetailPage() {
                   className="h-[75vh] min-h-[480px] w-full rounded-2xl border-0 bg-white md:min-h-[620px]"
                 />
               ) : (
-                <div className="flex min-h-[420px] items-center justify-center rounded-2xl bg-gray-50 px-6 text-center text-gray-500 dark:bg-slate-900 dark:text-slate-400">
-                  静态前端资源暂时不可用，请稍后重试。
-                </div>
+                <div className="flex min-h-[420px] items-center justify-center rounded-2xl bg-gray-50 px-6 text-center text-gray-500 dark:bg-slate-900 dark:text-slate-400">静态前端资源暂时不可用，请稍后重试。</div>
               )
             ) : (
-            <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="article-content">
+              <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="article-content">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm, remarkMath, remarkSafeHtml, remarkGithubAlerts]}
                 rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}
@@ -320,18 +282,16 @@ export default function ArticleDetailPage() {
               >
                 {renderedContent}
               </ReactMarkdown>
-            </motion.article>
+              </motion.article>
             )}
           </div>
 
-          {article.contentType !== 'static' && tocItems.length > 0 && (
+          {!isStaticArticle && tocItems.length > 0 && (
             <aside className="hidden lg:col-start-3 lg:block">
               <ArticleTableOfContents items={tocItems} />
             </aside>
           )}
         </div>
-
-        {article.contentType !== 'static' && <CommentSection articleId={article.id || id} />}
 
         {article.tags && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="mt-12 border-t border-gray-100 pt-8 dark:border-slate-800">

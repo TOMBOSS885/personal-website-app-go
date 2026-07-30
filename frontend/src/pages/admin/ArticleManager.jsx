@@ -1,571 +1,178 @@
-import { lazy, Suspense, useState, useEffect, useRef } from 'react'
-import { motion } from 'framer-motion'
-import { Plus, Edit2, Trash2, X, FileText, Tag, Calendar, Check, Loader, Save, Eye, Hash, UploadCloud, Image as ImageIcon, RefreshCw, ChevronLeft, ChevronRight, Lock, Code2, FileArchive, UserRoundCheck, Globe2 } from 'lucide-react'
-import OptimizedImage from '../../components/OptimizedImage'
+import { useEffect, useRef, useState } from 'react'
+import { Code2, Edit2, FileArchive, FileText, Image, Loader, Lock, Plus, Save, Trash2, Upload, UploadCloud, X } from 'lucide-react'
+import RichTextEditor from '../../components/RichTextEditor'
+import { optimizeCoverImage } from '../../utils/imageCompression'
 
-const API_BASE = ''
-const RichTextEditor = lazy(() => import('../../components/RichTextEditor'))
-const NEW_ARTICLE_DRAFT_KEY = 'article-draft-new'
-const MAX_PERSISTED_DRAFT_BYTES = 2 * 1024 * 1024
-const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const emptyForm = {
+  title: '', summary: '', content: '', category: '', tags: '', coverImage: '',
+  published: true, contentType: 'markdown', staticSiteKey: '', staticSiteName: '',
+  isLocked: false, accessPassword: '',
+}
+const DRAFT_KEY = 'php-shared-host:article-draft'
 
 export default function ArticleManager() {
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState(0)
-  const [size, setSize] = useState(20)
-  const [total, setTotal] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadingSite, setUploadingSite] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingArticle, setEditingArticle] = useState(null)
-  const [showCoverPicker, setShowCoverPicker] = useState(false)
-  const [coverImages, setCoverImages] = useState([])
-  const [loadingCoverImages, setLoadingCoverImages] = useState(false)
-  const [uploadingCover, setUploadingCover] = useState(false)
-  const [cleaningCoverImages, setCleaningCoverImages] = useState(false)
-  const [draftNotice, setDraftNotice] = useState('')
-  const [uploadingSite, setUploadingSite] = useState(false)
-  const [selectedIds, setSelectedIds] = useState(() => new Set())
-  const [batchUpdating, setBatchUpdating] = useState(false)
-  const coverFileInputRef = useRef(null)
+  const [form, setForm] = useState(emptyForm)
+  const fileInputRef = useRef(null)
   const siteFileInputRef = useRef(null)
-  const listRequestRef = useRef(null)
-  const [form, setForm] = useState({ 
-    title: '', 
-    summary: '', 
-    content: '', 
-    category: '', 
-    tags: [], 
-    published: true,
-    coverImage: '',
-    contentType: 'markdown',
-    staticSiteKey: '',
-    staticSiteName: '',
-    requiresLogin: false,
-    isLocked: false,
-    accessPassword: ''
-  })
-
-  const token = sessionStorage.getItem('token')
-  const totalPages = Math.max(1, Math.ceil(total / size))
-
-  useEffect(() => {
-    fetchArticles()
-    setSelectedIds(new Set())
-  }, [page, size])
-
-  useEffect(() => {
-    if (!showModal) return undefined
-    const key = getDraftKey(editingArticle)
-    const timer = window.setTimeout(() => {
-      try {
-        const serialized = JSON.stringify({ ...draftSafeForm(form), savedAt: Date.now() })
-        if (new Blob([serialized]).size > MAX_PERSISTED_DRAFT_BYTES) {
-          setDraftNotice('文章较长，已暂停本地自动保存')
-          return
-        }
-        sessionStorage.setItem(key, serialized)
-        setDraftNotice(`已在当前会话保存 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`)
-      } catch {
-        setDraftNotice('本地自动保存不可用')
-      }
-    }, 700)
-    return () => window.clearTimeout(timer)
-  }, [form, showModal, editingArticle])
 
   const fetchArticles = async () => {
-    listRequestRef.current?.abort()
-    const controller = new AbortController()
-    listRequestRef.current = controller
     setLoading(true)
     try {
-      const tokenValue = sessionStorage.getItem('token')
-      const headers = {}
-      if (tokenValue) {
-        headers['Authorization'] = `Bearer ${tokenValue}`
-      }
-      
-      const res = await fetch(`${API_BASE}/api/admin/articles?page=${page}&size=${size}`, { headers, signal: controller.signal })
-      
-      if (!res.ok) {
-        console.error('获取文章列表失败:', res.status)
-        setArticles([])
-        return
-      }
-      
-      const text = await res.text()
-      let data
-      try {
-        data = JSON.parse(text)
-      } catch {
-        console.error('文章列表返回了无效数据')
-        setArticles([])
-        return
-      }
-      
-      setArticles(Array.isArray(data) ? data : (data.content || []))
-      setTotal(Number(data.totalElements || 0))
-    } catch (err) {
-      if (err.name === 'AbortError') return
-      console.error('获取文章列表失败:', err)
-      setArticles([])
+      const response = await fetch('/api/admin/articles?page=0&size=100')
+      const data = await response.json().catch(() => ({}))
+      setArticles(response.ok ? (data.content || []) : [])
     } finally {
-      if (listRequestRef.current === controller) setLoading(false)
+      setLoading(false)
     }
   }
 
-  const fetchCoverImages = async () => {
-    setLoadingCoverImages(true)
-    try {
-      const tokenValue = sessionStorage.getItem('token')
-      const headers = tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {}
-      const res = await fetch(`${API_BASE}/api/admin/article-images`, { headers })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setCoverImages(Array.isArray(data) ? data : [])
-    } catch (err) {
-      console.error('获取封面图库失败:', err)
-      setCoverImages([])
-    } finally {
-      setLoadingCoverImages(false)
-    }
+  useEffect(() => { void fetchArticles() }, [])
+
+  useEffect(() => {
+    if (!showModal || editingArticle) return undefined
+    const timer = window.setTimeout(() => {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ ...form, savedAt: Date.now() }))
+    }, 500)
+    return () => window.clearTimeout(timer)
+  }, [editingArticle, form, showModal])
+
+  const openCreate = () => {
+    let draft = null
+    try { draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null') } catch { draft = null }
+    setEditingArticle(null)
+    setForm(draft ? { ...emptyForm, ...draft } : emptyForm)
+    setShowModal(true)
   }
 
-  const openCoverPicker = () => {
-    setShowCoverPicker(true)
-    fetchCoverImages()
+  const openEdit = article => {
+    setEditingArticle(article)
+    setForm({
+      ...emptyForm,
+      ...article,
+      tags: article.tags || '',
+      accessPassword: '',
+    })
+    setShowModal(true)
   }
 
-  const uploadCoverImage = async (file) => {
+  const closeModal = () => {
+    setShowModal(false)
+    setEditingArticle(null)
+    setForm(emptyForm)
+  }
+
+  const uploadCover = async file => {
     if (!file) return
-
-    setUploadingCover(true)
+    setUploading(true)
     try {
-      const tokenValue = sessionStorage.getItem('token')
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const res = await fetch(`${API_BASE}/api/admin/article-images`, {
-        method: 'POST',
-        headers: tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {},
-        body: formData
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || `HTTP ${res.status}`)
-      }
-
-      const image = await res.json()
-      setForm(current => ({ ...current, coverImage: image.url }))
-      setCoverImages(current => [image, ...current])
-    } catch (err) {
-      console.error('上传封面图片失败:', err)
-      alert('封面图片上传失败，请确认文件是 jpg、png、gif 或 webp，且大小不超过 10MB')
+      const optimizedFile = await optimizeCoverImage(file)
+      const body = new FormData()
+      body.append('file', optimizedFile)
+      const response = await fetch('/api/admin/article-images', { method: 'POST', body })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || '封面上传失败')
+      setForm(current => ({ ...current, coverImage: data.url }))
+    } catch (error) {
+      alert(error.message || '封面上传失败')
     } finally {
-      setUploadingCover(false)
-      if (coverFileInputRef.current) {
-        coverFileInputRef.current.value = ''
-      }
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
-  const cleanupCoverImages = async () => {
-    setCleaningCoverImages(true)
-    try {
-      const tokenValue = sessionStorage.getItem('token')
-      const res = await fetch(`${API_BASE}/api/admin/upload-assets/cleanup?kind=article_image`, {
-        method: 'POST',
-        headers: tokenValue ? { Authorization: `Bearer ${tokenValue}` } : {},
-      })
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || `HTTP ${res.status}`)
-      }
-      const data = await res.json()
-      await fetchCoverImages()
-      alert(`已清理 ${data.removed || 0} 条失效图片记录`)
-    } catch (err) {
-      alert(`清理失效图片失败: ${err.message}`)
-    } finally {
-      setCleaningCoverImages(false)
-    }
-  }
-
-  const selectCoverImage = (url) => {
-    setForm(current => ({ ...current, coverImage: url }))
-    setShowCoverPicker(false)
-  }
-
-  const uploadArticleSite = async (file) => {
+  const uploadArticleSite = async file => {
     if (!file) return
     setUploadingSite(true)
     try {
       const body = new FormData()
       body.append('file', file)
-      const res = await fetch(`${API_BASE}/api/admin/article-sites`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body,
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.message || '静态前端上传失败')
+      const response = await fetch('/api/admin/article-sites', { method: 'POST', body })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || '静态前端上传失败')
       setForm(current => ({
         ...current,
         contentType: 'static',
         staticSiteKey: data.siteKey,
         staticSiteName: data.name || file.name,
       }))
-    } catch (err) {
-      alert(err.message || '静态前端上传失败')
+    } catch (error) {
+      alert(error.message || '静态前端上传失败')
     } finally {
       setUploadingSite(false)
       if (siteFileInputRef.current) siteFileInputRef.current.value = ''
     }
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (form.isLocked && !form.accessPassword && !editingArticle?.isLocked) {
-      alert('请先设置文章访问密码')
+  const handleSubmit = async event => {
+    event.preventDefault()
+    if (!form.title.trim()) {
+      alert('标题不能为空')
+      return
+    }
+    if (form.contentType !== 'static' && !form.content.trim()) {
+      alert('Markdown 正文不能为空')
       return
     }
     if (form.contentType === 'static' && !form.staticSiteKey) {
-      alert('请先上传静态前端 ZIP')
+      alert('请先上传包含 index.html 的静态前端 ZIP')
+      return
+    }
+    if (form.isLocked && !editingArticle?.isLocked && !form.accessPassword) {
+      alert('请为加锁文章设置访问密码')
       return
     }
     setSaving(true)
-    
-    const url = editingArticle
-      ? `${API_BASE}/api/admin/articles/${editingArticle.id}`
-      : `${API_BASE}/api/admin/articles`
-    const method = editingArticle ? 'PUT' : 'POST'
-
     try {
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ ...form, tags: form.tags.join(',') })
+      const response = await fetch(editingArticle ? `/api/admin/articles/${editingArticle.id}` : '/api/admin/articles', {
+        method: editingArticle ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
       })
-      
-      if (res.ok) {
-        sessionStorage.removeItem(getDraftKey(editingArticle))
-        setDraftNotice('')
-        setShowModal(false)
-        setEditingArticle(null)
-        setForm({ 
-          title: '', 
-          summary: '', 
-          content: '', 
-          category: '', 
-          tags: [], 
-          published: true,
-          coverImage: '',
-          contentType: 'markdown',
-          staticSiteKey: '',
-          staticSiteName: '',
-          requiresLogin: false,
-          isLocked: false,
-          accessPassword: ''
-        })
-        fetchArticles()
-      } else {
-        alert('保存失败，请重试')
-      }
-    } catch (err) {
-      console.error('保存文章失败:', err)
-      alert('保存失败，请重试')
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || '保存失败')
+      sessionStorage.removeItem(DRAFT_KEY)
+      closeModal()
+      await fetchArticles()
+    } catch (error) {
+      alert(error.message || '保存失败')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleEdit = (article) => {
-    const draft = loadDraft(getDraftKey(article))
-    setEditingArticle(article)
-    setForm({
-      title: draft?.title ?? article.title,
-      summary: draft?.summary ?? article.summary ?? '',
-      content: draft?.content ?? article.content ?? '',
-      category: draft?.category ?? article.category ?? '',
-      tags: draft?.tags ?? (article.tags ? article.tags.split(',').map(t => t.trim()).filter(Boolean) : []),
-      published: draft?.published ?? article.published,
-      coverImage: draft?.coverImage ?? article.coverImage ?? '',
-      contentType: draft?.contentType ?? article.contentType ?? 'markdown',
-      staticSiteKey: draft?.staticSiteKey ?? article.staticSiteKey ?? '',
-      staticSiteName: draft?.staticSiteName ?? article.staticSiteName ?? '',
-      requiresLogin: draft?.requiresLogin ?? article.requiresLogin ?? false,
-      isLocked: draft?.isLocked ?? article.isLocked ?? false,
-      accessPassword: draft?.accessPassword ?? ''
-    })
-    setDraftNotice(draft ? '已恢复本地自动保存草稿' : '')
-    setShowModal(true)
-  }
-
-  const handleDelete = async (id) => {
-    if (!confirm('确定要删除这篇文章吗？此操作不可撤销。')) return
-    
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/articles/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      
-      if (res.ok) {
-        fetchArticles()
-      } else {
-        alert('删除失败，请重试')
-      }
-    } catch (err) {
-      console.error('删除文章失败:', err)
-    }
-  }
-
-  const toggleSelected = (id) => {
-    setSelectedIds(current => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
-
-  const visibleIds = articles.map(article => article.id)
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id))
-  const someVisibleSelected = visibleIds.some(id => selectedIds.has(id))
-
-  const toggleAllVisible = () => {
-    setSelectedIds(current => {
-      const next = new Set(current)
-      if (visibleIds.every(id => next.has(id))) visibleIds.forEach(id => next.delete(id))
-      else visibleIds.forEach(id => next.add(id))
-      return next
-    })
-  }
-
-  const updateSelectedAccess = async (requiresLogin) => {
-    const ids = Array.from(selectedIds)
-    if (!ids.length || batchUpdating) return
-    const action = requiresLogin ? '设为登录后可查看' : '设为公开可查看'
-    if (!confirm(`确定将选中的 ${ids.length} 篇文章${action}吗？`)) return
-
-    setBatchUpdating(true)
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/articles/access`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ ids, requiresLogin }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.message || '批量更新失败')
-      setArticles(current => current.map(article => (
-        selectedIds.has(article.id) ? { ...article, requiresLogin } : article
-      )))
-      setSelectedIds(new Set())
-    } catch (err) {
-      alert(err.message || '批量更新失败，请重试')
-    } finally {
-      setBatchUpdating(false)
-    }
+  const handleDelete = async id => {
+    if (!confirm('确定删除这篇文章吗？此操作无法撤销。')) return
+    const response = await fetch(`/api/admin/articles/${id}`, { method: 'DELETE' })
+    if (response.ok) await fetchArticles()
+    else alert('删除失败')
   }
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText className="w-7 h-7 text-purple-600" />
-            文章管理
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">管理您的博客文章内容</p>
-        </div>
-        <button
-          onClick={() => {
-            const draft = loadDraft(NEW_ARTICLE_DRAFT_KEY)
-            setEditingArticle(null)
-            setForm(draft || {
-              title: '', 
-              summary: '', 
-              content: '', 
-              category: '', 
-              tags: [], 
-              published: true,
-              coverImage: '',
-              contentType: 'markdown',
-              staticSiteKey: '',
-              staticSiteName: '',
-              requiresLogin: false,
-              isLocked: false,
-              accessPassword: ''
-            })
-            setDraftNotice(draft ? '已恢复本地自动保存草稿' : '')
-            setShowModal(true)
-          }}
-          className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-xl flex items-center gap-2 shadow-lg shadow-purple-500/20 transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          新建文章
-        </button>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div><h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-slate-100"><FileText className="h-7 w-7 text-indigo-600" />文章管理</h1><p className="mt-1 text-sm text-gray-500">发布 Markdown 或静态前端文章</p></div>
+        <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white hover:bg-indigo-700"><Plus className="h-4 w-4" />新建文章</button>
       </div>
 
-      {selectedIds.size > 0 && (
-        <div className="mb-3 flex flex-col gap-3 rounded-xl border border-indigo-100 bg-white p-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-indigo-100 px-2 font-semibold text-indigo-700">{selectedIds.size}</span>
-            篇文章已选择
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              disabled={batchUpdating}
-              onClick={() => updateSelectedAccess(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50"
-            >
-              {batchUpdating ? <Loader className="h-4 w-4 animate-spin" /> : <UserRoundCheck className="h-4 w-4" />}
-              设为登录可见
-            </button>
-            <button
-              type="button"
-              disabled={batchUpdating}
-              onClick={() => updateSelectedAccess(false)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
-            >
-              <Globe2 className="h-4 w-4" />
-              设为公开可见
-            </button>
-            <button type="button" disabled={batchUpdating} onClick={() => setSelectedIds(new Set())} className="p-2 text-gray-400 transition hover:text-gray-700 disabled:opacity-50" title="清除选择" aria-label="清除选择">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader className="w-6 h-6 animate-spin text-purple-500" />
-            <span className="ml-2 text-gray-500">加载中...</span>
-          </div>
-        ) : articles.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <p>暂无文章，点击上方按钮创建</p>
-          </div>
-        ) : (
-          <table className="w-full min-w-[920px]">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="w-12 px-4 py-4 text-center">
-                  <input
-                    type="checkbox"
-                    checked={allVisibleSelected}
-                    ref={input => { if (input) input.indeterminate = someVisibleSelected && !allVisibleSelected }}
-                    onChange={toggleAllVisible}
-                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    aria-label="选择当前页全部文章"
-                  />
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">标题</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">分类</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">状态</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">阅读量</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">创建时间</th>
-                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">操作</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
+      <div className="overflow-x-auto rounded-lg border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        {loading ? <div className="flex items-center justify-center py-16 text-gray-500"><Loader className="mr-2 h-5 w-5 animate-spin" />加载中...</div> : articles.length === 0 ? <div className="py-16 text-center text-gray-500">暂无文章</div> : (
+          <table className="w-full min-w-[720px]">
+            <thead className="border-b border-gray-100 bg-gray-50 text-left text-xs uppercase text-gray-500 dark:border-slate-800 dark:bg-slate-950"><tr><th className="px-5 py-4">标题</th><th className="px-5 py-4">分类</th><th className="px-5 py-4">状态</th><th className="px-5 py-4">阅读</th><th className="px-5 py-4 text-right">操作</th></tr></thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
               {articles.map(article => (
-                <tr key={article.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-4 text-center">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(article.id)}
-                      onChange={() => toggleSelected(article.id)}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      aria-label={`选择文章：${article.title}`}
-                    />
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                      <span>{article.title}</span>
-                      {article.contentType === 'static' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-cyan-100 px-2 py-0.5 text-xs font-medium text-cyan-700">
-                          <Code2 className="h-3 w-3" />
-                          静态前端
-                        </span>
-                      )}
-                      {article.isLocked && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                          <Lock className="h-3 w-3" />
-                          加锁
-                        </span>
-                      )}
-                      {article.requiresLogin && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                          <UserRoundCheck className="h-3 w-3" />
-                          登录可见
-                        </span>
-                      )}
-                    </div>
-                    {article.summary && (
-                      <div className="text-xs text-gray-500 mt-1 line-clamp-1">{article.summary}</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {article.category ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full">
-                        <Tag className="w-3 h-3" />
-                        {article.category}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400 text-sm">-</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full ${
-                      article.published 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {article.published && <Check className="w-3 h-3" />}
-                      {article.published ? '已发布' : '草稿'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1 text-sm text-gray-600">
-                      <Eye className="w-3 h-3" />
-                      {article.views || 0}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {new Date(article.createdAt).toLocaleDateString('zh-CN')}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button 
-                        onClick={() => handleEdit(article)} 
-                        className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                        title="编辑"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(article.id)} 
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="删除"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
+                <tr key={article.id} className="text-sm text-gray-700 dark:text-slate-300">
+                  <td className="px-5 py-4"><div className="flex items-center gap-2 font-medium text-gray-900 dark:text-slate-100"><span>{article.title}</span>{article.contentType === 'static' && <span className="inline-flex items-center gap-1 rounded-md bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300"><Code2 className="h-3 w-3" />静态前端</span>}</div><div className="mt-1 max-w-xl truncate text-xs text-gray-500">{article.summary}</div></td>
+                  <td className="px-5 py-4">{article.category || '-'}</td>
+                  <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs ${article.published ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{article.published ? '已发布' : '草稿'}</span>{article.isLocked && <Lock className="ml-2 inline h-4 w-4 text-amber-500" />}</td>
+                  <td className="px-5 py-4">{article.views || 0}</td>
+                  <td className="px-5 py-4 text-right"><button type="button" onClick={() => openEdit(article)} className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50" title="编辑"><Edit2 className="h-4 w-4" /></button><button type="button" onClick={() => handleDelete(article.id)} className="ml-1 rounded-lg p-2 text-red-500 hover:bg-red-50" title="删除"><Trash2 className="h-4 w-4" /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -573,514 +180,46 @@ export default function ArticleManager() {
         )}
       </div>
 
-      <div className="mt-4 flex flex-col gap-3 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
-          <span>共 {total} 篇</span>
-          <select
-            value={size}
-            onChange={(event) => {
-              setSize(Number(event.target.value))
-              setPage(0)
-            }}
-            className="rounded-lg border border-gray-200 bg-white px-2 py-1"
-          >
-            {[10, 20, 50, 100].map(item => <option key={item} value={item}>{item} 条/页</option>)}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            disabled={page <= 0}
-            onClick={() => setPage(value => Math.max(0, value - 1))}
-            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:opacity-40"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            上一页
-          </button>
-          <span className="rounded-lg bg-gray-100 px-3 py-2 text-gray-700">{page + 1} / {totalPages}</span>
-          <button
-            type="button"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage(value => Math.min(totalPages - 1, value + 1))}
-            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 disabled:opacity-40"
-          >
-            下一页
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Modal - Full Screen Editor */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex">
-          <div className="bg-white w-full h-full overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gradient-to-r from-purple-500 to-pink-500">
-              <div className="flex items-center gap-3">
-                <FileText className="w-6 h-6 text-white" />
-                <h2 className="text-lg font-semibold text-white">
-                  {editingArticle ? '编辑文章' : '新建文章'}
-                </h2>
-                {form.title && (
-                  <span className="text-white/80 text-sm">- {form.title}</span>
-                )}
-                {draftNotice && (
-                  <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs text-white/85">{draftNotice}</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleSubmit}
-                  disabled={saving || !form.title}
-                  className="px-4 py-2 bg-white rounded-lg font-medium hover:bg-gray-100 transition-colors disabled:opacity-50 flex items-center gap-2"
-                  style={{ color: 'var(--theme-primary)' }}
-                >
-                  {saving ? (
-                    <>
-                      <Loader className="w-4 h-4 animate-spin" />
-                      保存中...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4" />
-                      保存
-                    </>
-                  )}
-                </button>
-                <button 
-                  onClick={() => setShowModal(false)} 
-                  className="p-2 text-white/80 hover:text-white transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 flex overflow-hidden">
-              {/* Left: Meta fields */}
-              <div className="w-80 border-r border-gray-200 p-4 overflow-y-auto bg-gray-50">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      标题 <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="输入文章标题"
-                      value={form.title}
-                      onChange={e => setForm({ ...form, title: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">封面图片</label>
-                    <input
-                      type="text"
-                      placeholder="输入图片地址，或上传/选择服务器图片"
-                      value={form.coverImage}
-                      onChange={e => setForm({ ...form, coverImage: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
-                    />
-                    <input
-                      ref={coverFileInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/gif,image/webp"
-                      className="hidden"
-                      onChange={(e) => uploadCoverImage(e.target.files?.[0])}
-                    />
-                    <div className="grid grid-cols-2 gap-2 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => coverFileInputRef.current?.click()}
-                        disabled={uploadingCover}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium disabled:opacity-50"
-                      >
-                        {uploadingCover ? <Loader className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-                        {uploadingCover ? '上传中' : '上传封面'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={openCoverPicker}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-medium"
-                      >
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        选择图片
-                      </button>
-                    </div>
-                    {form.coverImage && (
-                      <div className="mt-2 rounded-lg overflow-hidden border border-gray-200 bg-gray-100">
-                        <OptimizedImage src={form.coverImage} alt="封面预览" className="w-full h-32 object-cover" wrapperClassName="block" />
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">摘要</label>
-                    <textarea
-                      placeholder="简短描述文章内容"
-                      value={form.summary}
-                      onChange={e => setForm({ ...form, summary: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white resize-none"
-                      rows={3}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
-                    <input
-                      type="text"
-                      placeholder="如：技术、生活"
-                      value={form.category}
-                      onChange={e => setForm({ ...form, category: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white"
-                    />
-                  </div>
-                  
-                  {/* TagInput 组件 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">标签</label>
-                    <TagInput 
-                      tags={form.tags} 
-                      onChange={(tags) => setForm({ ...form, tags })} 
-                    />
-                  </div>
-                  
-                  <label className="flex items-center gap-3 p-3 bg-white rounded-xl cursor-pointer hover:bg-gray-100 transition-colors border border-gray-200">
-                    <input
-                      type="checkbox"
-                      checked={form.published}
-                      onChange={e => setForm({ ...form, published: e.target.checked })}
-                      className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                    />
-                    <span className="text-sm text-gray-700 flex items-center gap-1">
-                      {form.published ? (
-                        <><Eye className="w-4 h-4 text-green-500" /> 立即发布</>
-                      ) : (
-                        <><FileText className="w-4 h-4 text-gray-400" /> 保存为草稿</>
-                      )}
-                    </span>
-                  </label>
-
-                  <div className="rounded-xl border border-indigo-100 bg-white p-3">
-                    <label className="flex cursor-pointer items-start gap-3">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(form.requiresLogin)}
-                        onChange={e => setForm({ ...form, requiresLogin: e.target.checked })}
-                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                      />
-                      <span>
-                        <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                          <UserRoundCheck className="h-4 w-4 text-indigo-500" />
-                          登录后可查看
-                        </span>
-                        <span className="mt-1 block text-xs leading-relaxed text-gray-500">未登录访客只能看到标题和摘要，正文、静态项目和评论均不可访问。</span>
-                      </span>
-                    </label>
-                  </div>
-
-                  <div className="rounded-xl border border-amber-100 bg-white p-3">
-                    <label className="flex cursor-pointer items-center gap-3">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(form.isLocked)}
-                        onChange={e => setForm({ ...form, isLocked: e.target.checked, accessPassword: e.target.checked ? form.accessPassword : '' })}
-                        className="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                      />
-                      <span className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                        <Lock className="h-4 w-4 text-amber-500" />
-                        访问密码保护
-                      </span>
-                    </label>
-                    {form.isLocked && (
-                      <div className="mt-3 space-y-1.5">
-                        <input
-                          type="password"
-                          autoComplete="new-password"
-                          placeholder={editingArticle?.isLocked ? '留空表示保留原密码' : '设置文章访问密码'}
-                          value={form.accessPassword}
-                          onChange={e => setForm({ ...form, accessPassword: e.target.value })}
-                          className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm focus:border-amber-500 focus:ring-2 focus:ring-amber-500"
-                        />
-                        <p className="text-xs text-gray-500">读者需要输入该密码才能查看正文。密码不会明文保存。</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Right: Editor */}
-              <div className="flex-1 p-4 overflow-hidden">
-                <div className="flex h-full flex-col gap-3">
-                  <div className="inline-flex w-fit rounded-lg border border-gray-200 bg-gray-100 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, contentType: 'markdown' })}
-                      className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${form.contentType !== 'static' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-                    >
-                      <FileText className="h-4 w-4" />
-                      Markdown
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setForm({ ...form, contentType: 'static' })}
-                      className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${form.contentType === 'static' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}
-                    >
-                      <Code2 className="h-4 w-4" />
-                      静态前端
-                    </button>
-                  </div>
-
-                  {form.contentType === 'static' ? (
-                    <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-dashed border-cyan-300 bg-cyan-50/60 p-6">
-                      <input
-                        ref={siteFileInputRef}
-                        type="file"
-                        accept=".zip,application/zip"
-                        className="hidden"
-                        onChange={event => uploadArticleSite(event.target.files?.[0])}
-                      />
-                      <div className="max-w-lg text-center">
-                        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-cyan-100 text-cyan-700">
-                          {uploadingSite ? <Loader className="h-6 w-6 animate-spin" /> : <FileArchive className="h-6 w-6" />}
-                        </div>
-                        <h3 className="mt-4 text-lg font-semibold text-gray-900">
-                          {form.staticSiteKey ? '静态前端已就绪' : '上传静态前端 ZIP'}
-                        </h3>
-                        <p className="mt-2 text-sm leading-relaxed text-gray-500">
-                          ZIP 根目录需要有 index.html，也支持把整个 dist 或 build 文件夹直接压缩上传。
-                        </p>
-                        {form.staticSiteKey && (
-                          <div className="mt-3 rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm text-cyan-800">
-                            {form.staticSiteName || form.staticSiteKey}
-                          </div>
-                        )}
-                        <div className="mt-5 flex flex-wrap justify-center gap-2">
-                          <button
-                            type="button"
-                            disabled={uploadingSite}
-                            onClick={() => siteFileInputRef.current?.click()}
-                            className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-50"
-                          >
-                            <UploadCloud className="h-4 w-4" />
-                            {uploadingSite ? '上传并检查中...' : form.staticSiteKey ? '替换 ZIP' : '选择 ZIP'}
-                          </button>
-                          {form.staticSiteKey && (
-                            <button
-                              type="button"
-                              onClick={() => setForm({ ...form, staticSiteKey: '', staticSiteName: '' })}
-                              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              移除
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="min-h-0 flex-1">
-                      <Suspense fallback={
-                        <div className="flex h-full items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
-                          <Loader className="w-5 h-5 animate-spin text-purple-500" />
-                        </div>
-                      }>
-                        <RichTextEditor
-                          value={form.content}
-                          onChange={(val) => setForm({ ...form, content: val })}
-                          height={600}
-                        />
-                      </Suspense>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showCoverPicker && (
-        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[82vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gradient-to-r from-purple-500 to-pink-500">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/55 p-3 backdrop-blur-sm sm:p-6">
+          <div className="mx-auto max-w-6xl overflow-hidden rounded-lg bg-white shadow-2xl dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-slate-800"><h2 className="text-lg font-semibold text-gray-900 dark:text-slate-100">{editingArticle ? '编辑文章' : '新建文章'}</h2><button type="button" onClick={closeModal} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"><X className="h-5 w-5" /></button></div>
+            <form onSubmit={handleSubmit} className="space-y-5 p-5">
+              <div className="grid gap-4 md:grid-cols-2"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">标题<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" required /></label><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">分类<input value={form.category} onChange={event => setForm({ ...form, category: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label></div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">摘要<textarea value={form.summary} onChange={event => setForm({ ...form, summary: event.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
+              <div className="grid gap-4 md:grid-cols-[1fr_auto]"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">封面 URL<input value={form.coverImage} onChange={event => setForm({ ...form, coverImage: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label><div className="flex items-end"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => uploadCover(event.target.files?.[0])} className="hidden" /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200">{uploading ? <Loader className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{uploading ? '压缩并上传中...' : '上传封面'}</button></div></div>
+              {form.coverImage && <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-600 dark:bg-slate-950"><Image className="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{form.coverImage}</span></div>}
+              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">标签（英文逗号分隔）<input value={form.tags} onChange={event => setForm({ ...form, tags: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
               <div>
-                <h3 className="text-lg font-semibold text-white">选择封面图片</h3>
-                <p className="text-xs text-white/75 mt-0.5">从服务器文章图片中选择，或上传一张新封面</p>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-gray-700 dark:text-slate-300">正文类型</div>
+                  <div className="inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-slate-700 dark:bg-slate-950">
+                    <button type="button" onClick={() => setForm(current => ({ ...current, contentType: 'markdown' }))} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${form.contentType !== 'static' ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-800 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400'}`}><FileText className="h-4 w-4" />Markdown</button>
+                    <button type="button" onClick={() => setForm(current => ({ ...current, contentType: 'static' }))} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${form.contentType === 'static' ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-800 dark:text-slate-100' : 'text-gray-500 dark:text-slate-400'}`}><Code2 className="h-4 w-4" />静态前端</button>
+                  </div>
+                </div>
+                {form.contentType === 'static' ? (
+                  <div className="flex min-h-[360px] items-center justify-center rounded-lg border border-dashed border-cyan-300 bg-cyan-50/60 p-6 dark:border-cyan-500/30 dark:bg-cyan-500/5">
+                    <input ref={siteFileInputRef} type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={event => uploadArticleSite(event.target.files?.[0])} className="hidden" />
+                    <div className="max-w-xl text-center">
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">{uploadingSite ? <Loader className="h-6 w-6 animate-spin" /> : <FileArchive className="h-6 w-6" />}</div>
+                      <h3 className="mt-4 text-lg font-semibold text-gray-900 dark:text-slate-100">{form.staticSiteKey ? '静态前端已就绪' : '上传静态前端 ZIP'}</h3>
+                      <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-slate-400">入口必须是 index.html。可以直接压缩 Vite、React 或 Vue 构建后的 dist 目录，资源请使用相对路径。</p>
+                      {form.staticSiteKey && <div className="mt-3 truncate rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm text-cyan-800 dark:border-cyan-500/20 dark:bg-slate-900 dark:text-cyan-200">{form.staticSiteName || form.staticSiteKey}</div>}
+                      <div className="mt-5 flex flex-wrap justify-center gap-2">
+                        <button type="button" disabled={uploadingSite} onClick={() => siteFileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-50"><UploadCloud className="h-4 w-4" />{uploadingSite ? '上传并检查中...' : form.staticSiteKey ? '替换 ZIP' : '选择 ZIP'}</button>
+                        {form.staticSiteKey && <button type="button" onClick={() => setForm(current => ({ ...current, staticSiteKey: '', staticSiteName: '' }))} className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"><Trash2 className="h-4 w-4" />移除</button>}
+                      </div>
+                    </div>
+                  </div>
+                ) : <RichTextEditor value={form.content} onChange={content => setForm(current => ({ ...current, content }))} height={520} />}
               </div>
-              <button type="button" onClick={() => setShowCoverPicker(false)} className="text-white/80 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 flex flex-wrap items-center gap-3 border-b border-gray-100">
-              <button
-                type="button"
-                onClick={() => coverFileInputRef.current?.click()}
-                disabled={uploadingCover}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-50"
-              >
-                {uploadingCover ? <Loader className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                {uploadingCover ? '上传中...' : '上传封面'}
-              </button>
-              <button
-                type="button"
-                onClick={fetchCoverImages}
-                disabled={loadingCoverImages}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium disabled:opacity-50"
-              >
-                <RefreshCw className={`w-4 h-4 ${loadingCoverImages ? 'animate-spin' : ''}`} />
-                刷新图库
-              </button>
-              <button
-                type="button"
-                onClick={cleanupCoverImages}
-                disabled={cleaningCoverImages}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium disabled:opacity-50"
-              >
-                {cleaningCoverImages ? <Loader className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                清理失效
-              </button>
-              <span className="text-xs text-gray-500">选择后会立即显示在封面预览中</span>
-            </div>
-
-            <div className="p-4 overflow-y-auto">
-              {loadingCoverImages ? (
-                <div className="py-12 flex items-center justify-center text-gray-500">
-                  <Loader className="w-5 h-5 animate-spin mr-2" />
-                  加载图片中...
-                </div>
-              ) : coverImages.length === 0 ? (
-                <div className="py-12 text-center text-gray-500">
-                  服务器还没有文章图片，可以先上传一张封面
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  {coverImages.map((image) => (
-                    <button
-                      type="button"
-                      key={image.url}
-                      onClick={() => selectCoverImage(image.url)}
-                      className={`group text-left rounded-xl border overflow-hidden hover:border-purple-300 hover:shadow-lg transition-all bg-white ${
-                        form.coverImage === image.url ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-200'
-                      }`}
-                    >
-                      <div className="aspect-video bg-gray-100 overflow-hidden">
-                        <OptimizedImage src={image.url} alt={image.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" wrapperClassName="block w-full h-full" />
-                      </div>
-                      <div className="p-2">
-                        <div className="text-xs font-medium text-gray-700 truncate">{image.name}</div>
-                        <div className="text-[11px] text-gray-400 mt-0.5">{formatImageSize(image.size)}</div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+              <div className="grid gap-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-950 sm:grid-cols-2"><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.published} onChange={event => setForm({ ...form, published: event.target.checked })} className="h-4 w-4 rounded" />立即发布</label><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.isLocked} onChange={event => setForm({ ...form, isLocked: event.target.checked })} className="h-4 w-4 rounded" />使用独立访问密码</label>{form.isLocked && <input type="password" value={form.accessPassword} onChange={event => setForm({ ...form, accessPassword: event.target.value })} placeholder={editingArticle?.isLocked ? '留空则保持原密码' : '设置访问密码'} className="rounded-lg border border-gray-300 px-3 py-2 sm:col-span-2 dark:border-slate-700 dark:bg-slate-900" />}</div>
+              <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-800"><button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:border-slate-700 dark:text-slate-200">取消</button><button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50">{saving ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{saving ? '保存中...' : '保存文章'}</button></div>
+            </form>
           </div>
         </div>
       )}
-    </div>
-  )
-}
-
-function formatImageSize(size) {
-  const bytes = Number(size)
-  if (!Number.isFinite(bytes) || bytes <= 0) return ''
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
-function getDraftKey(article) {
-  return article?.id ? `article-draft-${article.id}` : NEW_ARTICLE_DRAFT_KEY
-}
-
-function loadDraft(key) {
-  try {
-    const legacy = localStorage.getItem(key)
-    if (legacy) localStorage.removeItem(key)
-    const raw = sessionStorage.getItem(key)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    if (!parsed || typeof parsed !== 'object') return null
-    const { savedAt, ...draft } = parsed
-    if (!Number.isFinite(savedAt) || Date.now() - savedAt > DRAFT_MAX_AGE_MS) {
-      sessionStorage.removeItem(key)
-      return null
-    }
-    const hasContent = draft.title || draft.summary || draft.content || draft.coverImage || draft.category || draft.tags?.length || draft.staticSiteKey
-    return hasContent ? draft : null
-  } catch {
-    return null
-  }
-}
-
-// ========== TagInput 组件 ==========
-function draftSafeForm(form) {
-  const { accessPassword, ...safeForm } = form
-  return safeForm
-}
-
-function TagInput({ tags, onChange }) {
-  const [inputValue, setInputValue] = useState('')
-  const inputRef = useRef(null)
-
-  const addTag = (tagText) => {
-    const tag = tagText.trim()
-    if (tag && !tags.includes(tag)) {
-      onChange([...tags, tag])
-    }
-    setInputValue('')
-  }
-
-  const removeTag = (indexToRemove) => {
-    onChange(tags.filter((_, i) => i !== indexToRemove))
-  }
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      addTag(inputValue)
-    } else if (e.key === ',' || e.key === '，') {
-      e.preventDefault()
-      addTag(inputValue)
-    } else if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
-      removeTag(tags.length - 1)
-    }
-  }
-
-  return (
-    <div className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-purple-500 bg-white flex flex-wrap items-center gap-2 min-h-[46px]">
-      {tags.map((tag, index) => (
-        <motion.span
-          key={tag}
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.8, opacity: 0 }}
-          className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-100 text-purple-700 text-sm rounded-full"
-        >
-          <Hash className="w-3 h-3" />
-          {tag}
-          <button
-            type="button"
-            onClick={() => removeTag(index)}
-            className="ml-0.5 hover:text-purple-900 hover:bg-purple-200 rounded-full p-0.5 transition-colors"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        </motion.span>
-      ))}
-      <input
-        ref={inputRef}
-        type="text"
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={tags.length === 0 ? '输入标签后按回车或逗号添加' : '继续添加...'}
-        className="flex-1 min-w-[120px] outline-none bg-transparent text-sm py-1"
-      />
     </div>
   )
 }

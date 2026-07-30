@@ -107,6 +107,14 @@ const PRESET_THEMES = {
   },
 }
 
+export const DEFAULT_THEME_KEY = 'purple-pink'
+
+export function resolvePresetThemeKey(themeKey) {
+  return Object.prototype.hasOwnProperty.call(PRESET_THEMES, themeKey)
+    ? themeKey
+    : DEFAULT_THEME_KEY
+}
+
 function normalizeTheme(theme) {
   if (!theme) return theme
   return {
@@ -204,7 +212,7 @@ function getModeTokens(theme, colorMode) {
 }
 
 export function ThemeProvider({ children }) {
-  const [currentTheme, setCurrentTheme] = useState('purple-pink')
+  const [currentTheme, setCurrentTheme] = useState(DEFAULT_THEME_KEY)
   const [customTheme, setCustomTheme] = useState(null)
   const [colorMode, setColorModeState] = useState(() => {
     if (typeof window === 'undefined') return 'light'
@@ -218,7 +226,7 @@ export function ThemeProvider({ children }) {
         if (savedTheme) {
           const parsed = JSON.parse(savedTheme)
           if (parsed.preset) {
-            setCurrentTheme(parsed.preset)
+            setCurrentTheme(resolvePresetThemeKey(parsed.preset))
             setCustomTheme(null)
           } else if (parsed.custom) {
             setCustomTheme(normalizeTheme(parsed.custom))
@@ -229,13 +237,15 @@ export function ThemeProvider({ children }) {
         if (res.ok) {
           const data = await res.json()
           if (data.preset) {
-            setCurrentTheme(data.preset)
+            const preset = resolvePresetThemeKey(data.preset)
+            setCurrentTheme(preset)
             setCustomTheme(null)
+            localStorage.setItem('website-theme', JSON.stringify({ preset }))
           } else if (data.custom) {
             data.custom = normalizeTheme(data.custom)
             setCustomTheme(data.custom)
+            localStorage.setItem('website-theme', JSON.stringify(data))
           }
-          localStorage.setItem('website-theme', JSON.stringify(data))
         }
       } catch (e) {
         console.error('Failed to load theme from backend:', e)
@@ -246,7 +256,7 @@ export function ThemeProvider({ children }) {
   }, [])
 
   useEffect(() => {
-    const theme = normalizeTheme(customTheme || PRESET_THEMES[currentTheme])
+    const theme = normalizeTheme(customTheme || PRESET_THEMES[resolvePresetThemeKey(currentTheme)])
     if (!theme) return
     let cancelled = false
 
@@ -291,7 +301,7 @@ export function ThemeProvider({ children }) {
 
     if (theme.backgroundStyle === 'image' && theme.backgroundImage) {
       const backgroundImage = getResponsiveBackgroundImage(theme.backgroundImage)
-      preloadImage(backgroundImage, { timeout: 10000 }).then((loaded) => {
+      preloadImage(backgroundImage, { timeout: 10000, fetchPriority: 'low' }).then((loaded) => {
         if (cancelled || !loaded) return
         root.style.setProperty('--theme-bg-image', cssUrl(backgroundImage))
         root.style.setProperty('--theme-bg-image-opacity', '1')
@@ -304,9 +314,10 @@ export function ThemeProvider({ children }) {
   }, [currentTheme, customTheme, colorMode])
 
   const setTheme = (themeKey) => {
-    setCurrentTheme(themeKey)
+    const preset = resolvePresetThemeKey(themeKey)
+    setCurrentTheme(preset)
     setCustomTheme(null)
-    localStorage.setItem('website-theme', JSON.stringify({ preset: themeKey }))
+    localStorage.setItem('website-theme', JSON.stringify({ preset }))
   }
 
   const setCustomThemeConfig = (theme) => {
@@ -325,7 +336,7 @@ export function ThemeProvider({ children }) {
     setColorMode(colorMode === 'dark' ? 'light' : 'dark')
   }
 
-  const getActiveTheme = () => normalizeTheme(customTheme || PRESET_THEMES[currentTheme])
+  const getActiveTheme = () => normalizeTheme(customTheme || PRESET_THEMES[resolvePresetThemeKey(currentTheme)])
 
   return (
     <ThemeContext.Provider

@@ -43,16 +43,12 @@ export default function FeatureCardManager() {
   const [editingCard, setEditingCard] = useState(null)
   const [form, setForm] = useState(emptyForm)
 
-  const token = sessionStorage.getItem('token')
-
   useEffect(() => { fetchCards() }, [])
 
   const fetchCards = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/admin/feature-cards`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await fetch(`${API_BASE}/api/admin/feature-cards`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setCards(Array.isArray(data) ? data : [])
@@ -98,8 +94,7 @@ export default function FeatureCardManager() {
       const res = await fetch(url, {
         method,
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           ...form,
@@ -126,8 +121,7 @@ export default function FeatureCardManager() {
 
     try {
       const res = await fetch(`${API_BASE}/api/admin/feature-cards/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
+        method: 'DELETE'
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       fetchCards()

@@ -1,24 +1,17 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './contexts/LanguageContext'
-import { UserAuthProvider } from './contexts/UserAuthContext'
+import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext'
+import { installAdminFetchInterceptor } from './api/adminFetch'
 import Navbar from './components/Navbar'
 import CursorEffects from './components/CursorEffects'
 import DeferredMount from './components/DeferredMount'
+import VisitTracker from './components/VisitTracker'
 import { fetchWithTimeout } from './utils/network'
+import { getAdminBasePath } from './utils/adminEntry'
 
-const API_BASE = ''
-
-try {
-  const legacyToken = localStorage.getItem('token')
-  if (legacyToken && !sessionStorage.getItem('token')) {
-    sessionStorage.setItem('token', legacyToken)
-  }
-  localStorage.removeItem('token')
-} catch {
-  // Storage can be unavailable in hardened browser contexts.
-}
+installAdminFetchInterceptor()
 
 const HomePage = lazy(() => import('./pages/HomePage'))
 const BlogPage = lazy(() => import('./pages/BlogPage'))
@@ -26,8 +19,6 @@ const ArticleDetailPage = lazy(() => import('./pages/ArticleDetailPage'))
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
 const SearchPage = lazy(() => import('./pages/SearchPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
-const UserLoginPage = lazy(() => import('./pages/UserLoginPage'))
-const UserAccountPage = lazy(() => import('./pages/UserAccountPage'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
 const ArticleManager = lazy(() => import('./pages/admin/ArticleManager'))
@@ -35,73 +26,15 @@ const ProjectManager = lazy(() => import('./pages/admin/ProjectManager'))
 const SkillManager = lazy(() => import('./pages/admin/SkillManager'))
 const FeatureCardManager = lazy(() => import('./pages/admin/FeatureCardManager'))
 const ProfileManager = lazy(() => import('./pages/admin/ProfileManager'))
-const ClientDownloadManager = lazy(() => import('./pages/admin/ClientDownloadManager'))
 const ThemeManager = lazy(() => import('./pages/admin/ThemeManager'))
 const Live2DManager = lazy(() => import('./pages/admin/Live2DManager'))
-const MusicManager = lazy(() => import('./pages/admin/MusicManager'))
+const AnalyticsManager = lazy(() => import('./pages/admin/AnalyticsManager'))
 const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsManager'))
-const StabilityManager = lazy(() => import('./pages/admin/StabilityManager'))
-const SecurityManager = lazy(() => import('./pages/admin/SecurityManager'))
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
-const UserMonitor = lazy(() => import('./pages/admin/UserMonitor'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Footer = lazy(() => import('./components/Footer'))
-const MusicPlayer = lazy(() => import('./components/MusicPlayer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
 const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
-const AccessAlert = lazy(() => import('./components/AccessAlert'))
-
-function setupAdminApiInterceptor() {
-  if (window.__adminApiInterceptorInstalled) return
-  window.__adminApiInterceptorInstalled = true
-
-  const originalFetch = window.fetch
-  window.fetch = async (url, options = {}) => {
-    const res = await originalFetch(url, options)
-    const urlText = typeof url === 'string' ? url : url?.url || ''
-
-    if (res.status === 429 || res.status === 403) {
-      const isMusic = urlText.includes('/api/public/music')
-      res.clone().json()
-        .then(data => {
-          const code = data?.code || ''
-          const category = data?.category || (isMusic ? 'music-stream' : '')
-          if (res.status === 429 || code === 'ip_banned') {
-            window.dispatchEvent(new CustomEvent('access-alert', {
-              detail: {
-                type: code === 'ip_banned' ? 'ban' : 'limit',
-                category,
-                message: data?.message || (isMusic ? '音乐访问次数过多，请稍后重试' : '访问次数过多，请稍后重试'),
-              },
-            }))
-          }
-        })
-        .catch(() => {
-          if (res.status === 429) {
-            window.dispatchEvent(new CustomEvent('access-alert', {
-              detail: {
-                type: 'limit',
-                category: isMusic ? 'music-stream' : '',
-                message: isMusic ? '音乐访问次数过多，请稍后重试' : '访问次数过多，请稍后重试',
-              },
-            }))
-          }
-        })
-    }
-
-    if (
-      urlText.includes('/api/admin/')
-      && res.status === 401
-      && !window.location.pathname.includes('/admin/login')
-    ) {
-      sessionStorage.removeItem('token')
-      window.location.href = '/admin/login'
-      return res
-    }
-
-    return res
-  }
-}
 
 function PageLoading() {
   return (
@@ -120,126 +53,84 @@ function App() {
       return null
     }
   })
-  const [clientDownload, setClientDownload] = useState(null)
 
   const loadProfile = useCallback(() => {
-    fetchWithTimeout(`${API_BASE}/api/public/profile`, {}, 7000)
+    fetchWithTimeout('/api/public/profile', {}, 7000)
       .then(res => res.json())
       .then(data => {
         setProfile(data)
         localStorage.setItem('website-profile', JSON.stringify(data))
-        if (data.nickname) {
-          document.title = `${data.nickname} - 个人网站`
-        }
+        if (data.nickname) document.title = `${data.nickname} - 个人网站`
       })
       .catch(() => {})
   }, [])
 
-  const loadClientDownload = useCallback(() => {
-    fetchWithTimeout(`${API_BASE}/api/public/client-download`, {}, 7000)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        return res.json()
-      })
-      .then(data => setClientDownload(data))
-      .catch(() => setClientDownload(null))
-  }, [])
-
   useEffect(() => {
-    setupAdminApiInterceptor()
     loadProfile()
-    loadClientDownload()
     window.addEventListener('profile:updated', loadProfile)
-    window.addEventListener('client-download:updated', loadClientDownload)
-    return () => {
-      window.removeEventListener('profile:updated', loadProfile)
-      window.removeEventListener('client-download:updated', loadClientDownload)
-    }
-  }, [loadClientDownload, loadProfile])
+    return () => window.removeEventListener('profile:updated', loadProfile)
+  }, [loadProfile])
 
   return (
     <ThemeProvider>
-	  <LanguageProvider>
-		<div className="theme-page-background" aria-hidden="true" />
-		  <Router>
-          <div className="theme-app-shell min-h-screen flex flex-col">
-            <CursorEffects />
-            <Suspense fallback={null}>
-              <AccessAlert />
-            </Suspense>
-            <Suspense fallback={<PageLoading />}>
-              <Routes>
-                <Route path="/admin/login" element={<LoginPage />} />
-                <Route path="/admin/*" element={
-                  <PrivateRoute>
-                    <AdminLayout />
-                  </PrivateRoute>
-                }>
-                  <Route index element={<Dashboard />} />
-                  <Route path="articles" element={<ArticleManager />} />
-                  <Route path="projects" element={<ProjectManager />} />
-                  <Route path="feature-cards" element={<FeatureCardManager />} />
-                  <Route path="skills" element={<SkillManager />} />
-                  <Route path="profile" element={<ProfileManager />} />
-                  <Route path="client-download" element={<ClientDownloadManager />} />
-                  <Route path="account" element={<AccountSettings />} />
-                  <Route path="theme" element={<ThemeManager />} />
-                  <Route path="live2d" element={<Live2DManager />} />
-                  <Route path="music" element={<MusicManager />} />
-                  <Route path="upload-settings" element={<UploadSettingsManager />} />
-                  <Route path="stability" element={<StabilityManager />} />
-                  <Route path="security" element={<SecurityManager />} />
-                  <Route path="users" element={<UserMonitor />} />
-                </Route>
-				<Route path="/*" element={
-				  <UserAuthProvider>
-                    <Navbar profile={profile} clientDownload={clientDownload} />
-                    <main className="flex-1">
-                      <Routes>
-                        <Route path="/" element={<HomePage />} />
-                        <Route path="/blog" element={<BlogPage />} />
-                        <Route path="/blog/:id" element={<ArticleDetailPage />} />
-                        <Route path="/projects" element={<ProjectsPage />} />
-                        <Route path="/search" element={<SearchPage />} />
-                        <Route path="/login" element={<UserLoginPage />} />
-                        <Route path="/account" element={<UserAccountPage />} />
-                        <Route path="*" element={<NotFoundPage />} />
-                      </Routes>
-                    </main>
-                    <DeferredMount timeout={900}>
-                      <Suspense fallback={null}>
-                        <Footer profile={profile} />
-                      </Suspense>
-                    </DeferredMount>
-                    <DeferredMount timeout={1400}>
-                      <Suspense fallback={null}>
-                        <MusicPlayer />
-                      </Suspense>
-                    </DeferredMount>
-                    <DeferredMount timeout={1800}>
-                      <Suspense fallback={null}>
-                        <HomeBackgroundCustomizer />
-                      </Suspense>
-                    </DeferredMount>
-                    <DeferredMount timeout={2400}>
-                      <Suspense fallback={null}>
-                        <Live2DWidget />
-                      </Suspense>
-                    </DeferredMount>
-				  </UserAuthProvider>
-				} />
-              </Routes>
-            </Suspense>
-		  </div>
-		  </Router>
-	  </LanguageProvider>
+      <LanguageProvider>
+        <Router>
+          <AdminAuthProvider>
+            <div className="theme-page-background" aria-hidden="true" />
+            <div className="theme-app-shell min-h-screen flex flex-col">
+              <CursorEffects />
+              <Suspense fallback={<PageLoading />}>
+                <Routes>
+                  <Route path="/:adminEntry/login" element={<LoginPage />} />
+                  <Route path="/:adminEntry/*" element={<PrivateRoute><AdminLayout /></PrivateRoute>}>
+                    <Route index element={<Dashboard />} />
+                    <Route path="articles" element={<ArticleManager />} />
+                    <Route path="projects" element={<ProjectManager />} />
+                    <Route path="feature-cards" element={<FeatureCardManager />} />
+                    <Route path="skills" element={<SkillManager />} />
+                    <Route path="profile" element={<ProfileManager />} />
+                    <Route path="theme" element={<ThemeManager />} />
+                    <Route path="live2d" element={<Live2DManager />} />
+                    <Route path="analytics" element={<AnalyticsManager />} />
+                    <Route path="upload-settings" element={<UploadSettingsManager />} />
+                    <Route path="account" element={<AccountSettings />} />
+                    <Route path="*" element={<Navigate to="." replace />} />
+                  </Route>
+                  <Route path="/" element={<PublicLayout profile={profile} />}>
+                    <Route index element={<HomePage />} />
+                    <Route path="blog" element={<BlogPage />} />
+                    <Route path="blog/:id" element={<ArticleDetailPage />} />
+                    <Route path="projects" element={<ProjectsPage />} />
+                    <Route path="search" element={<SearchPage />} />
+                    <Route path="*" element={<NotFoundPage />} />
+                  </Route>
+                </Routes>
+              </Suspense>
+            </div>
+          </AdminAuthProvider>
+        </Router>
+      </LanguageProvider>
     </ThemeProvider>
   )
 }
 
+function PublicLayout({ profile }) {
+  return (
+    <>
+      <VisitTracker />
+      <Navbar profile={profile} />
+      <main className="flex-1"><Outlet /></main>
+      <DeferredMount timeout={900}><Suspense fallback={null}><Footer profile={profile} /></Suspense></DeferredMount>
+      <DeferredMount timeout={1400}><Suspense fallback={null}><HomeBackgroundCustomizer /></Suspense></DeferredMount>
+      <DeferredMount delay={8000} timeout={3000}><Suspense fallback={null}><Live2DWidget /></Suspense></DeferredMount>
+    </>
+  )
+}
+
 function PrivateRoute({ children }) {
-  const token = sessionStorage.getItem('token')
-  return token ? children : <Navigate to="/admin/login" replace />
+  const { admin, loading } = useAdminAuth()
+  if (loading) return <PageLoading />
+  return admin ? children : <Navigate to={`${getAdminBasePath()}/login`} replace />
 }
 
 export default App

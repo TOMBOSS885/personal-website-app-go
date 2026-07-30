@@ -15,13 +15,8 @@ export default function ProfileManager() {
   const [form, setForm] = useState({})
   const [avatarFile, setAvatarFile] = useState(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const token = sessionStorage.getItem('token')
-
   useEffect(() => {
-    const tokenValue = sessionStorage.getItem('token')
-    fetch(`${API_BASE}/api/admin/profile`, {
-      headers: { 'Authorization': `Bearer ${tokenValue}` }
-    })
+    fetch(`${API_BASE}/api/admin/profile`)
       .then(res => {
         if (!res.ok) {
           console.error('获取profile失败:', res.status, res.statusText)
@@ -68,7 +63,7 @@ export default function ProfileManager() {
     try {
       const res = await fetch(`${API_BASE}/api/admin/profile`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
       })
       
@@ -110,7 +105,6 @@ export default function ProfileManager() {
       uploadForm.append('file', blob, 'avatar.png')
       const res = await fetch(`${API_BASE}/api/admin/profile/avatar`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
         body: uploadForm,
       })
 

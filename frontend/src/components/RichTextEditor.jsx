@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import 'katex/dist/katex.min.css'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
 import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
+import { optimizeArticleImage } from '../utils/imageCompression'
 
 const API_BASE = ''
 
@@ -131,10 +133,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const fetchImages = useCallback(async () => {
     setLoadingImages(true)
     try {
-      const token = sessionStorage.getItem('token')
-      const res = await fetch(`${API_BASE}/api/admin/article-images`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
-      })
+      const res = await fetch(`${API_BASE}/api/admin/article-images`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setImages(Array.isArray(data) ? data : [])
@@ -157,13 +156,12 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
 
     setUploading(true)
     try {
-      const token = sessionStorage.getItem('token')
+      const optimizedFile = await optimizeArticleImage(file)
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', optimizedFile)
 
       const res = await fetch(`${API_BASE}/api/admin/article-images`, {
         method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData
       })
       if (!res.ok) {
@@ -188,10 +186,8 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const cleanupImages = async () => {
     setCleaningImages(true)
     try {
-      const token = sessionStorage.getItem('token')
       const res = await fetch(`${API_BASE}/api/admin/upload-assets/cleanup?kind=article_image`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {}
+        method: 'POST'
       })
       if (!res.ok) {
         const text = await res.text()
@@ -345,7 +341,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-50"
               >
                 {uploading ? <Loader className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                {uploading ? '上传中...' : '上传图片'}
+                {uploading ? '压缩并上传中...' : '上传图片'}
               </button>
               <button
                 type="button"
@@ -365,7 +361,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
                 {cleaningImages ? <Loader className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 清理失效
               </button>
-              <span className="text-xs text-gray-500">支持 jpg、png、gif、webp，单张不超过 10MB</span>
+              <span className="text-xs text-gray-500">支持 jpg、png、gif、webp；普通图片会自动压缩为适合网页的大小</span>
             </div>
 
             <div className="p-4 overflow-y-auto">

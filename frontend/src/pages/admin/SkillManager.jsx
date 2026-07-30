@@ -11,20 +11,12 @@ export default function SkillManager() {
   const [editingSkill, setEditingSkill] = useState(null)
   const [form, setForm] = useState({ name: '', category: '', proficiency: 80, displayOrder: 0 })
 
-  const token = sessionStorage.getItem('token')
-
   useEffect(() => { fetchSkills() }, [])
 
   const fetchSkills = async () => {
     setLoading(true)
     try {
-      const tokenValue = sessionStorage.getItem('token')
-      const headers = {}
-      if (tokenValue) {
-        headers['Authorization'] = `Bearer ${tokenValue}`
-      }
-      
-      const res = await fetch(`${API_BASE}/api/admin/skills`, { headers })
+      const res = await fetch(`${API_BASE}/api/admin/skills`)
       
       if (!res.ok) {
         console.error('获取技能列表失败:', res.status, res.statusText)
@@ -63,7 +55,7 @@ export default function SkillManager() {
     try {
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           ...form, 
           proficiency: Number(form.proficiency), 
@@ -101,8 +93,7 @@ export default function SkillManager() {
     if (!confirm('确定要删除这个技能吗？')) return
     try {
       await fetch(`${API_BASE}/api/admin/skills/${id}`, { 
-        method: 'DELETE', 
-        headers: { 'Authorization': `Bearer ${token}` } 
+        method: 'DELETE'
       })
       fetchSkills()
     } catch (err) {

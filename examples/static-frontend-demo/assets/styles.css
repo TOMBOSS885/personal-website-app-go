@@ -1,0 +1,286 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #edf1f3;
+  color: #172126;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 280px;
+  min-height: 100vh;
+  margin: 0;
+  background: #edf1f3;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.page-shell {
+  width: min(920px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 40px 0 28px;
+}
+
+.masthead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  gap: 36px;
+  align-items: center;
+  padding: 36px;
+  color: #f8fbfc;
+  background: #18313b;
+  border: 1px solid #18313b;
+  border-radius: 6px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #d59535;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 12px;
+  font-size: 46px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+h2 {
+  margin-bottom: 0;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+h3 {
+  margin-bottom: 5px;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.subtitle {
+  max-width: 580px;
+  margin-bottom: 0;
+  color: #c8d4d8;
+  line-height: 1.75;
+}
+
+.test-image {
+  display: block;
+  width: 180px;
+  height: 140px;
+  object-fit: contain;
+}
+
+.status-panel,
+.interaction-panel {
+  margin-top: 18px;
+  padding: 28px;
+  background: #ffffff;
+  border: 1px solid #cbd4d8;
+  border-radius: 6px;
+}
+
+.section-heading {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.overall-status {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  padding: 5px 10px;
+  color: #6d4b10;
+  background: #fff2d8;
+  border: 1px solid #e6bd70;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.overall-status.is-success {
+  color: #185a3a;
+  background: #e5f5eb;
+  border-color: #8fc7a5;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.status-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 12px;
+  min-height: 88px;
+  align-items: start;
+  padding: 18px;
+  background: #f7f9fa;
+  border: 1px solid #d8dfe2;
+  border-radius: 5px;
+}
+
+.status-item p {
+  margin-bottom: 0;
+  color: #637178;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  background: #d59535;
+  border-radius: 50%;
+}
+
+.status-item.is-success .status-dot {
+  background: #258254;
+}
+
+.status-item.is-error .status-dot {
+  background: #bd3f35;
+}
+
+.interaction-panel {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.clock {
+  margin: 16px 0 5px;
+  color: #18313b;
+  font-family: Consolas, "SFMono-Regular", monospace;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.action-result {
+  margin-bottom: 0;
+  color: #637178;
+  font-size: 14px;
+}
+
+button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 10px 18px;
+  color: #ffffff;
+  background: #176b74;
+  border: 1px solid #176b74;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:hover {
+  background: #125860;
+}
+
+button:focus-visible {
+  outline: 3px solid #e8b85d;
+  outline-offset: 3px;
+}
+
+footer {
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding: 18px 4px 0;
+  color: #66757c;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .page-shell {
+    width: min(100% - 20px, 920px);
+    padding-top: 10px;
+  }
+
+  .masthead {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    padding: 25px 22px;
+  }
+
+  h1 {
+    font-size: 34px;
+  }
+
+  .test-image {
+    width: 140px;
+    height: 110px;
+  }
+
+  .status-panel,
+  .interaction-panel {
+    padding: 22px;
+  }
+
+  .status-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .interaction-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  button {
+    width: 100%;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root,
+  body {
+    background: #101719;
+    color: #e8edef;
+  }
+
+  .status-panel,
+  .interaction-panel {
+    background: #172126;
+    border-color: #34454c;
+  }
+
+  .status-item {
+    background: #1d2a30;
+    border-color: #34454c;
+  }
+
+  .status-item p,
+  .action-result,
+  footer {
+    color: #a8b6bc;
+  }
+
+  .clock {
+    color: #f2f6f7;
+  }
+}

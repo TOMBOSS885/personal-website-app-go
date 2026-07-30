@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="140" viewBox="0 0 180 140" role="img" aria-labelledby="title desc">
+  <title id="title">静态资源测试插图</title>
+  <desc id="desc">一个包含代码窗口和成功标记的简洁插图</desc>
+  <rect x="1" y="1" width="178" height="138" rx="6" fill="#f7fafb" stroke="#8aa0a9" stroke-width="2"/>
+  <path d="M2 30h176" stroke="#8aa0a9" stroke-width="2"/>
+  <circle cx="18" cy="16" r="4" fill="#bd3f35"/>
+  <circle cx="32" cy="16" r="4" fill="#d59535"/>
+  <circle cx="46" cy="16" r="4" fill="#258254"/>
+  <path d="m28 59-13 12 13 12M62 59l13 12-13 12M50 51 39 91" fill="none" stroke="#176b74" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
+  <circle cx="128" cy="76" r="31" fill="#e5f5eb" stroke="#258254" stroke-width="3"/>
+  <path d="m112 76 10 10 22-23" fill="none" stroke="#258254" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"/>
+  <path d="M22 116h136" stroke="#cbd4d8" stroke-linecap="round" stroke-width="5"/>
+</svg>

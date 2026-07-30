@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, Eye, Image as ImageIcon, Loader, Palette, RefreshCw, RotateCcw, Sparkles, Trash2, Upload } from 'lucide-react'
 import { getThemeBackground, useTheme } from '../../context/ThemeContext'
 import OptimizedImage from '../../components/OptimizedImage'
+import { optimizeBackgroundImage } from '../../utils/imageCompression'
 
 const API_BASE = ''
 
@@ -31,7 +32,6 @@ export default function ThemeManager() {
     getActiveTheme,
   } = useTheme()
 
-  const token = sessionStorage.getItem('token')
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [loadingBackgrounds, setLoadingBackgrounds] = useState(false)
@@ -44,9 +44,7 @@ export default function ThemeManager() {
   const fetchBackgroundImages = async () => {
     setLoadingBackgrounds(true)
     try {
-      const res = await fetch(`${API_BASE}/api/admin/theme/background-images`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      const res = await fetch(`${API_BASE}/api/admin/theme/background-images`)
       const data = res.ok ? await res.json() : []
       setBackgroundImages(Array.isArray(data) ? data : [])
     } catch {
@@ -105,14 +103,12 @@ export default function ThemeManager() {
 
     setUploading(true)
     try {
+      const optimizedFile = await optimizeBackgroundImage(file)
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', optimizedFile)
 
       const res = await fetch(`${API_BASE}/api/admin/theme/background-image`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formData,
       })
 
@@ -144,8 +140,7 @@ export default function ThemeManager() {
 
     try {
       const res = await fetch(`${API_BASE}/api/admin/theme/background-image/${encodeURIComponent(image.name)}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
+        method: 'DELETE'
       })
       if (!res.ok) {
         const error = await res.text()
@@ -165,8 +160,7 @@ export default function ThemeManager() {
     setCleaningBackgrounds(true)
     try {
       const res = await fetch(`${API_BASE}/api/admin/upload-assets/cleanup?kind=theme_background`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        method: 'POST'
       })
       if (!res.ok) {
         const error = await res.text()
@@ -189,8 +183,7 @@ export default function ThemeManager() {
       const res = await fetch(`${API_BASE}/api/admin/theme`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(themeData),
       })

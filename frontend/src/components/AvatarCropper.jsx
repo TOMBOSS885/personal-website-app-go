@@ -3,7 +3,7 @@ import { Check, Loader, X } from 'lucide-react'
 
 const CROP_SIZE = 256
 const OUTPUT_SIZE = 512
-const MAX_OUTPUT_BYTES = 500 * 1024
+const MAX_OUTPUT_BYTES = 220 * 1024
 
 function canvasToBlob(canvas, type, quality) {
   return new Promise(resolve => canvas.toBlob(resolve, type, quality))
@@ -163,7 +163,7 @@ export default function AvatarCropper({ file, onCancel, onConfirm, onError, proc
         <div className="mb-4 flex items-center justify-between">
           <div>
 				<h3 id="avatar-crop-title" className="text-lg font-semibold text-gray-900 dark:text-white">裁剪头像</h3>
-				<p className="mt-1 text-sm text-gray-500 dark:text-gray-400">拖动图片并调整缩放，裁剪结果会压缩到 500KB 内。</p>
+				<p className="mt-1 text-sm text-gray-500 dark:text-gray-400">拖动图片并调整缩放，裁剪结果会压缩到 220KB 内。</p>
           </div>
           <button
             type="button"

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>静态前端运行检测</title>
+    <link rel="stylesheet" href="./assets/styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">STATIC SITE CHECK</p>
+          <h1>静态前端运行检测</h1>
+          <p class="subtitle">这是一个完全离线的测试页面，用于确认上传、解压和相对路径资源是否正常。</p>
+        </div>
+        <img
+          id="test-image"
+          class="test-image"
+          src="./assets/test-image.svg"
+          alt="由本地资源加载的测试插图"
+          width="180"
+          height="140"
+        />
+      </header>
+
+      <section class="status-panel" aria-labelledby="status-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">STATUS</p>
+            <h2 id="status-title">资源状态</h2>
+          </div>
+          <span id="overall-status" class="overall-status">正在检测</span>
+        </div>
+
+        <div class="status-grid">
+          <article class="status-item is-success">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div>
+              <h3>HTML</h3>
+              <p>入口页面已加载</p>
+            </div>
+          </article>
+          <article class="status-item is-success">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div>
+              <h3>CSS</h3>
+              <p>样式文件已加载</p>
+            </div>
+          </article>
+          <article id="js-status" class="status-item is-pending">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div>
+              <h3>JavaScript</h3>
+              <p id="js-message">等待脚本执行</p>
+            </div>
+          </article>
+          <article id="image-status" class="status-item is-pending">
+            <span class="status-dot" aria-hidden="true"></span>
+            <div>
+              <h3>本地图片</h3>
+              <p id="image-message">正在读取相对路径资源</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="interaction-panel" aria-labelledby="interaction-title">
+        <div>
+          <p class="eyebrow">INTERACTION</p>
+          <h2 id="interaction-title">脚本交互</h2>
+          <p id="clock" class="clock" aria-live="polite">--:--:--</p>
+          <p id="action-result" class="action-result" aria-live="polite">按钮尚未点击</p>
+        </div>
+        <button id="test-button" type="button">运行交互测试</button>
+      </section>
+
+      <footer>
+        <span>静态前端示例</span>
+        <span id="viewport-size">视口检测中</span>
+      </footer>
+    </main>
+
+    <script src="./assets/app.js"></script>
+  </body>
+</html>

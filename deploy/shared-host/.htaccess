@@ -1,0 +1,36 @@
+Options -Indexes
+DirectoryIndex index.html
+RewriteEngine On
+
+# Protect PHP source/configuration when the host cannot place them above web root.
+RewriteRule ^(?:app|config|migrations)(?:/|$) - [F,L,NC]
+
+# Static frontend articles must pass through the signed PHP resource route.
+RewriteRule ^uploads/article-sites(?:/|$) - [F,L,NC]
+
+# Route all API calls through the PHP front controller.
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^api(?:/(.*))?$ api/index.php?route=$1 [QSA,L]
+
+# Existing static assets and uploads are served directly.
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# React BrowserRouter fallback.
+RewriteRule ^ index.html [L]
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  <FilesMatch "\.(?:js|css|png|jpe?g|gif|webp|svg|woff2?)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/css application/javascript application/json image/svg+xml application/octet-stream
+  <FilesMatch "\.(?:js|css|json|svg|moc3)$">
+    SetOutputFilter DEFLATE
+  </FilesMatch>
+</IfModule>

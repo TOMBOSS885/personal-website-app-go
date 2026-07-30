@@ -1,4 +1,4 @@
-export function preloadImage(src, { timeout = 12000 } = {}) {
+export function preloadImage(src, { timeout = 12000, fetchPriority = 'auto' } = {}) {
   if (!src) return Promise.resolve(false)
 
   return new Promise((resolve) => {
@@ -25,6 +25,7 @@ export function preloadImage(src, { timeout = 12000 } = {}) {
     }
     img.onerror = () => finish(false)
     img.decoding = 'async'
+    img.fetchPriority = fetchPriority
     img.src = src
   })
 }

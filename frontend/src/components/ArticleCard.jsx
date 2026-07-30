@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Calendar, Eye, ArrowRight, Lock, Code2, UserRoundCheck } from 'lucide-react'
+import { Calendar, Eye, ArrowRight, Lock } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
 
 export default function ArticleCard({ article, index = 0 }) {
@@ -65,18 +65,6 @@ export default function ArticleCard({ article, index = 0 }) {
               <div className="absolute right-4 top-4 inline-flex items-center gap-1 rounded-full bg-black/55 px-3 py-1 text-xs font-semibold text-white backdrop-blur">
                 <Lock className="h-3.5 w-3.5" />
                 加锁
-              </div>
-            )}
-            {article.requiresLogin && (
-              <div className={`absolute right-4 ${article.isLocked ? 'top-14' : 'top-4'} inline-flex items-center gap-1 rounded-full bg-indigo-600/90 px-3 py-1 text-xs font-semibold text-white backdrop-blur`}>
-                <UserRoundCheck className="h-3.5 w-3.5" />
-                登录可见
-              </div>
-            )}
-            {article.contentType === 'static' && (
-              <div className={`absolute left-4 ${article.category ? 'top-14' : 'top-4'} inline-flex items-center gap-1 rounded-full bg-cyan-600/85 px-3 py-1 text-xs font-semibold text-white backdrop-blur`}>
-                <Code2 className="h-3.5 w-3.5" />
-                静态前端
               </div>
             )}
           </div>

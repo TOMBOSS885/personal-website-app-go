@@ -1,35 +1,33 @@
 import { useState, useEffect } from 'react'
-import { FileText, Folder, Award, Eye, TrendingUp, Sparkles } from 'lucide-react'
+import { FileText, Folder, Award, BarChart3, TrendingUp, Sparkles } from 'lucide-react'
+import { getAdminBasePath } from '../../utils/adminEntry'
 
 const API_BASE = ''
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ articles: 0, projects: 0, skills: 0, views: 0 })
+  const adminBasePath = getAdminBasePath()
+  const [stats, setStats] = useState({ articles: 0, projects: 0, skills: 0, visits: 0 })
   const [loading, setLoading] = useState(true)
-  const token = sessionStorage.getItem('token')
-
   useEffect(() => {
-    fetch(`${API_BASE}/api/admin/dashboard-stats`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
+    fetch(`${API_BASE}/api/admin/dashboard-stats`)
       .then(r => r.json())
       .then(data => {
         setStats({
-          articles: data?.articles || 0,
-          projects: data?.projects || 0,
-          skills: data?.skills || 0,
-          views: data?.views || 0
+          articles: data?.articleCount || 0,
+          projects: data?.projectCount || 0,
+          skills: data?.skillCount || 0,
+          visits: data?.totalVisits || 0
         })
       })
       .catch(err => console.error('获取统计失败:', err))
       .finally(() => setLoading(false))
-  }, [token])
+  }, [])
 
   const cards = [
     { label: '文章总数', value: stats.articles, icon: FileText, color: 'blue', bg: 'from-blue-500 to-cyan-500' },
     { label: '项目总数', value: stats.projects, icon: Folder, color: 'green', bg: 'from-green-500 to-emerald-500' },
     { label: '专业技能', value: stats.skills, icon: Award, color: 'purple', bg: 'from-purple-500 to-pink-500' },
-    { label: '总阅读量', value: stats.views, icon: Eye, color: 'orange', bg: 'from-orange-500 to-red-500' },
+    { label: '网站访问次数', value: stats.visits, icon: BarChart3, color: 'orange', bg: 'from-orange-500 to-red-500' },
   ]
 
   return (
@@ -73,16 +71,16 @@ export default function Dashboard() {
           在这里你可以管理文章、项目、首页能力卡片、专业技能和个人信息。使用左侧导航栏切换不同的管理模块。
         </p>
         <div className="mt-4 flex gap-3">
-          <a href="/admin/articles" className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
+          <a href={`${adminBasePath}/articles`} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
             管理文章
           </a>
-          <a href="/admin/projects" className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
+          <a href={`${adminBasePath}/projects`} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
             管理项目
           </a>
-          <a href="/admin/feature-cards" className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
+          <a href={`${adminBasePath}/feature-cards`} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
             管理能力卡片
           </a>
-          <a href="/admin/skills" className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
+          <a href={`${adminBasePath}/skills`} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm transition-colors">
             管理专业技能
           </a>
         </div>
@@ -95,16 +93,16 @@ export default function Dashboard() {
             快速操作
           </h3>
           <div className="space-y-3">
-            <a href="/admin/articles" className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <a href={`${adminBasePath}/articles`} className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <span className="text-gray-700">📝 新建文章</span>
             </a>
-            <a href="/admin/projects" className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <a href={`${adminBasePath}/projects`} className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <span className="text-gray-700">📁 新建项目</span>
             </a>
-            <a href="/admin/feature-cards" className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <a href={`${adminBasePath}/feature-cards`} className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <span className="text-gray-700">管理能力卡片</span>
             </a>
-            <a href="/admin/skills" className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
+            <a href={`${adminBasePath}/skills`} className="block p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors">
               <span className="text-gray-700">⚡ 添加专业技能</span>
             </a>
           </div>

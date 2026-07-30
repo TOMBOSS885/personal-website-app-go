@@ -891,16 +891,6 @@ html.theme-dark .optimized-image-placeholder {
   background: linear-gradient(90deg, rgba(30, 41, 59, 0.72) 25%, rgba(51, 65, 85, 0.72) 50%, rgba(30, 41, 59, 0.72) 75%);
 }
 
-html.theme-dark .music-progress-range::-webkit-slider-thumb {
-  background: var(--theme-accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-}
-
-html.theme-dark .music-progress-range::-moz-range-thumb {
-  background: var(--theme-accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-}
-
 html:not(.theme-dark) .admin-login form {
   background-color: rgba(255, 255, 255, 0.82);
   border-color: rgba(255, 255, 255, 0.86);
@@ -1631,66 +1621,6 @@ img {
 .optimized-image-loaded {
   opacity: 1;
   transition: opacity 240ms ease;
-}
-
-.music-progress-range {
-  appearance: none;
-  background: transparent;
-  outline: none;
-}
-
-.lyrics-module-shell {
-  background-color: rgb(255 255 255 / var(--lyrics-bg-opacity, 0.88));
-}
-
-html.theme-dark .lyrics-module-shell {
-  background-color: rgb(2 6 23 / var(--lyrics-bg-opacity, 0.88));
-}
-
-.music-progress-range::-webkit-slider-runnable-track {
-  height: 1.25rem;
-  background: transparent;
-}
-
-.music-progress-range::-webkit-slider-thumb {
-  appearance: none;
-  width: 0.875rem;
-  height: 0.875rem;
-  margin-top: 0.1875rem;
-  border: 2px solid #fff;
-  border-radius: 9999px;
-  background: var(--theme-primary);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.28);
-  transition: transform 160ms ease, box-shadow 160ms ease;
-}
-
-.music-progress-range:hover::-webkit-slider-thumb,
-.music-progress-range:active::-webkit-slider-thumb,
-.music-progress-seeking .music-progress-range::-webkit-slider-thumb {
-  transform: scale(1.28);
-  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.4);
-}
-
-.music-progress-range::-moz-range-track {
-  height: 1.25rem;
-  background: transparent;
-}
-
-.music-progress-range::-moz-range-thumb {
-  width: 0.875rem;
-  height: 0.875rem;
-  border: 2px solid #fff;
-  border-radius: 9999px;
-  background: var(--theme-primary);
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.28);
-  transition: transform 160ms ease, box-shadow 160ms ease;
-}
-
-.music-progress-range:hover::-moz-range-thumb,
-.music-progress-range:active::-moz-range-thumb,
-.music-progress-seeking .music-progress-range::-moz-range-thumb {
-  transform: scale(1.28);
-  box-shadow: 0 6px 18px rgba(79, 70, 229, 0.4);
 }
 
 @media (max-width: 768px), (prefers-reduced-motion: reduce) {

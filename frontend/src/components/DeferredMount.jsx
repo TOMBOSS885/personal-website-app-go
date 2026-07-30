@@ -1,18 +1,25 @@
 import { useEffect, useState } from 'react'
 import { cancelIdle, requestIdle } from '../utils/network'
 
-export default function DeferredMount({ children, timeout = 1500 }) {
+export default function DeferredMount({ children, timeout = 1500, delay = 0 }) {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     if (mounted) return undefined
 
-    const handle = requestIdle(() => {
-      setMounted(true)
-    }, timeout)
+    let idleHandle = null
+    const timer = window.setTimeout(() => {
+      idleHandle = requestIdle(() => {
+        idleHandle = null
+        setMounted(true)
+      }, timeout)
+    }, Math.max(0, delay))
 
-    return () => cancelIdle(handle)
-  }, [mounted, timeout])
+    return () => {
+      window.clearTimeout(timer)
+      if (idleHandle !== null) cancelIdle(idleHandle)
+    }
+  }, [delay, mounted, timeout])
 
   return mounted ? children : null
 }

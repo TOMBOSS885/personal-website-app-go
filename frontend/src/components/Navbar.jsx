@@ -1,21 +1,20 @@
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, LogIn, UserRound, Download } from 'lucide-react'
+import { Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import LanguageSwitcher from './LanguageSwitcher'
-import { safeDownloadHref, safeExternalHref } from '../utils/safeUrl'
+import { safeExternalHref } from '../utils/safeUrl'
 import { useTheme } from '../context/ThemeContext'
 import ProfileAvatar from './ProfileAvatar'
-import { useUserAuth } from '../contexts/UserAuthContext'
 
-function NavbarAvatar({ user, profile }) {
+function NavbarAvatar({ profile }) {
   const sharedClass = 'relative z-10 h-12 w-12 overflow-hidden rounded-full bg-white shadow-lg ring-2 ring-white/80 transition-shadow group-hover:shadow-xl dark:bg-slate-900 dark:ring-slate-800/80'
 
   return (
     <ProfileAvatar
-      profile={user ? { nickname: user.username } : profile}
+      profile={profile}
       sizeClass="h-12 w-12"
       textClass="text-xl"
       className={sharedClass}
@@ -23,17 +22,15 @@ function NavbarAvatar({ user, profile }) {
   )
 }
 
-export default function Navbar({ profile, clientDownload }) {
+export default function Navbar({ profile }) {
   const [isOpen, setIsOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const location = useLocation()
   const { language } = useLanguage()
   const { t } = useTranslation()
   const { colorMode, toggleColorMode } = useTheme()
-  const { user, loading: userLoading } = useUserAuth()
   const githubHref = safeExternalHref(profile?.github || 'https://github.com')
-  const downloadHref = clientDownload?.enabled ? safeDownloadHref(clientDownload.downloadUrl) : ''
-  const identityName = user?.username || profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')
+  const identityName = profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')
 
   useEffect(() => {
     const handleScroll = () => {
@@ -69,9 +66,9 @@ export default function Navbar({ profile, clientDownload }) {
           }`}>
             {/* Logo */}
             <Link
-              to={user ? '/account' : '/'}
+              to="/"
               className="flex min-w-0 items-center space-x-3 group"
-              aria-label={user ? '打开账号设置' : '返回首页'}
+              aria-label="返回首页"
             >
               <motion.div 
                 className="relative isolate"
@@ -82,7 +79,7 @@ export default function Navbar({ profile, clientDownload }) {
                   className="pointer-events-none absolute -inset-1 -z-10 rounded-full opacity-30 blur transition-opacity group-hover:opacity-50"
                   style={{ background: 'var(--theme-gradient)' }}
                 />
-                <NavbarAvatar user={user} profile={profile} />
+                <NavbarAvatar profile={profile} />
               </motion.div>
               <div className="hidden min-w-0 sm:block lg:hidden xl:block">
                 <span 
@@ -131,21 +128,6 @@ export default function Navbar({ profile, clientDownload }) {
                   <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 to-purple-500/0 group-hover:from-indigo-50 group-hover:to-purple-50 rounded-xl -z-10 transition-all duration-300" />
                 </Link>
               ))}
-              {downloadHref && (
-                <motion.a
-                  href={downloadHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-1 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white xl:px-4"
-                  style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  title={clientDownload.version ? `${t('nav.downloadClient')} ${clientDownload.version}` : t('nav.downloadClient')}
-                >
-                  <Download className="h-4 w-4" />
-                  <span>{t('nav.downloadClient')}</span>
-                </motion.a>
-              )}
             </div>
 
             {/* Right side actions */}
@@ -153,17 +135,6 @@ export default function Navbar({ profile, clientDownload }) {
               {/* Language Switcher */}
               <LanguageSwitcher />
 
-              {!userLoading && !user && (
-                <Link
-                  to={`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
-                  className="hidden h-10 items-center justify-center gap-2 rounded-xl border border-indigo-500/20 bg-indigo-600 px-2.5 text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-md hover:shadow-indigo-500/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-indigo-400/20 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:focus-visible:ring-offset-slate-900 sm:inline-flex md:px-3.5"
-                  title="登录"
-                  aria-label="登录"
-                >
-                  <LogIn className="h-5 w-5 shrink-0" />
-                  <span className="hidden text-sm font-semibold md:inline">登录</span>
-                </Link>
-              )}
 
               <motion.button
                 type="button"
@@ -310,42 +281,6 @@ export default function Navbar({ profile, clientDownload }) {
                       </Link>
                     </motion.div>
                   ))}
-                  {downloadHref && (
-                    <motion.div
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: navLinks.length * 0.1 }}
-                    >
-                      <a
-                        href={downloadHref}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => setIsOpen(false)}
-                        className="flex items-center gap-4 rounded-xl px-5 py-4 font-medium text-white"
-                        style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}
-                      >
-                        <Download className="h-5 w-5 shrink-0" />
-                        <span className="min-w-0 flex-1">{t('nav.downloadClient')}</span>
-                        {clientDownload.version && (
-                          <span className="max-w-24 truncate text-xs font-normal text-white/80">{clientDownload.version}</span>
-                        )}
-                      </a>
-                    </motion.div>
-                  )}
-                  <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: (navLinks.length + (downloadHref ? 1 : 0)) * 0.1 }}
-                  >
-                    <Link
-                      to={user ? '/account' : `/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}`}
-                      onClick={() => setIsOpen(false)}
-                      className="flex items-center space-x-4 rounded-xl px-5 py-4 text-gray-700 transition-all duration-300 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
-                    >
-                      {user ? <UserRound className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
-                      <span className="font-medium">{user ? '账号设置' : '登录'}</span>
-                    </Link>
-                  </motion.div>
                 </div>
 
                 {/* Divider */}
