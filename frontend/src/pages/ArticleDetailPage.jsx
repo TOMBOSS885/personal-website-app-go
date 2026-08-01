@@ -1,16 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import 'katex/dist/katex.min.css'
-import { ArrowLeft, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, Share2, Tag } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
-import rehypeKatex from 'rehype-katex'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeHighlight from 'rehype-highlight'
-import OptimizedImage from '../components/OptimizedImage'
-import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
-import { remarkGithubAlerts, remarkSafeHtml } from '../utils/markdownPlugins'
+import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, MessageCircle, Share2, Tag } from 'lucide-react'
+import LoadingIndicator from '../components/LoadingIndicator'
+import { guestbookTargetUrl, guestMessageUrl } from '../utils/guestMessageTarget'
+
+let markdownRendererPromise
+
+function loadMarkdownRenderer() {
+  if (!markdownRendererPromise) {
+    markdownRendererPromise = import('../components/MarkdownArticleRenderer')
+  }
+  return markdownRendererPromise
+}
+
+const MarkdownArticleRenderer = lazy(loadMarkdownRenderer)
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
@@ -20,18 +24,21 @@ export default function ArticleDetailPage() {
   const [password, setPassword] = useState('')
   const [unlocking, setUnlocking] = useState(false)
   const [unlockError, setUnlockError] = useState('')
+  const [relatedMessages, setRelatedMessages] = useState([])
   const isStaticArticle = article?.contentType === 'static'
   const tocItems = useMemo(() => buildToc(isStaticArticle ? '' : article?.content || ''), [article?.content, isStaticArticle])
   const headingIdsByLine = useMemo(() => new Map(
     parseToc(article?.content || '').map(item => [item.sourceLine, item.id]),
   ), [article?.content])
-  const renderedContent = useMemo(() => normalizeMarkdownMath(isStaticArticle ? '' : article?.content || ''), [article?.content, isStaticArticle])
 
   useEffect(() => {
     let active = true
     setLoading(true)
     setPassword('')
     setUnlockError('')
+    // Start the optional Markdown renderer at the same time as the article
+    // API request. This removes an otherwise sequential high-latency round.
+    void loadMarkdownRenderer()
     fetch(`/api/public/articles/${id}`)
       .then(res => res.ok ? res.json() : null)
       .then(data => {
@@ -47,6 +54,18 @@ export default function ArticleDetailPage() {
         }
       })
     return () => { active = false }
+  }, [id])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setRelatedMessages([])
+    fetch(`/api/public/guest-messages?targetType=article&targetId=${encodeURIComponent(id)}&page=0&size=12`, { signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => setRelatedMessages(Array.isArray(data?.content) ? data.content : []))
+      .catch(error => {
+        if (error.name !== 'AbortError') setRelatedMessages([])
+      })
+    return () => controller.abort()
   }, [id])
 
   const handleShare = async () => {
@@ -103,11 +122,7 @@ export default function ArticleDetailPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-            className="mx-auto mb-4 h-12 w-12 rounded-full border-4 border-indigo-500 border-t-transparent"
-          />
+          <LoadingIndicator size={52} className="mx-auto mb-4 text-indigo-600 dark:text-indigo-300" label="加载文章" />
           <p className="text-gray-500 dark:text-slate-400">加载中...</p>
         </div>
       </div>
@@ -246,42 +261,9 @@ export default function ArticleDetailPage() {
               )
             ) : (
               <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="article-content">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm, remarkMath, remarkSafeHtml, remarkGithubAlerts]}
-                rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}
-                components={{
-                  a: ({ node, href, children, ...props }) => {
-                    if (!isSafeMarkdownHref(href)) return <span>{children}</span>
-                    const external = /^https?:\/\//i.test(href || '')
-                    return <a {...props} href={href} target={external ? '_blank' : undefined} rel={external ? 'noopener noreferrer nofollow' : undefined}>{children}</a>
-                  },
-                  table: ({ node, ...props }) => (
-                    <div className="article-table-wrap">
-                      <table {...props} />
-                    </div>
-                  ),
-                  h2: ({ node, children, ...props }) => {
-                    return <h2 id={resolveHeadingId(node, children)} {...props}>{children}</h2>
-                  },
-                  h3: ({ node, children, ...props }) => {
-                    return <h3 id={resolveHeadingId(node, children)} {...props}>{children}</h3>
-                  },
-                  h4: ({ node, children, ...props }) => {
-                    return <h4 id={resolveHeadingId(node, children)} {...props}>{children}</h4>
-                  },
-                  h5: ({ node, children, ...props }) => {
-                    return <h5 id={resolveHeadingId(node, children)} {...props}>{children}</h5>
-                  },
-                  h6: ({ node, children, ...props }) => {
-                    return <h6 id={resolveHeadingId(node, children)} {...props}>{children}</h6>
-                  },
-                  img: ({ node, ...props }) => (
-                    <OptimizedImage {...props} loading="lazy" sizes="(min-width: 768px) 768px, 100vw" wrapperClassName="block" />
-                  )
-                }}
-              >
-                {renderedContent}
-              </ReactMarkdown>
+                <Suspense fallback={<ArticleContentPreview content={article.content} />}>
+                  <MarkdownArticleRenderer content={article.content} resolveHeadingId={resolveHeadingId} />
+                </Suspense>
               </motion.article>
             )}
           </div>
@@ -292,6 +274,23 @@ export default function ArticleDetailPage() {
             </aside>
           )}
         </div>
+
+        <section aria-labelledby="related-messages-heading" className="adaptive-surface mx-auto mt-10 max-w-[56rem] border-y border-white/60 bg-white/75 px-5 py-7 backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-950/70 md:px-7">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 id="related-messages-heading" className="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-slate-100"><MessageCircle className="h-5 w-5 text-emerald-500" />相关留言</h2>
+              <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">引用这篇文章的访客留言</p>
+            </div>
+            <Link to={guestbookTargetUrl('article', article.id)} className="theme-action-surface inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/80 px-4 py-2 text-sm font-medium text-indigo-800 transition hover:border-indigo-400 dark:border-indigo-400/25 dark:bg-indigo-500/10 dark:text-indigo-100">写一条相关留言<ArrowUpRight className="h-4 w-4" /></Link>
+          </div>
+          {relatedMessages.length === 0 ? (
+            <p className="mt-6 text-sm text-gray-500 dark:text-slate-400">暂时还没有相关留言。</p>
+          ) : (
+            <div className="mt-6 divide-y divide-gray-200/80 dark:divide-slate-700/70">
+              {relatedMessages.map(message => <article key={message.id} className="py-5 first:pt-0 last:pb-0"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold text-gray-900 dark:text-slate-100">{message.nickname}</h3><time className="text-xs text-gray-500 dark:text-slate-400">{formatGuestMessageDate(message.createdAt)}</time></div><p className="mt-2 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-7 text-gray-700 dark:text-slate-200">{message.content}</p><Link to={guestMessageUrl(message.id)} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-indigo-700 hover:underline dark:text-indigo-200">查看原留言<ArrowUpRight className="h-4 w-4" /></Link></article>)}
+            </div>
+          )}
+        </section>
 
         {article.tags && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="mt-12 border-t border-gray-100 pt-8 dark:border-slate-800">
@@ -315,6 +314,35 @@ export default function ArticleDetailPage() {
       </motion.div>
     </div>
   )
+}
+
+function formatGuestMessageDate(value) {
+  if (!value) return ''
+  try {
+    return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  } catch {
+    return value
+  }
+}
+
+function ArticleContentPreview({ content }) {
+  return (
+    <div className="article-fast-preview">
+      {toReadablePreview(content)}
+    </div>
+  )
+}
+
+function toReadablePreview(content) {
+  return String(content || '')
+    .replace(/^\s*(`{3,}|~{3,})[^\n]*$/gm, '')
+    .replace(/^\s*#{1,6}[\t ]+/gm, '')
+    .replace(/^\s*>[\t ]?/gm, '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .trim()
 }
 
 function ArticleTableOfContents({ items }) {
@@ -695,11 +723,4 @@ function slugify(text) {
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
   return slug || 'section'
-}
-
-function isSafeMarkdownHref(href) {
-  if (!href) return false
-  const value = String(href).trim()
-  if (value.startsWith('#') || (value.startsWith('/') && !value.startsWith('//')) || value.startsWith('./') || value.startsWith('../')) return true
-  return /^(?:https?:|mailto:|tel:)/i.test(value)
 }

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Check, Eye, Image as ImageIcon, Loader, Palette, RefreshCw, RotateCcw, Sparkles, Trash2, Upload } from 'lucide-react'
+import { Check, Eye, Image as ImageIcon, Palette, RefreshCw, RotateCcw, Sparkles, Trash2, Upload } from 'lucide-react'
 import { getThemeBackground, useTheme } from '../../context/ThemeContext'
 import OptimizedImage from '../../components/OptimizedImage'
+import LoadingIndicator from '../../components/LoadingIndicator'
 import { optimizeBackgroundImage } from '../../utils/imageCompression'
 
 const API_BASE = ''
@@ -231,7 +232,7 @@ export default function ThemeManager() {
             className="px-4 py-2 text-white rounded-xl flex items-center gap-2 transition-all disabled:opacity-50"
             style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}
           >
-            {saving ? <Loader className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {saving ? <LoadingIndicator size={16} /> : <Sparkles className="w-4 h-4" />}
             {saving ? '保存中...' : '保存配置'}
           </button>
         </div>
@@ -376,7 +377,7 @@ export default function ThemeManager() {
             <label className="block text-sm font-medium text-gray-700 mb-2">背景图片</label>
             <div className="flex flex-col md:flex-row gap-4 md:items-center">
               <label className="inline-flex w-fit cursor-pointer items-center gap-2 px-4 py-2.5 rounded-xl text-white transition-all disabled:opacity-50" style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}>
-                {uploading ? <Loader className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {uploading ? <LoadingIndicator size={16} /> : <Upload className="w-4 h-4" />}
                 {uploading ? '上传中...' : '上传图片'}
                 <input
                   type="file"
@@ -468,7 +469,7 @@ export default function ThemeManager() {
                     disabled={loadingBackgrounds}
                     className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
                   >
-                    <RefreshCw className={`h-3.5 w-3.5 ${loadingBackgrounds ? 'animate-spin' : ''}`} />
+                    {loadingBackgrounds ? <LoadingIndicator size={14} /> : <RefreshCw className="h-3.5 w-3.5" />}
                     刷新
                   </button>
                   <button
@@ -477,7 +478,7 @@ export default function ThemeManager() {
                     disabled={cleaningBackgrounds}
                     className="inline-flex items-center gap-1 rounded-lg border border-red-100 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
                   >
-                    {cleaningBackgrounds ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    {cleaningBackgrounds ? <LoadingIndicator size={14} /> : <Trash2 className="h-3.5 w-3.5" />}
                     清理失效
                   </button>
                 </div>
@@ -485,7 +486,7 @@ export default function ThemeManager() {
 
               {loadingBackgrounds ? (
                 <div className="flex h-28 items-center justify-center rounded-xl border border-dashed border-gray-200 text-sm text-gray-500">
-                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  <LoadingIndicator size={16} className="mr-2" />
                   加载背景图库...
                 </div>
               ) : backgroundImages.length === 0 ? (

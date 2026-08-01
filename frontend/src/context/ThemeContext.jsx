@@ -1,5 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-import { preloadImage } from '../utils/assets'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { fetchWithTimeout } from '../utils/network'
 
 const ThemeContext = createContext(null)
@@ -133,6 +132,17 @@ function cssUrl(url) {
   return `url("${String(url).replace(/"/g, '\\"')}")`
 }
 
+function getStoredTheme() {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const savedTheme = localStorage.getItem('website-theme')
+    return savedTheme ? JSON.parse(savedTheme) : null
+  } catch {
+    return null
+  }
+}
+
 function getResponsiveBackgroundImage(url) {
   if (!url || !url.match(/@desktop\.(webp|jpg)$/) || typeof window === 'undefined') {
     return url
@@ -160,6 +170,19 @@ export function getThemeBackground(theme) {
   }
 
   return normalized.background || `linear-gradient(135deg, ${normalized.primary}, ${normalized.secondary})`
+}
+
+export function getThemeBackgroundLayer(theme) {
+  const normalized = normalizeTheme(theme)
+  const hasImage = normalized?.backgroundStyle === 'image' && normalized.backgroundImage
+
+  return {
+    image: hasImage ? cssUrl(getResponsiveBackgroundImage(normalized.backgroundImage)) : 'none',
+    opacity: hasImage ? '1' : '0',
+    position: normalized?.backgroundPosition || 'center',
+    size: normalized?.backgroundSize || 'cover',
+    repeat: normalized?.backgroundRepeat || 'no-repeat',
+  }
 }
 
 function getThemeFallbackBackground(theme) {
@@ -212,30 +235,34 @@ function getModeTokens(theme, colorMode) {
 }
 
 export function ThemeProvider({ children }) {
-  const [currentTheme, setCurrentTheme] = useState(DEFAULT_THEME_KEY)
-  const [customTheme, setCustomTheme] = useState(null)
+  const [initialTheme] = useState(getStoredTheme)
+  const localThemeRevisionRef = useRef(0)
+  const [currentTheme, setCurrentTheme] = useState(() => {
+    const preset = initialTheme?.preset
+    return preset ? resolvePresetThemeKey(preset) : DEFAULT_THEME_KEY
+  })
+  const [customTheme, setCustomTheme] = useState(() => {
+    const custom = initialTheme?.custom
+    return custom ? normalizeTheme(custom) : null
+  })
   const [colorMode, setColorModeState] = useState(() => {
     if (typeof window === 'undefined') return 'light'
     return localStorage.getItem('website-color-mode') || 'light'
+  })
+  const [surfaceMode, setSurfaceModeState] = useState(() => {
+    if (typeof window === 'undefined') return 'glass'
+    return localStorage.getItem('website-surface-mode') === 'transparent' ? 'transparent' : 'glass'
   })
 
   useEffect(() => {
     const loadTheme = async () => {
       try {
-        const savedTheme = localStorage.getItem('website-theme')
-        if (savedTheme) {
-          const parsed = JSON.parse(savedTheme)
-          if (parsed.preset) {
-            setCurrentTheme(resolvePresetThemeKey(parsed.preset))
-            setCustomTheme(null)
-          } else if (parsed.custom) {
-            setCustomTheme(normalizeTheme(parsed.custom))
-          }
-        }
-
+        if (localThemeRevisionRef.current !== 0) return
+        const requestRevision = localThemeRevisionRef.current
         const res = await fetchWithTimeout(`${API_BASE}/api/public/theme`, {}, 7000)
-        if (res.ok) {
+        if (res.ok && localThemeRevisionRef.current === requestRevision) {
           const data = await res.json()
+          if (localThemeRevisionRef.current !== requestRevision) return
           if (data.preset) {
             const preset = resolvePresetThemeKey(data.preset)
             setCurrentTheme(preset)
@@ -252,15 +279,24 @@ export function ThemeProvider({ children }) {
       }
     }
 
-    loadTheme()
+    // The cached theme is already available on the first render. The remote
+    // refresh stays deferred and cannot replace a newer local interaction.
+    const timer = window.setTimeout(loadTheme, 2500)
+    return () => window.clearTimeout(timer)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('surfaces-transparent', surfaceMode === 'transparent')
+    root.setAttribute('data-surface-mode', surfaceMode)
+  }, [surfaceMode])
+
+  useLayoutEffect(() => {
     const theme = normalizeTheme(customTheme || PRESET_THEMES[resolvePresetThemeKey(currentTheme)])
     if (!theme) return
-    let cancelled = false
 
     const modeTokens = getModeTokens(theme, colorMode)
+    const backgroundLayer = getThemeBackgroundLayer(theme)
     const fallbackBackground = modeTokens.fallbackBackground
     const root = document.documentElement
 
@@ -271,16 +307,24 @@ export function ThemeProvider({ children }) {
     root.style.setProperty('--theme-text-secondary', modeTokens.textSecondary)
     root.style.setProperty('--theme-bg', fallbackBackground)
     root.style.setProperty('--theme-page-bg', fallbackBackground)
-    root.style.setProperty('--theme-bg-image', 'none')
-    root.style.setProperty('--theme-bg-image-opacity', '0')
-    root.style.setProperty('--theme-bg-position', theme.backgroundPosition)
-    root.style.setProperty('--theme-bg-size', theme.backgroundSize)
-    root.style.setProperty('--theme-bg-repeat', theme.backgroundRepeat)
+    root.style.setProperty('--theme-bg-image', backgroundLayer.image)
+    root.style.setProperty('--theme-bg-image-opacity', backgroundLayer.opacity)
+    root.style.setProperty('--theme-bg-position', backgroundLayer.position)
+    root.style.setProperty('--theme-bg-size', backgroundLayer.size)
+    root.style.setProperty('--theme-bg-repeat', backgroundLayer.repeat)
     root.style.setProperty('--theme-bg-overlay', modeTokens.imageOverlay)
     root.style.setProperty('--theme-card-bg', modeTokens.cardBg)
     root.style.setProperty('--theme-surface', modeTokens.surface)
     root.style.setProperty('--theme-surface-soft', modeTokens.surfaceSoft)
     root.style.setProperty('--theme-border', modeTokens.border)
+    const useLightTransparentText = colorMode === 'dark'
+      || theme.backgroundStyle === 'image'
+      || theme.backgroundStyle === 'gradient'
+      || isDarkSolid(theme.background)
+    root.style.setProperty('--theme-transparent-text', useLightTransparentText ? '#f8fafc' : '#111827')
+    root.style.setProperty('--theme-transparent-muted', useLightTransparentText ? '#e2e8f0' : '#374151')
+    root.style.setProperty('--theme-transparent-border', useLightTransparentText ? 'rgba(255,255,255,0.48)' : 'rgba(17,24,39,0.28)')
+    root.style.setProperty('--theme-transparent-shadow', useLightTransparentText ? '0 1px 3px rgba(0,0,0,0.92)' : '0 1px 2px rgba(255,255,255,0.9)')
     root.style.setProperty('--theme-gradient', `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`)
     root.style.setProperty('--theme-gradient-text', `linear-gradient(90deg, ${theme.primary}, ${theme.secondary}, ${theme.accent})`)
     root.style.setProperty('--theme-gradient-hover', `linear-gradient(135deg, ${adjustBrightness(theme.primary, -15)}, ${adjustBrightness(theme.secondary, -15)})`)
@@ -299,21 +343,10 @@ export function ThemeProvider({ children }) {
 
     document.body.style.background = fallbackBackground
 
-    if (theme.backgroundStyle === 'image' && theme.backgroundImage) {
-      const backgroundImage = getResponsiveBackgroundImage(theme.backgroundImage)
-      preloadImage(backgroundImage, { timeout: 10000, fetchPriority: 'low' }).then((loaded) => {
-        if (cancelled || !loaded) return
-        root.style.setProperty('--theme-bg-image', cssUrl(backgroundImage))
-        root.style.setProperty('--theme-bg-image-opacity', '1')
-      })
-    }
-
-    return () => {
-      cancelled = true
-    }
   }, [currentTheme, customTheme, colorMode])
 
   const setTheme = (themeKey) => {
+    localThemeRevisionRef.current += 1
     const preset = resolvePresetThemeKey(themeKey)
     setCurrentTheme(preset)
     setCustomTheme(null)
@@ -321,6 +354,7 @@ export function ThemeProvider({ children }) {
   }
 
   const setCustomThemeConfig = (theme) => {
+    localThemeRevisionRef.current += 1
     const normalized = normalizeTheme(theme)
     setCustomTheme(normalized)
     localStorage.setItem('website-theme', JSON.stringify({ custom: normalized }))
@@ -336,6 +370,16 @@ export function ThemeProvider({ children }) {
     setColorMode(colorMode === 'dark' ? 'light' : 'dark')
   }
 
+  const setSurfaceMode = (mode) => {
+    const nextMode = mode === 'transparent' ? 'transparent' : 'glass'
+    setSurfaceModeState(nextMode)
+    localStorage.setItem('website-surface-mode', nextMode)
+  }
+
+  const toggleSurfaceMode = () => {
+    setSurfaceMode(surfaceMode === 'transparent' ? 'glass' : 'transparent')
+  }
+
   const getActiveTheme = () => normalizeTheme(customTheme || PRESET_THEMES[resolvePresetThemeKey(currentTheme)])
 
   return (
@@ -349,6 +393,9 @@ export function ThemeProvider({ children }) {
         colorMode,
         setColorMode,
         toggleColorMode,
+        surfaceMode,
+        setSurfaceMode,
+        toggleSurfaceMode,
         getActiveTheme,
       }}
     >

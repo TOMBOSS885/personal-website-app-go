@@ -124,6 +124,7 @@ function app_live2d_import_bundle(): array
     $slug = date('YmdHis') . '-' . bin2hex(random_bytes(6));
     $live2dRoot = rtrim((string) $config['upload_dir'], '/\\') . '/live2d';
     $modelRoot = $live2dRoot . '/' . $slug;
+    $databaseCommitted = false;
     if (!is_dir($modelRoot) && !mkdir($modelRoot, 0755, true) && !is_dir($modelRoot)) {
         fclose($handle);
         app_error(500, '无法创建 Live2D 上传目录', 'LIVE2D_DIRECTORY_FAILED');
@@ -147,13 +148,26 @@ function app_live2d_import_bundle(): array
         if (!is_array($entryJson)) throw new RuntimeException('模型入口 JSON 无效');
 
         $modelUrl = rtrim((string) $config['upload_url'], '/') . '/live2d/' . $slug . '/' . $entryPath;
-        app_db()->beginTransaction();
-        app_db()->exec('UPDATE live2d_models SET active = 0');
-        $statement = app_db()->prepare('INSERT INTO live2d_models (name, model_path, active) VALUES (?, ?, 1)');
+        $database = app_db();
+        $database->beginTransaction();
+        $settingsId = $database->query('SELECT id FROM live2d_settings WHERE id = 1 FOR UPDATE')->fetchColumn();
+        if ($settingsId === false) throw new RuntimeException('Live2D 设置尚未初始化');
+
+        // The settings row serializes import, activation and deletion on shared hosting.
+        $modelCount = (int) $database->query('SELECT COUNT(*) FROM live2d_models')->fetchColumn();
+        if ($modelCount >= APP_LIVE2D_MAX_MODELS) {
+            $database->rollBack();
+            app_live2d_remove_tree_with_log($modelRoot, 'rejected import');
+            app_error(409, '最多保留 3 个 Live2D 模型，请先删除旧模型', 'LIVE2D_MODEL_LIMIT');
+        }
+
+        $database->exec('UPDATE live2d_models SET active = 0');
+        $statement = $database->prepare('INSERT INTO live2d_models (name, model_path, active) VALUES (?, ?, 1)');
         $statement->execute([$name, $modelUrl]);
-        $id = (int) app_db()->lastInsertId();
-        app_db()->exec('UPDATE live2d_settings SET enabled = 1 WHERE id = 1');
-        app_db()->commit();
+        $id = (int) $database->lastInsertId();
+        $database->exec('UPDATE live2d_settings SET enabled = 1 WHERE id = 1');
+        $database->commit();
+        $databaseCommitted = true;
 
         $statement = app_db()->prepare('SELECT * FROM live2d_models WHERE id = ?');
         $statement->execute([$id]);
@@ -161,11 +175,12 @@ function app_live2d_import_bundle(): array
     } catch (PDOException $error) {
         if (app_db()->inTransaction()) app_db()->rollBack();
         if (is_resource($handle)) fclose($handle);
-        app_live2d_remove_tree($modelRoot);
+        if (!$databaseCommitted) app_live2d_remove_tree_with_log($modelRoot, 'failed database import');
         throw $error;
     } catch (Throwable $error) {
+        if (app_db()->inTransaction()) app_db()->rollBack();
         if (is_resource($handle)) fclose($handle);
-        app_live2d_remove_tree($modelRoot);
+        if (!$databaseCommitted) app_live2d_remove_tree_with_log($modelRoot, 'failed model import');
         error_log($error->__toString());
         app_error(400, 'Live2D 模型导入失败，请检查模型文件完整性', 'LIVE2D_IMPORT_FAILED');
     }
@@ -207,34 +222,63 @@ function app_live2d_update_model(int $id): array
 
 function app_live2d_activate_model(int $id): array
 {
-    $statement = app_db()->prepare('SELECT id FROM live2d_models WHERE id = ?');
-    $statement->execute([$id]);
-    if (!$statement->fetch()) app_error(404, '模型不存在', 'NOT_FOUND');
-    app_db()->beginTransaction();
-    app_db()->exec('UPDATE live2d_models SET active = 0');
-    $statement = app_db()->prepare('UPDATE live2d_models SET active = 1 WHERE id = ?');
-    $statement->execute([$id]);
-    app_db()->exec('UPDATE live2d_settings SET enabled = 1 WHERE id = 1');
-    app_db()->commit();
+    $database = app_db();
+    $database->beginTransaction();
+    try {
+        $settingsId = $database->query('SELECT id FROM live2d_settings WHERE id = 1 FOR UPDATE')->fetchColumn();
+        if ($settingsId === false) throw new RuntimeException('Live2D 设置尚未初始化');
+        $statement = $database->prepare('SELECT id FROM live2d_models WHERE id = ? FOR UPDATE');
+        $statement->execute([$id]);
+        if (!$statement->fetch()) {
+            $database->rollBack();
+            app_error(404, '模型不存在', 'NOT_FOUND');
+        }
+        $database->exec('UPDATE live2d_models SET active = 0');
+        $statement = $database->prepare('UPDATE live2d_models SET active = 1 WHERE id = ?');
+        $statement->execute([$id]);
+        $database->exec('UPDATE live2d_settings SET enabled = 1 WHERE id = 1');
+        $database->commit();
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->rollBack();
+        throw $error;
+    }
     return app_live2d_admin_state();
 }
 
 function app_live2d_delete_model(int $id): array
 {
-    $statement = app_db()->prepare('SELECT * FROM live2d_models WHERE id = ?');
-    $statement->execute([$id]);
-    $row = $statement->fetch();
-    if (!$row) app_error(404, '模型不存在', 'NOT_FOUND');
-    $root = app_live2d_model_root((string) $row['model_path']);
-    $wasActive = (bool) $row['active'];
-    app_db()->prepare('DELETE FROM live2d_models WHERE id = ?')->execute([$id]);
-    if ($wasActive) {
-        $nextId = app_db()->query('SELECT id FROM live2d_models ORDER BY id DESC LIMIT 1')->fetchColumn();
-        if ($nextId) app_db()->prepare('UPDATE live2d_models SET active = 1 WHERE id = ?')->execute([(int) $nextId]);
-        else app_db()->exec('UPDATE live2d_settings SET enabled = 0 WHERE id = 1');
+    $database = app_db();
+    $database->beginTransaction();
+    try {
+        $settingsId = $database->query('SELECT id FROM live2d_settings WHERE id = 1 FOR UPDATE')->fetchColumn();
+        if ($settingsId === false) throw new RuntimeException('Live2D 设置尚未初始化');
+        $statement = $database->prepare('SELECT * FROM live2d_models WHERE id = ? FOR UPDATE');
+        $statement->execute([$id]);
+        $row = $statement->fetch();
+        if (!$row) {
+            $database->rollBack();
+            app_error(404, '模型不存在', 'NOT_FOUND');
+        }
+
+        $root = app_live2d_model_root((string) $row['model_path']);
+        $database->prepare('DELETE FROM live2d_models WHERE id = ?')->execute([$id]);
+        $nextId = $database->query('SELECT id FROM live2d_models ORDER BY active DESC, id DESC LIMIT 1 FOR UPDATE')->fetchColumn();
+        if ($nextId !== false) {
+            $database->exec('UPDATE live2d_models SET active = 0');
+            $database->prepare('UPDATE live2d_models SET active = 1 WHERE id = ?')->execute([(int) $nextId]);
+        } else {
+            $database->exec('UPDATE live2d_settings SET enabled = 0 WHERE id = 1');
+        }
+        $database->commit();
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->rollBack();
+        throw $error;
     }
-    if ($root) app_live2d_remove_tree($root);
-    return ['success' => true];
+
+    $storageDeleted = app_live2d_remove_tree_with_log($root, 'deleted model ' . $id);
+    $result = ['success' => true, 'storageDeleted' => $storageDeleted];
+    if (!$storageDeleted) $result['warning'] = '模型记录已删除，但模型文件清理失败，请检查 uploads/live2d 目录权限';
+    return $result;
 }
 
 function app_live2d_validate_manifest_files(array $files): array
@@ -345,4 +389,20 @@ function app_live2d_remove_tree(string $directory): bool
         else @unlink($item->getPathname());
     }
     return @rmdir($directory);
+}
+
+function app_live2d_remove_tree_with_log(?string $directory, string $context): bool
+{
+    if ($directory === null || $directory === '') {
+        error_log('Live2D storage cleanup skipped for ' . $context . ': invalid model directory');
+        return false;
+    }
+    try {
+        $removed = app_live2d_remove_tree($directory);
+    } catch (Throwable $error) {
+        error_log('Live2D storage cleanup failed for ' . $context . ': ' . $error->getMessage());
+        return false;
+    }
+    if (!$removed) error_log('Live2D storage cleanup failed for ' . $context . ': directory remains at ' . $directory);
+    return $removed;
 }

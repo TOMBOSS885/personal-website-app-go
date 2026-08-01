@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Code2, Edit2, FileArchive, FileText, Image, Loader, Lock, Plus, Save, Trash2, Upload, UploadCloud, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Code2, Edit2, FileArchive, FileText, Image, Lock, Plus, Save, Trash2, Upload, UploadCloud, X } from 'lucide-react'
 import RichTextEditor from '../../components/RichTextEditor'
+import LoadingIndicator from '../../components/LoadingIndicator'
 import { optimizeCoverImage } from '../../utils/imageCompression'
 
 const emptyForm = {
@@ -9,10 +10,16 @@ const emptyForm = {
   isLocked: false, accessPassword: '',
 }
 const DRAFT_KEY = 'php-shared-host:article-draft'
+const PAGE_SIZE = 20
 
 export default function ArticleManager() {
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [page, setPage] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [totalElements, setTotalElements] = useState(0)
+  const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadingSite, setUploadingSite] = useState(false)
@@ -22,18 +29,31 @@ export default function ArticleManager() {
   const fileInputRef = useRef(null)
   const siteFileInputRef = useRef(null)
 
-  const fetchArticles = async () => {
+  const fetchArticles = async (requestedPage = page) => {
     setLoading(true)
+    setLoadError('')
     try {
-      const response = await fetch('/api/admin/articles?page=0&size=100')
+      const response = await fetch(`/api/admin/articles?page=${requestedPage}&size=${PAGE_SIZE}`, { cache: 'no-store' })
       const data = await response.json().catch(() => ({}))
-      setArticles(response.ok ? (data.content || []) : [])
+      if (!response.ok) throw new Error(data.message || '加载文章失败')
+      const nextArticles = Array.isArray(data.content) ? data.content : []
+      const nextTotalPages = Number(data.totalPages) || 0
+      if (requestedPage > 0 && nextArticles.length === 0 && nextTotalPages <= requestedPage) {
+        setPage(requestedPage - 1)
+        return
+      }
+      setArticles(nextArticles)
+      setTotalPages(nextTotalPages)
+      setTotalElements(Number(data.totalElements) || 0)
+    } catch (error) {
+      setArticles([])
+      setLoadError(error.message || '加载文章失败')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { void fetchArticles() }, [])
+  useEffect(() => { void fetchArticles(page) }, [page])
 
   useEffect(() => {
     if (!showModal || editingArticle) return undefined
@@ -51,15 +71,25 @@ export default function ArticleManager() {
     setShowModal(true)
   }
 
-  const openEdit = article => {
-    setEditingArticle(article)
-    setForm({
-      ...emptyForm,
-      ...article,
-      tags: article.tags || '',
-      accessPassword: '',
-    })
-    setShowModal(true)
+  const openEdit = async article => {
+    setEditingId(article.id)
+    try {
+      const response = await fetch(`/api/admin/articles/${article.id}`, { cache: 'no-store' })
+      const detail = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(detail.message || '加载文章正文失败')
+      setEditingArticle(detail)
+      setForm({
+        ...emptyForm,
+        ...detail,
+        tags: detail.tags || '',
+        accessPassword: '',
+      })
+      setShowModal(true)
+    } catch (error) {
+      alert(error.message || '加载文章正文失败')
+    } finally {
+      setEditingId(null)
+    }
   }
 
   const closeModal = () => {
@@ -139,7 +169,7 @@ export default function ArticleManager() {
       if (!response.ok) throw new Error(data.message || '保存失败')
       sessionStorage.removeItem(DRAFT_KEY)
       closeModal()
-      await fetchArticles()
+      await fetchArticles(page)
     } catch (error) {
       alert(error.message || '保存失败')
     } finally {
@@ -150,7 +180,7 @@ export default function ArticleManager() {
   const handleDelete = async id => {
     if (!confirm('确定删除这篇文章吗？此操作无法撤销。')) return
     const response = await fetch(`/api/admin/articles/${id}`, { method: 'DELETE' })
-    if (response.ok) await fetchArticles()
+    if (response.ok) await fetchArticles(page)
     else alert('删除失败')
   }
 
@@ -162,7 +192,7 @@ export default function ArticleManager() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        {loading ? <div className="flex items-center justify-center py-16 text-gray-500"><Loader className="mr-2 h-5 w-5 animate-spin" />加载中...</div> : articles.length === 0 ? <div className="py-16 text-center text-gray-500">暂无文章</div> : (
+        {loading ? <div className="flex items-center justify-center py-16 text-gray-500"><LoadingIndicator size={20} className="mr-2" />加载中...</div> : loadError ? <div className="py-16 text-center text-red-600"><p>{loadError}</p><button type="button" onClick={() => fetchArticles(page)} className="mt-4 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium hover:bg-red-50">重新加载</button></div> : articles.length === 0 ? <div className="py-16 text-center text-gray-500">暂无文章</div> : (
           <table className="w-full min-w-[720px]">
             <thead className="border-b border-gray-100 bg-gray-50 text-left text-xs uppercase text-gray-500 dark:border-slate-800 dark:bg-slate-950"><tr><th className="px-5 py-4">标题</th><th className="px-5 py-4">分类</th><th className="px-5 py-4">状态</th><th className="px-5 py-4">阅读</th><th className="px-5 py-4 text-right">操作</th></tr></thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -172,11 +202,20 @@ export default function ArticleManager() {
                   <td className="px-5 py-4">{article.category || '-'}</td>
                   <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs ${article.published ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{article.published ? '已发布' : '草稿'}</span>{article.isLocked && <Lock className="ml-2 inline h-4 w-4 text-amber-500" />}</td>
                   <td className="px-5 py-4">{article.views || 0}</td>
-                  <td className="px-5 py-4 text-right"><button type="button" onClick={() => openEdit(article)} className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50" title="编辑"><Edit2 className="h-4 w-4" /></button><button type="button" onClick={() => handleDelete(article.id)} className="ml-1 rounded-lg p-2 text-red-500 hover:bg-red-50" title="删除"><Trash2 className="h-4 w-4" /></button></td>
+                  <td className="px-5 py-4 text-right"><button type="button" onClick={() => openEdit(article)} disabled={editingId !== null} className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 disabled:cursor-wait disabled:opacity-50" title="编辑">{editingId === article.id ? <LoadingIndicator size={16} /> : <Edit2 className="h-4 w-4" />}</button><button type="button" onClick={() => handleDelete(article.id)} disabled={editingId !== null} className="ml-1 rounded-lg p-2 text-red-500 hover:bg-red-50 disabled:opacity-50" title="删除"><Trash2 className="h-4 w-4" /></button></td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+        {!loading && !loadError && totalElements > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-4 text-sm text-gray-500 dark:border-slate-800">
+            <span>共 {totalElements} 篇，第 {page + 1} / {Math.max(totalPages, 1)} 页</span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => setPage(current => Math.max(0, current - 1))} disabled={page === 0} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800" title="上一页"><ChevronLeft className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setPage(current => Math.min(Math.max(totalPages - 1, 0), current + 1))} disabled={page + 1 >= totalPages} className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:hover:bg-slate-800" title="下一页"><ChevronRight className="h-4 w-4" /></button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -187,7 +226,7 @@ export default function ArticleManager() {
             <form onSubmit={handleSubmit} className="space-y-5 p-5">
               <div className="grid gap-4 md:grid-cols-2"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">标题<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" required /></label><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">分类<input value={form.category} onChange={event => setForm({ ...form, category: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label></div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">摘要<textarea value={form.summary} onChange={event => setForm({ ...form, summary: event.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
-              <div className="grid gap-4 md:grid-cols-[1fr_auto]"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">封面 URL<input value={form.coverImage} onChange={event => setForm({ ...form, coverImage: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label><div className="flex items-end"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => uploadCover(event.target.files?.[0])} className="hidden" /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200">{uploading ? <Loader className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{uploading ? '压缩并上传中...' : '上传封面'}</button></div></div>
+              <div className="grid gap-4 md:grid-cols-[1fr_auto]"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">封面 URL<input value={form.coverImage} onChange={event => setForm({ ...form, coverImage: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label><div className="flex items-end"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => uploadCover(event.target.files?.[0])} className="hidden" /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200">{uploading ? <LoadingIndicator size={16} /> : <Upload className="h-4 w-4" />}{uploading ? '压缩并上传中...' : '上传封面'}</button></div></div>
               {form.coverImage && <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-600 dark:bg-slate-950"><Image className="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{form.coverImage}</span></div>}
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">标签（英文逗号分隔）<input value={form.tags} onChange={event => setForm({ ...form, tags: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
               <div>
@@ -202,7 +241,7 @@ export default function ArticleManager() {
                   <div className="flex min-h-[360px] items-center justify-center rounded-lg border border-dashed border-cyan-300 bg-cyan-50/60 p-6 dark:border-cyan-500/30 dark:bg-cyan-500/5">
                     <input ref={siteFileInputRef} type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={event => uploadArticleSite(event.target.files?.[0])} className="hidden" />
                     <div className="max-w-xl text-center">
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">{uploadingSite ? <Loader className="h-6 w-6 animate-spin" /> : <FileArchive className="h-6 w-6" />}</div>
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">{uploadingSite ? <LoadingIndicator size={24} /> : <FileArchive className="h-6 w-6" />}</div>
                       <h3 className="mt-4 text-lg font-semibold text-gray-900 dark:text-slate-100">{form.staticSiteKey ? '静态前端已就绪' : '上传静态前端 ZIP'}</h3>
                       <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-slate-400">入口必须是 index.html。可以直接压缩 Vite、React 或 Vue 构建后的 dist 目录，资源请使用相对路径。</p>
                       {form.staticSiteKey && <div className="mt-3 truncate rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm text-cyan-800 dark:border-cyan-500/20 dark:bg-slate-900 dark:text-cyan-200">{form.staticSiteName || form.staticSiteKey}</div>}
@@ -215,7 +254,7 @@ export default function ArticleManager() {
                 ) : <RichTextEditor value={form.content} onChange={content => setForm(current => ({ ...current, content }))} height={520} />}
               </div>
               <div className="grid gap-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-950 sm:grid-cols-2"><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.published} onChange={event => setForm({ ...form, published: event.target.checked })} className="h-4 w-4 rounded" />立即发布</label><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.isLocked} onChange={event => setForm({ ...form, isLocked: event.target.checked })} className="h-4 w-4 rounded" />使用独立访问密码</label>{form.isLocked && <input type="password" value={form.accessPassword} onChange={event => setForm({ ...form, accessPassword: event.target.value })} placeholder={editingArticle?.isLocked ? '留空则保持原密码' : '设置访问密码'} className="rounded-lg border border-gray-300 px-3 py-2 sm:col-span-2 dark:border-slate-700 dark:bg-slate-900" />}</div>
-              <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-800"><button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:border-slate-700 dark:text-slate-200">取消</button><button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50">{saving ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{saving ? '保存中...' : '保存文章'}</button></div>
+              <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-800"><button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:border-slate-700 dark:text-slate-200">取消</button><button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50">{saving ? <LoadingIndicator size={16} /> : <Save className="h-4 w-4" />}{saving ? '保存中...' : '保存文章'}</button></div>
             </form>
           </div>
         </div>

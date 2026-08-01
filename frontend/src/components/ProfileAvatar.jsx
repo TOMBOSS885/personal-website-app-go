@@ -11,6 +11,15 @@ export default function ProfileAvatar({
     ? profile.avatar
     : ''
 
+  if (!profile) {
+    return (
+      <div
+        className={`relative ${sizeClass} shrink-0 animate-pulse overflow-hidden rounded-full bg-gray-200/80 dark:bg-slate-700/70 ${className}`}
+        aria-hidden="true"
+      />
+    )
+  }
+
   return (
     <div
       className={`relative ${sizeClass} shrink-0 overflow-hidden rounded-full ${className}`}

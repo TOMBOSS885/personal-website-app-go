@@ -42,8 +42,8 @@ export default function Dashboard() {
 
       <div className="grid md:grid-cols-4 gap-5">
         {cards.map(({ label, value, icon: Icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
-            <div className={`h-1.5 bg-gradient-to-r ${bg}`} />
+          <div key={label} className="stack-card-hover bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+            <div className={`h-1.5 rounded-t-xl bg-gradient-to-r ${bg}`} />
             <div className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -87,7 +87,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-6 grid md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="stack-card-hover bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <FileText className="w-5 h-5 text-blue-500" />
             快速操作
@@ -108,7 +108,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="stack-card-hover bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <Award className="w-5 h-5 text-purple-500" />
             提示

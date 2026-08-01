@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound, Loader, Lock, Moon, Sun, User } from 'lucide-react'
+import { KeyRound, Lock, Moon, Sun, User } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAdminAuth } from '../../contexts/AdminAuthContext'
+import LoadingIndicator from '../../components/LoadingIndicator'
 import { getAdminBasePath } from '../../utils/adminEntry'
 
 export default function LoginPage() {
@@ -73,7 +74,7 @@ export default function LoginPage() {
           </label>
 
           <button type="submit" disabled={loading || sessionLoading} className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 font-semibold text-white shadow-lg shadow-indigo-500/20 transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
-            {loading && <Loader className="h-5 w-5 animate-spin" />}
+            {loading && <LoadingIndicator size={20} />}
             {loading ? '登录中...' : '登录'}
           </button>
         </form>

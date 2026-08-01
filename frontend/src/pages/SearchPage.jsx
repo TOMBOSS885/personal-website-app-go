@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { FileText, Folder, Loader, Search, Zap } from 'lucide-react'
+import { FileText, Folder, Search, Zap } from 'lucide-react'
+import LoadingIndicator from '../components/LoadingIndicator'
 
 export default function SearchPage() {
   const [params, setParams] = useSearchParams()
@@ -71,7 +72,7 @@ export default function SearchPage() {
         <div className="mt-6 overflow-hidden rounded-3xl border border-white/60 bg-white/75 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-gray-500 dark:text-slate-400">
-              <Loader className="mr-2 h-5 w-5 animate-spin" />
+              <LoadingIndicator size={20} className="mr-2" />
               搜索中...
             </div>
           ) : results.length === 0 ? (

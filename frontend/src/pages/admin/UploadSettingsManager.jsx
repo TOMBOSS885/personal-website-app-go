@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Loader, Save, UploadCloud } from 'lucide-react'
+import { Save, UploadCloud } from 'lucide-react'
+import LoadingIndicator from '../../components/LoadingIndicator'
 
 const defaults = {
   articleImageMaxMB: 5,
@@ -55,7 +56,7 @@ export default function UploadSettingsManager() {
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center py-16 text-gray-500"><Loader className="mr-2 h-5 w-5 animate-spin" />加载中...</div>
+  if (loading) return <div className="flex items-center justify-center py-16 text-gray-500"><LoadingIndicator size={20} className="mr-2" />加载中...</div>
 
   return (
     <div className="max-w-4xl">
@@ -65,7 +66,7 @@ export default function UploadSettingsManager() {
           {fields.map(([key, label, unit, min, max]) => <label key={key} className="block text-sm font-medium text-gray-700 dark:text-slate-300">{label}<div className="mt-1 flex"><input type="number" min={min} max={max} value={settings[key]} onChange={event => setSettings(current => ({ ...current, [key]: Number(event.target.value) }))} className="min-w-0 flex-1 rounded-l-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /><span className="rounded-r-lg border border-l-0 border-gray-300 bg-gray-50 px-3 py-2 text-gray-500 dark:border-slate-700 dark:bg-slate-800">{unit}</span></div></label>)}
         </div>
         <p className="mt-6 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">图片允许 JPG、PNG、GIF、WebP；静态前端上限还会受到主机 PHP 的 upload_max_filesize、post_max_size 和剩余空间限制。</p>
-        <div className="mt-6 flex items-center justify-end gap-4">{message && <span className="text-sm text-gray-600 dark:text-slate-300">{message}</span>}<button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-50">{saving ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{saving ? '保存中...' : '保存设置'}</button></div>
+        <div className="mt-6 flex items-center justify-end gap-4">{message && <span className="text-sm text-gray-600 dark:text-slate-300">{message}</span>}<button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 font-medium text-white hover:bg-indigo-700 disabled:opacity-50">{saving ? <LoadingIndicator size={16} /> : <Save className="h-4 w-4" />}{saving ? '保存中...' : '保存设置'}</button></div>
       </form>
     </div>
   )

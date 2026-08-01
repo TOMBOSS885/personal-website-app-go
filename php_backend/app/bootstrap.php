@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/live2d.php';
 require_once __DIR__ . '/analytics.php';
 require_once __DIR__ . '/article_sites.php';
+require_once __DIR__ . '/social.php';
 
 function app_config(): array
 {
@@ -47,6 +48,9 @@ function app_start_session(): void
     if (session_status() === PHP_SESSION_ACTIVE) return;
     $app = app_config()['app'];
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    ini_set('session.use_strict_mode', '1');
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.cookie_httponly', '1');
     session_name((string) ($app['session_name'] ?? 'personal_website_admin'));
     session_set_cookie_params([
         'lifetime' => 0,
@@ -58,12 +62,130 @@ function app_start_session(): void
     session_start();
 }
 
+function app_destroy_session_state(): void
+{
+    if (session_status() !== PHP_SESSION_ACTIVE) return;
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+    }
+    session_destroy();
+}
+
 function app_json($data, int $status = 200): void
 {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+function app_json_cached($data, int $maxAge = 30, int $staleAge = 120): void
+{
+    $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if (!is_string($json)) app_error(500, 'Unable to encode response', 'JSON_ENCODING_FAILED');
+    $etag = '"' . hash('sha256', $json) . '"';
+    header('Cache-Control: public, max-age=' . max(0, $maxAge) . ', stale-while-revalidate=' . max(0, $staleAge));
+    header('ETag: ' . $etag);
+    if (strpos((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? ''), $etag) !== false) {
+        http_response_code(304);
+        exit;
+    }
+    http_response_code(200);
+    header('Content-Type: application/json; charset=utf-8');
+    echo $json;
+    exit;
+}
+
+function app_public_cache_remember(string $key, int $ttl, callable $producer): array
+{
+    $safeKey = preg_replace('/[^a-z0-9_-]/i', '-', $key);
+    $cacheRoot = rtrim((string) app_config()['app']['upload_dir'], '/\\') . '/.cache/api';
+    $cachePath = $cacheRoot . '/' . $safeKey . '.json';
+    if (is_file($cachePath) && filemtime($cachePath) >= time() - $ttl) {
+        $cached = json_decode((string) @file_get_contents($cachePath), true);
+        if (is_array($cached)) return $cached;
+    }
+
+    $value = $producer();
+    if (!is_array($value)) return [];
+    try {
+        if (!is_dir($cacheRoot) && !mkdir($cacheRoot, 0755, true) && !is_dir($cacheRoot)) return $value;
+        $temporary = $cachePath . '.' . bin2hex(random_bytes(4)) . '.tmp';
+        $encoded = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if (is_string($encoded) && file_put_contents($temporary, $encoded, LOCK_EX) !== false) {
+            @chmod($temporary, 0644);
+            if (!@rename($temporary, $cachePath)) @unlink($temporary);
+        }
+    } catch (Throwable $error) {
+        error_log('Public API cache write failed: ' . $error->getMessage());
+    }
+    return $value;
+}
+
+function app_public_cache_clear(): void
+{
+    $cacheRoot = rtrim((string) app_config()['app']['upload_dir'], '/\\') . '/.cache/api';
+    if (!is_dir($cacheRoot)) return;
+    foreach (glob($cacheRoot . '/*.json') ?: [] as $path) {
+        if (is_file($path)) @unlink($path);
+    }
+}
+
+function app_security_secret(string $purpose): string
+{
+    $config = app_config();
+    $material = (string) ($config['app']['setup_key'] ?? '') . '|' . (string) ($config['database']['name'] ?? '');
+    return hash('sha256', $purpose . '|' . $material);
+}
+
+function app_client_address(): string
+{
+    $cloudflare = trim((string) ($_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''));
+    if ($cloudflare !== '' && filter_var($cloudflare, FILTER_VALIDATE_IP)) return $cloudflare;
+    $remote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    return filter_var($remote, FILTER_VALIDATE_IP) ? $remote : 'unknown';
+}
+
+function app_security_client_hash(string $purpose): string
+{
+    $remote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    if (!filter_var($remote, FILTER_VALIDATE_IP)) $remote = 'unknown';
+    return hash_hmac('sha256', 'client|' . $purpose . '|' . $remote . '|' . app_client_address(), app_security_secret($purpose), true);
+}
+
+function app_security_peer_hash(string $purpose): string
+{
+    $remote = trim((string) ($_SERVER['REMOTE_ADDR'] ?? ''));
+    if (!filter_var($remote, FILTER_VALIDATE_IP)) $remote = 'unknown';
+    return hash_hmac('sha256', 'peer|' . $purpose . '|' . $remote, app_security_secret($purpose), true);
+}
+
+function app_security_peer_rate_limit_allow(string $purpose, int $limit): bool
+{
+    $bucket = (int) floor(time() / 300);
+    $rateKey = app_security_peer_hash($purpose);
+    try {
+        $statement = app_db()->prepare('INSERT INTO analytics_rate_limits (rate_key, window_bucket, request_count, updated_at) VALUES (?, ?, 1, NOW()) ON DUPLICATE KEY UPDATE request_count = LAST_INSERT_ID(LEAST(request_count + 1, 65535)), updated_at = NOW()');
+        $statement->execute([$rateKey, $bucket]);
+        if ($statement->rowCount() === 1) return true;
+        return (int) app_db()->query('SELECT LAST_INSERT_ID()')->fetchColumn() <= $limit;
+    } catch (PDOException $error) {
+        error_log('Security peer rate limit unavailable: ' . $error->getMessage());
+        return false;
+    }
+}
+
+function app_security_maybe_cleanup(): void
+{
+    try {
+        if (random_int(1, 100) !== 1) return;
+        app_db()->exec('DELETE FROM admin_login_attempts WHERE updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT 500');
+        app_db()->exec('DELETE FROM article_unlock_attempts WHERE updated_at < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT 500');
+    } catch (Throwable $error) {
+        error_log('Security attempt cleanup failed: ' . $error->getMessage());
+    }
 }
 
 function app_error(int $status, string $message, string $code = 'REQUEST_FAILED'): void
@@ -73,8 +195,11 @@ function app_error(int $status, string $message, string $code = 'REQUEST_FAILED'
 
 function app_body(): array
 {
+    $contentLength = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($contentLength > 5 * 1024 * 1024) app_error(413, '请求内容超过 5MB 限制', 'REQUEST_TOO_LARGE');
     $raw = file_get_contents('php://input');
     if ($raw === false || trim($raw) === '') return [];
+    if (strlen($raw) > 5 * 1024 * 1024) app_error(413, '请求内容超过 5MB 限制', 'REQUEST_TOO_LARGE');
     $data = json_decode($raw, true);
     if (!is_array($data)) app_error(400, '请求 JSON 格式错误', 'INVALID_JSON');
     return $data;
@@ -168,17 +293,27 @@ function app_update_admin_security_settings(): array
         app_error(400, '后台地址后缀必须为 8 到 64 位字母、数字、连字符或下划线，且不能使用公开页面名称', 'INVALID_ADMIN_PATH');
     }
 
-    $statement = app_db()->prepare('SELECT password_hash FROM admin_account WHERE id = ?');
-    $statement->execute([$_SESSION['admin_id']]);
-    $admin = $statement->fetch();
-    if (!$admin || !password_verify((string) ($body['currentPassword'] ?? ''), $admin['password_hash'])) {
-        app_error(400, '当前管理员密码不正确', 'INVALID_CURRENT_PASSWORD');
-    }
-
     app_site_settings_ensure();
-    $statement = app_db()->prepare('UPDATE site_settings SET admin_path_suffix = ?, updated_at = NOW() WHERE id = 1');
-    $statement->execute([$suffix]);
-    return ['adminPathSuffix' => $suffix, 'loginPath' => '/' . $suffix . '/login'];
+    $database = app_db();
+    $database->beginTransaction();
+    try {
+        $statement = $database->prepare('SELECT password_hash FROM admin_account WHERE id = ? FOR UPDATE');
+        $statement->execute([$_SESSION['admin_id']]);
+        $admin = $statement->fetch();
+        $password = (string) ($body['currentPassword'] ?? '');
+        if (!$admin || strlen($password) > 1024 || !password_verify($password, $admin['password_hash'])) {
+            $database->rollBack();
+            app_error(400, '当前管理员密码不正确', 'INVALID_CURRENT_PASSWORD');
+        }
+        $statement = $database->prepare('UPDATE site_settings SET admin_path_suffix = ?, updated_at = NOW() WHERE id = 1');
+        $statement->execute([$suffix]);
+        $database->prepare('UPDATE admin_account SET session_version = session_version + 1, updated_at = NOW() WHERE id = ?')->execute([$_SESSION['admin_id']]);
+        $database->commit();
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->rollBack();
+        throw $error;
+    }
+    return ['adminPathSuffix' => $suffix, 'loginPath' => '/' . $suffix . '/login', 'requiresLogin' => true];
 }
 
 function app_admin_entry_required(): void
@@ -192,6 +327,23 @@ function app_admin_entry_required(): void
 function app_admin_required(): void
 {
     if (empty($_SESSION['admin_id'])) app_error(401, '请先登录', 'UNAUTHENTICATED');
+    $now = time();
+    $createdAt = (int) ($_SESSION['admin_created_at'] ?? 0);
+    $lastSeenAt = (int) ($_SESSION['admin_last_seen_at'] ?? 0);
+    if ($createdAt <= 0 || $lastSeenAt <= 0 || $now - $createdAt > 43200 || $now - $lastSeenAt > 3600) {
+        app_destroy_session_state();
+        app_error(401, '登录状态已过期，请重新登录', 'SESSION_EXPIRED');
+    }
+
+    $statement = app_db()->prepare('SELECT username, session_version FROM admin_account WHERE id = ?');
+    $statement->execute([(int) $_SESSION['admin_id']]);
+    $admin = $statement->fetch();
+    if (!$admin || !hash_equals((string) ($admin['session_version'] ?? ''), (string) ($_SESSION['admin_session_version'] ?? ''))) {
+        app_destroy_session_state();
+        app_error(401, '登录状态已失效，请重新登录', 'SESSION_REVOKED');
+    }
+    $_SESSION['admin_last_seen_at'] = $now;
+    $_SESSION['admin_username'] = (string) $admin['username'];
 }
 
 function app_csrf_required(): void
@@ -290,10 +442,13 @@ function app_articles(bool $admin = false): array
     $count = app_db()->prepare("SELECT COUNT(*) FROM articles WHERE $condition");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
-    $sql = "SELECT * FROM articles WHERE $condition ORDER BY created_at DESC LIMIT $size OFFSET " . ($page * $size);
+    // List endpoints never need the MEDIUMTEXT body or password hash. Article
+    // content is loaded from the detail endpoint only when it is opened.
+    $columns = 'id,title,summary,cover_image,category,tags,views,published,content_type,static_site_key,static_site_name,is_locked,created_at,updated_at';
+    $sql = "SELECT $columns FROM articles WHERE $condition ORDER BY created_at DESC LIMIT $size OFFSET " . ($page * $size);
     $statement = app_db()->prepare($sql);
     $statement->execute($params);
-    $rows = array_map(function ($row) use ($admin) { return app_article_row($row, $admin, $admin); }, $statement->fetchAll());
+    $rows = array_map(function ($row) use ($admin) { return app_article_row($row, false, $admin); }, $statement->fetchAll());
     return app_page($rows, $total, $size, $page);
 }
 
@@ -409,7 +564,16 @@ function app_inspect_image(string $path): array
 
 function app_upload_image(string $kind): array
 {
-    if (empty($_FILES['file']) || !is_uploaded_file($_FILES['file']['tmp_name'])) app_error(400, '请选择要上传的图片', 'FILE_REQUIRED');
+    if (empty($_FILES['file']) || !is_array($_FILES['file'])) app_error(400, '请选择要上传的图片', 'FILE_REQUIRED');
+    $uploadError = (int) ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        if (in_array($uploadError, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) app_error(413, '图片超过主机 PHP 上传限制', 'PHP_UPLOAD_TOO_LARGE');
+        if ($uploadError === UPLOAD_ERR_PARTIAL) app_error(400, '图片只上传了一部分，请重试', 'UPLOAD_PARTIAL');
+        if ($uploadError === UPLOAD_ERR_NO_FILE) app_error(400, '请选择要上传的图片', 'FILE_REQUIRED');
+        error_log('Image upload rejected by PHP with code ' . $uploadError);
+        app_error(500, '主机无法接收上传文件，请检查临时目录和磁盘空间', 'PHP_UPLOAD_FAILED');
+    }
+    if (!is_uploaded_file((string) $_FILES['file']['tmp_name'])) app_error(400, '上传文件无效', 'UPLOAD_INVALID');
     $settings = app_upload_settings();
     $limits = ['article' => $settings['articleImageMaxMB'], 'theme' => $settings['themeBackgroundMaxMB'], 'avatar' => $settings['avatarImageMaxMB']];
     $limit = ($limits[$kind] ?? 2) * 1024 * 1024;
@@ -451,31 +615,184 @@ function app_list_images(string $folder): array
     return $items;
 }
 
+function app_upload_path_from_url(string $url): ?string
+{
+    $config = app_config()['app'];
+    $prefix = rtrim((string) $config['upload_url'], '/') . '/';
+    if (strpos($url, $prefix) !== 0) return null;
+    $relative = ltrim(substr($url, strlen($prefix)), '/');
+    if ($relative === '' || strpos($relative, '..') !== false || strpos($relative, "\0") !== false) return null;
+    return rtrim((string) $config['upload_dir'], '/\\') . '/' . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+}
+
+function app_cleanup_upload_assets(string $kind): array
+{
+    $folder = $kind === 'theme_background' ? 'theme' : ($kind === 'article_image' ? 'articles' : '');
+    if ($folder === '') app_error(400, '不支持的清理类型', 'INVALID_CLEANUP_KIND');
+    $references = '';
+    if ($folder === 'articles') {
+        foreach (app_db()->query('SELECT cover_image, content FROM articles')->fetchAll() as $row) $references .= "\n" . (string) $row['cover_image'] . "\n" . (string) $row['content'];
+        foreach (app_db()->query('SELECT cover_image FROM projects')->fetchAll(PDO::FETCH_COLUMN) as $url) $references .= "\n" . (string) $url;
+    } else {
+        $row = app_db()->query('SELECT background, background_image FROM themes WHERE id = 1')->fetch() ?: [];
+        $references = (string) ($row['background'] ?? '') . "\n" . (string) ($row['background_image'] ?? '');
+    }
+
+    $config = app_config()['app'];
+    $root = rtrim((string) $config['upload_dir'], '/\\') . '/' . $folder;
+    if (!is_dir($root)) return ['removed' => 0, 'reclaimedBytes' => 0];
+    $removed = 0;
+    $reclaimed = 0;
+    $cutoff = time() - 3600;
+    $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+    foreach ($iterator as $file) {
+        if ($file->isDir()) {
+            @rmdir($file->getPathname());
+            continue;
+        }
+        if (!$file->isFile() || $file->getMTime() > $cutoff) continue;
+        $relative = str_replace('\\', '/', substr($file->getPathname(), strlen(rtrim((string) $config['upload_dir'], '/\\')) + 1));
+        $url = rtrim((string) $config['upload_url'], '/') . '/' . $relative;
+        if (strpos($references, $url) !== false) continue;
+        $size = $file->getSize();
+        if (@unlink($file->getPathname())) { $removed++; $reclaimed += $size; }
+    }
+    return ['removed' => $removed, 'reclaimedBytes' => $reclaimed];
+}
+
+function app_delete_theme_background(string $name): array
+{
+    $name = basename(str_replace('\\', '/', $name));
+    if ($name === '' || !preg_match('/\.(?:jpe?g|png|gif|webp)$/i', $name)) app_error(400, '背景图片名称无效', 'INVALID_IMAGE_NAME');
+    $config = app_config()['app'];
+    $root = rtrim((string) $config['upload_dir'], '/\\') . '/theme';
+    $target = null;
+    $url = '';
+    if (is_dir($root)) {
+        foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $file) {
+            if (!$file->isFile() || !hash_equals($file->getFilename(), $name)) continue;
+            $target = $file->getPathname();
+            $relative = str_replace('\\', '/', substr($target, strlen(rtrim((string) $config['upload_dir'], '/\\')) + 1));
+            $url = rtrim((string) $config['upload_url'], '/') . '/' . $relative;
+            break;
+        }
+    }
+    if ($target === null) app_error(404, '背景图片不存在', 'NOT_FOUND');
+
+    $statement = app_db()->prepare("UPDATE themes SET background_image = '' WHERE id = 1 AND background_image = ?");
+    $statement->execute([$url]);
+    $deleted = @unlink($target);
+    app_public_cache_clear();
+    if (!$deleted) return ['success' => false, 'warning' => '主题引用已清除，但文件删除失败，请检查 uploads/theme 权限'];
+    return ['success' => true];
+}
+
 function app_handle_login(): void
 {
     $body = app_body();
     $username = trim((string) ($body['username'] ?? ''));
     $password = (string) ($body['password'] ?? '');
-    $statement = app_db()->prepare('SELECT * FROM admin_account WHERE username = ? LIMIT 1');
-    $statement->execute([$username]);
-    $admin = $statement->fetch();
-    if ($admin && $admin['locked_until'] && strtotime($admin['locked_until']) > time()) app_error(429, '登录失败次数过多，请稍后再试', 'LOGIN_LOCKED');
-    if (!$admin || !password_verify($password, $admin['password_hash'])) {
-        if ($admin) {
-            $attempts = (int) $admin['failed_login_attempts'] + 1;
-            $locked = $attempts >= 5 ? date('Y-m-d H:i:s', time() + 600) : null;
-            $update = app_db()->prepare('UPDATE admin_account SET failed_login_attempts = ?, locked_until = ?, updated_at = NOW() WHERE id = ?');
-            $update->execute([$attempts >= 5 ? 0 : $attempts, $locked, $admin['id']]);
+    if (!app_security_peer_rate_limit_allow('admin-login', 60)) app_error(429, '登录尝试过于频繁，请稍后再试', 'LOGIN_RATE_LIMITED');
+    $clientHash = app_security_client_hash('admin-login');
+    $database = app_db();
+    $database->beginTransaction();
+    try {
+        $database->prepare('INSERT IGNORE INTO admin_login_attempts (client_hash, failed_attempts, locked_until, updated_at) VALUES (?, 0, NULL, NOW())')->execute([$clientHash]);
+        $attemptStatement = $database->prepare('SELECT failed_attempts, locked_until FROM admin_login_attempts WHERE client_hash = ? FOR UPDATE');
+        $attemptStatement->execute([$clientHash]);
+        $attempt = $attemptStatement->fetch() ?: ['failed_attempts' => 0, 'locked_until' => null];
+
+        $admin = false;
+        if ($username !== '' && strlen($username) <= 100) {
+            $statement = $database->prepare('SELECT * FROM admin_account WHERE username = ? LIMIT 1');
+            $statement->execute([$username]);
+            $admin = $statement->fetch();
         }
-        usleep(350000);
-        app_error(401, '用户名或密码错误', 'INVALID_CREDENTIALS');
+        $dummyHash = '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
+        $passwordValid = strlen($password) <= 1024 && password_verify($password, $admin ? $admin['password_hash'] : $dummyHash);
+        $currentlyLocked = !empty($attempt['locked_until']) && strtotime((string) $attempt['locked_until']) > time();
+
+        if (!$admin || !$passwordValid || $currentlyLocked) {
+            if (!$currentlyLocked) {
+                $attempts = ((int) $attempt['failed_attempts']) + 1;
+                $lockedUntil = $attempts >= 5 ? date('Y-m-d H:i:s', time() + 900) : null;
+                $update = $database->prepare('UPDATE admin_login_attempts SET failed_attempts = ?, locked_until = ?, updated_at = NOW() WHERE client_hash = ?');
+                $update->execute([$attempts >= 5 ? 0 : $attempts, $lockedUntil, $clientHash]);
+                $currentlyLocked = $lockedUntil !== null;
+            }
+            $database->commit();
+            app_security_maybe_cleanup();
+            usleep(350000);
+            app_error($currentlyLocked ? 429 : 401, $currentlyLocked ? '登录失败次数过多，请 15 分钟后再试' : '用户名或密码错误', $currentlyLocked ? 'LOGIN_LOCKED' : 'INVALID_CREDENTIALS');
+        }
+
+        $database->prepare('DELETE FROM admin_login_attempts WHERE client_hash = ?')->execute([$clientHash]);
+        $database->prepare('UPDATE admin_account SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?')->execute([$admin['id']]);
+        $database->commit();
+        app_security_maybe_cleanup();
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->rollBack();
+        throw $error;
     }
     session_regenerate_id(true);
     $_SESSION['admin_id'] = (int) $admin['id'];
     $_SESSION['admin_username'] = $admin['username'];
+    $_SESSION['admin_session_version'] = (int) $admin['session_version'];
+    $_SESSION['admin_created_at'] = time();
+    $_SESSION['admin_last_seen_at'] = time();
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-    app_db()->prepare('UPDATE admin_account SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW(), updated_at = NOW() WHERE id = ?')->execute([$admin['id']]);
     app_json(['success' => true, 'username' => $admin['username'], 'csrfToken' => $_SESSION['csrf_token']]);
+}
+
+function app_handle_article_unlock(int $id): void
+{
+    $body = app_body();
+    $password = (string) ($body['password'] ?? '');
+    if (!app_security_peer_rate_limit_allow('article-unlock-' . $id, 120)) app_error(429, '密码尝试过于频繁，请稍后再试', 'ARTICLE_PASSWORD_RATE_LIMITED');
+    $clientHash = app_security_client_hash('article-unlock');
+    $database = app_db();
+    $database->beginTransaction();
+    try {
+        $statement = $database->prepare('SELECT * FROM articles WHERE id = ? AND published = 1');
+        $statement->execute([$id]);
+        $row = $statement->fetch();
+        if (!$row) {
+            $database->rollBack();
+            app_error(404, '文章不存在', 'NOT_FOUND');
+        }
+
+        $database->prepare('INSERT IGNORE INTO article_unlock_attempts (article_id, client_hash, failed_attempts, locked_until, updated_at) VALUES (?, ?, 0, NULL, NOW())')->execute([$id, $clientHash]);
+        $attemptStatement = $database->prepare('SELECT failed_attempts, locked_until FROM article_unlock_attempts WHERE article_id = ? AND client_hash = ? FOR UPDATE');
+        $attemptStatement->execute([$id, $clientHash]);
+        $attempt = $attemptStatement->fetch() ?: ['failed_attempts' => 0, 'locked_until' => null];
+        $currentlyLocked = !empty($attempt['locked_until']) && strtotime((string) $attempt['locked_until']) > time();
+        $passwordValid = strlen($password) <= 512
+            && !empty($row['access_password_hash'])
+            && password_verify($password, $row['access_password_hash']);
+
+        if ($currentlyLocked || !$passwordValid) {
+            if (!$currentlyLocked) {
+                $attempts = ((int) $attempt['failed_attempts']) + 1;
+                $lockedUntil = $attempts >= 5 ? date('Y-m-d H:i:s', time() + 900) : null;
+                $update = $database->prepare('UPDATE article_unlock_attempts SET failed_attempts = ?, locked_until = ?, updated_at = NOW() WHERE article_id = ? AND client_hash = ?');
+                $update->execute([$attempts >= 5 ? 0 : $attempts, $lockedUntil, $id, $clientHash]);
+                $currentlyLocked = $lockedUntil !== null;
+            }
+            $database->commit();
+            app_security_maybe_cleanup();
+            app_error($currentlyLocked ? 429 : 403, $currentlyLocked ? '密码错误次数过多，请 15 分钟后再试' : '文章访问密码错误', $currentlyLocked ? 'ARTICLE_PASSWORD_LOCKED' : 'INVALID_ARTICLE_PASSWORD');
+        }
+
+        $database->prepare('DELETE FROM article_unlock_attempts WHERE article_id = ? AND client_hash = ?')->execute([$id, $clientHash]);
+        $database->commit();
+        app_security_maybe_cleanup();
+        $_SESSION['article_unlocks'][$id] = true;
+        if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
+        app_json(app_article_row($row, true));
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->rollBack();
+        throw $error;
+    }
 }
 
 function app_save_article(?int $id): void
@@ -520,6 +837,7 @@ function app_save_article(?int $id): void
     $statement = app_db()->prepare('SELECT * FROM articles WHERE id = ?');
     $statement->execute([$id]);
     if ($oldSiteKey !== '' && $oldSiteKey !== $siteKey) app_article_site_delete_if_unreferenced($oldSiteKey);
+    app_public_cache_clear();
     app_json(app_article_row($statement->fetch(), true, true), $status);
 }
 
@@ -531,6 +849,7 @@ function app_delete_article(int $id): void
     if (!$row) app_error(404, '文章不存在', 'NOT_FOUND');
     app_db()->prepare('DELETE FROM articles WHERE id = ?')->execute([$id]);
     app_article_site_delete_if_unreferenced((string) ($row['static_site_key'] ?? ''));
+    app_public_cache_clear();
     app_json(['success' => true]);
 }
 
@@ -556,12 +875,16 @@ function app_generic_save(string $resource, ?int $id): void
         else { $sql='UPDATE feature_cards SET title=?,title_en=?,description=?,description_en=?,icon=?,gradient=?,display_order=?,enabled=? WHERE id=?'; $values[]=$id; }
     }
     app_db()->prepare($sql)->execute($values);
+    app_public_cache_clear();
     app_json(['success'=>true,'id'=>$id ?? (int) app_db()->lastInsertId()], $id===null?201:200);
 }
 
 function app_handle_request(): void
 {
     header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
     $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
     $methodOverride = strtoupper((string) ($_SERVER['HTTP_X_HTTP_METHOD_OVERRIDE'] ?? ''));
     if ($method === 'POST' && $methodOverride === 'DELETE') $method = 'DELETE';
@@ -583,26 +906,37 @@ function app_handle_request(): void
     try {
         if ($method === 'GET' && $route === 'health') {
             app_db()->query('SELECT 1');
-            app_json(['status' => 'ok', 'database' => 'ok']);
+            app_db()->query('SELECT session_version FROM admin_account LIMIT 1');
+            app_db()->query('SELECT 1 FROM admin_login_attempts LIMIT 1');
+            app_db()->query('SELECT 1 FROM friend_links LIMIT 1');
+            app_db()->query('SELECT target_type, target_id, target_title FROM guest_messages LIMIT 1');
+            app_db()->query('SELECT transferred_bytes FROM site_visits LIMIT 1');
+            app_db()->query('SELECT 1 FROM site_analytics_totals LIMIT 1');
+            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '009']);
         }
         if ($method === 'POST' && $route === 'auth/login') app_handle_login();
         if ($method === 'POST' && $route === 'auth/logout') {
             if (!empty($_SESSION['admin_id'])) app_csrf_required();
-            $_SESSION = [];
-            if (ini_get('session.use_cookies')) { $params=session_get_cookie_params(); setcookie(session_name(), '', time()-42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']); }
-            session_destroy();
+            app_destroy_session_state();
             app_json(['success' => true]);
         }
 
-        if ($method === 'GET' && $route === 'public/profile') app_json(app_profile(true));
+        if ($method === 'GET' && $route === 'public/profile') {
+            $language = strtolower((string) ($_GET['lang'] ?? 'zh')) === 'en' ? 'en' : 'zh';
+            app_json_cached(app_public_cache_remember('profile-' . $language, 20, function (): array { return app_profile(true); }), 30, 120);
+        }
         if ($method === 'GET' && $route === 'public/stats') {
             $profile=app_profile(true); $projects=(int)app_db()->query('SELECT COUNT(*) FROM projects')->fetchColumn(); $articles=(int)app_db()->query('SELECT COUNT(*) FROM articles WHERE published=1')->fetchColumn(); $stars=(int)app_db()->query('SELECT COALESCE(SUM(stars),0) FROM projects')->fetchColumn();
             app_json(['coffeeCount'=>$profile['coffeeCount'],'projectCount'=>$projects,'articleCount'=>$articles,'starsCount'=>$profile['starsCount'] ?: $stars]);
         }
         if ($method === 'GET' && $route === 'public/home') {
-            $articlePage=$_GET['page']??null; $articleSize=$_GET['size']??null; $_GET['page']=0; $_GET['size']=3; $articles=app_articles(false)['content']; if($articlePage===null)unset($_GET['page']);else $_GET['page']=$articlePage; if($articleSize===null)unset($_GET['size']);else $_GET['size']=$articleSize;
-            $profile=app_profile(true); $projects=app_projects(true); $skills=app_skills(); $cards=app_feature_cards(true); $articleCount=(int)app_db()->query('SELECT COUNT(*) FROM articles WHERE published=1')->fetchColumn(); $projectCount=(int)app_db()->query('SELECT COUNT(*) FROM projects')->fetchColumn(); $stars=(int)app_db()->query('SELECT COALESCE(SUM(stars),0) FROM projects')->fetchColumn();
-            app_json(['profile'=>$profile,'articles'=>$articles,'projects'=>$projects,'skills'=>$skills,'featureCards'=>$cards,'stats'=>['coffeeCount'=>$profile['coffeeCount'],'projectCount'=>$projectCount,'articleCount'=>$articleCount,'starsCount'=>$profile['starsCount'] ?: $stars]]);
+            $language = strtolower((string) ($_GET['lang'] ?? 'zh')) === 'en' ? 'en' : 'zh';
+            $payload = app_public_cache_remember('home-' . $language, 20, function (): array {
+                $articlePage=$_GET['page']??null; $articleSize=$_GET['size']??null; $_GET['page']=0; $_GET['size']=3; $articleResult=app_articles(false); if($articlePage===null)unset($_GET['page']);else $_GET['page']=$articlePage; if($articleSize===null)unset($_GET['size']);else $_GET['size']=$articleSize;
+                $profile=app_profile(true); $allProjects=app_projects(false); $projects=array_values(array_filter($allProjects, function(array $project): bool { return !empty($project['featured']); })); $skills=app_skills(); $cards=app_feature_cards(true); $stars=array_sum(array_column($allProjects,'stars'));
+                return ['profile'=>$profile,'articles'=>$articleResult['content'],'projects'=>$projects,'skills'=>$skills,'featureCards'=>$cards,'stats'=>['coffeeCount'=>$profile['coffeeCount'],'projectCount'=>count($allProjects),'articleCount'=>$articleResult['totalElements'],'starsCount'=>$profile['starsCount'] ?: $stars]];
+            });
+            app_json_cached($payload, 30, 120);
         }
         if ($method === 'GET' && $route === 'public/articles') app_json(app_articles(false));
         if (in_array($method, ['GET', 'HEAD'], true)
@@ -611,11 +945,11 @@ function app_handle_request(): void
         }
         if ($method === 'GET' && preg_match('#^public/articles/(\d+)$#', $route, $match)) {
             $statement=app_db()->prepare('SELECT * FROM articles WHERE id=? AND published=1'); $statement->execute([(int)$match[1]]); $row=$statement->fetch(); if(!$row)app_error(404,'文章不存在','NOT_FOUND');
-            $unlocked=!empty($_SESSION['article_unlocks'][(int)$row['id']]); if($row['is_locked']&&!$unlocked){$article=app_article_row($row,false);$article['requiresPassword']=true;app_json($article);} app_db()->prepare('UPDATE articles SET views=views+1 WHERE id=?')->execute([$row['id']]); $row['views']++;
+            $unlocked=!empty($_SESSION['article_unlocks'][(int)$row['id']]); if (session_status() === PHP_SESSION_ACTIVE) session_write_close(); if($row['is_locked']&&!$unlocked){$article=app_article_row($row,false);$article['requiresPassword']=true;app_json($article);} app_db()->prepare('UPDATE articles SET views=views+1 WHERE id=?')->execute([$row['id']]); $row['views']++;
             $article=app_article_row($row,true);$article['requiresPassword']=false;app_json($article);
         }
         if ($method === 'POST' && preg_match('#^public/articles/(\d+)/unlock$#', $route, $match)) {
-            $statement=app_db()->prepare('SELECT * FROM articles WHERE id=? AND published=1');$statement->execute([(int)$match[1]]);$row=$statement->fetch();if(!$row)app_error(404,'文章不存在');$body=app_body();if(!$row['access_password_hash']||!password_verify((string)($body['password']??''),$row['access_password_hash']))app_error(403,'文章访问密码错误','INVALID_ARTICLE_PASSWORD');$_SESSION['article_unlocks'][(int)$row['id']]=true;app_json(app_article_row($row,true));
+            app_handle_article_unlock((int) $match[1]);
         }
         if ($method === 'GET' && $route === 'public/categories') app_json(app_db()->query("SELECT DISTINCT category FROM articles WHERE published=1 AND category<>'' ORDER BY category")->fetchAll(PDO::FETCH_COLUMN));
         if ($method === 'GET' && $route === 'public/tags') { $tags=[];foreach(app_db()->query("SELECT tags FROM articles WHERE published=1 AND tags<>''")->fetchAll(PDO::FETCH_COLUMN) as $list){foreach(explode(',',$list) as $tag){$tag=trim($tag);if($tag!=='')$tags[$tag]=true;}}$result=array_keys($tags);sort($result,SORT_NATURAL|SORT_FLAG_CASE);app_json($result); }
@@ -623,13 +957,19 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'public/projects/featured') app_json(app_projects(true));
         if ($method === 'GET' && $route === 'public/skills') app_json(app_skills());
         if ($method === 'GET' && $route === 'public/feature-cards') app_json(app_feature_cards(true));
-        if ($method === 'GET' && $route === 'public/theme') app_json(app_theme());
+        if ($method === 'GET' && $route === 'public/theme') app_json_cached(app_public_cache_remember('theme', 20, function (): array { return app_theme(); }), 30, 120);
         if ($method === 'GET' && $route === 'public/theme/background-images') app_json(app_list_images('theme'));
         if ($method === 'GET' && $route === 'public/live2d-model') {
             header('Cache-Control: public, max-age=60, stale-while-revalidate=300');
             app_json(app_live2d());
         }
         if ($method === 'POST' && $route === 'public/analytics/visit') app_json(app_analytics_record_visit(), 201);
+        if ($method === 'GET' && $route === 'public/site-monitor') app_json_cached(app_analytics_public_monitor(), 30, 120);
+        if ($method === 'GET' && $route === 'public/friends') app_json_cached(app_public_friend_links(), 60, 300);
+        if ($method === 'GET' && $route === 'public/guest-message-targets') app_json_cached(app_public_guest_message_targets(), 30, 120);
+        if ($method === 'GET' && $route === 'public/guest-messages') app_json(app_public_guest_messages());
+        if ($method === 'GET' && preg_match('#^public/guest-messages/(\d+)$#', $route, $match)) app_json(app_public_guest_message((int) $match[1]));
+        if ($method === 'POST' && $route === 'public/guest-messages') app_json(app_create_guest_message(), 201);
         if ($method === 'GET' && $route === 'public/search') {
             $q=trim((string)($_GET['q']??''));if($q==='')app_json([]);$like="%$q%";$results=[];$s=app_db()->prepare('SELECT id,title,summary FROM articles WHERE published=1 AND (title LIKE ? OR summary LIKE ?) ORDER BY created_at DESC LIMIT 20');$s->execute([$like,$like]);foreach($s->fetchAll() as $row)$results[]=['type'=>'article','id'=>(int)$row['id'],'title'=>$row['title'],'description'=>$row['summary'],'url'=>'/blog/'.$row['id']];$s=app_db()->prepare('SELECT id,name,description FROM projects WHERE name LIKE ? OR description LIKE ? LIMIT 20');$s->execute([$like,$like]);foreach($s->fetchAll() as $row)$results[]=['type'=>'project','id'=>(int)$row['id'],'title'=>$row['name'],'description'=>$row['description'],'url'=>'/projects'];$s=app_db()->prepare('SELECT id,name,category FROM skills WHERE name LIKE ? OR category LIKE ? LIMIT 20');$s->execute([$like,$like]);foreach($s->fetchAll() as $row)$results[]=['type'=>'skill','id'=>(int)$row['id'],'title'=>$row['name'],'description'=>$row['category'],'url'=>'/#skills'];app_json($results);
         }
@@ -642,9 +982,23 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'admin/session') app_json(['authenticated'=>true,'username'=>$_SESSION['admin_username'],'csrfToken'=>app_ensure_csrf()]);
         if ($method === 'GET' && $route === 'admin/dashboard-stats') app_json(array_merge(['articleCount'=>(int)app_db()->query('SELECT COUNT(*) FROM articles')->fetchColumn(),'publishedArticleCount'=>(int)app_db()->query('SELECT COUNT(*) FROM articles WHERE published=1')->fetchColumn(),'projectCount'=>(int)app_db()->query('SELECT COUNT(*) FROM projects')->fetchColumn(),'skillCount'=>(int)app_db()->query('SELECT COUNT(*) FROM skills')->fetchColumn(),'totalViews'=>(int)app_db()->query('SELECT COALESCE(SUM(views),0) FROM articles')->fetchColumn()], app_analytics_dashboard_summary()));
         if ($method === 'GET' && $route === 'admin/analytics') app_json(app_analytics_report());
+        if ($method === 'GET' && $route === 'admin/friends') app_json(app_admin_friend_links());
+        if ($method === 'POST' && $route === 'admin/friends') app_json(app_save_friend_link(null), 201);
+        if (preg_match('#^admin/friends/(\d+)$#', $route, $match)) {
+            if ($method === 'PUT') app_json(app_save_friend_link((int) $match[1]));
+            if ($method === 'DELETE') app_json(app_delete_friend_link((int) $match[1]));
+        }
+        if ($method === 'GET' && $route === 'admin/guest-messages') app_json(app_admin_guest_messages());
+        if ($method === 'PUT' && preg_match('#^admin/guest-messages/(\d+)/status$#', $route, $match)) app_json(app_update_guest_message_status((int) $match[1]));
+        if ($method === 'DELETE' && preg_match('#^admin/guest-messages/(\d+)$#', $route, $match)) app_json(app_delete_guest_message((int) $match[1]));
         if ($method === 'GET' && $route === 'admin/articles') app_json(app_articles(true));
         if ($method === 'POST' && $route === 'admin/articles') app_save_article(null);
-        if (preg_match('#^admin/articles/(\d+)$#',$route,$match)) { $id=(int)$match[1];if($method==='PUT')app_save_article($id);if($method==='DELETE')app_delete_article($id); }
+        if (preg_match('#^admin/articles/(\d+)$#',$route,$match)) {
+            $id=(int)$match[1];
+            if($method==='GET'){$statement=app_db()->prepare('SELECT * FROM articles WHERE id=?');$statement->execute([$id]);$article=$statement->fetch();if(!$article)app_error(404,'文章不存在','NOT_FOUND');app_json(app_article_row($article,true,true));}
+            if($method==='PUT')app_save_article($id);
+            if($method==='DELETE')app_delete_article($id);
+        }
         if ($method === 'POST' && $route === 'admin/article-sites') {
             try {
                 app_json(app_article_site_upload(), 201);
@@ -657,15 +1011,37 @@ function app_handle_request(): void
         }
         if ($method === 'GET' && $route === 'admin/article-images') app_json(app_list_images('articles'));
         if ($method === 'POST' && $route === 'admin/article-images') app_json(app_upload_image('article'),201);
-        if ($method === 'POST' && $route === 'admin/upload-assets/cleanup') app_json(['removed'=>0]);
+        if ($method === 'POST' && $route === 'admin/upload-assets/cleanup') app_json(app_cleanup_upload_assets((string) ($_GET['kind'] ?? '')));
         if ($method === 'GET' && $route === 'admin/projects') app_json(app_projects(false));
         if ($method === 'GET' && $route === 'admin/skills') app_json(app_skills());
         if ($method === 'GET' && $route === 'admin/feature-cards') app_json(app_feature_cards(false));
-        foreach(['projects','skills','feature-cards'] as $resource){$dbResource=$resource==='feature-cards'?'feature_cards':$resource;if($method==='POST'&&$route==='admin/'.$resource)app_generic_save($dbResource,null);if(preg_match('#^admin/'.preg_quote($resource,'#').'/(\d+)$#',$route,$match)){if($method==='PUT')app_generic_save($dbResource,(int)$match[1]);if($method==='DELETE'){app_db()->prepare("DELETE FROM $dbResource WHERE id=?")->execute([(int)$match[1]]);app_json(['success'=>true]);}}}
+        foreach(['projects','skills','feature-cards'] as $resource){$dbResource=$resource==='feature-cards'?'feature_cards':$resource;if($method==='POST'&&$route==='admin/'.$resource)app_generic_save($dbResource,null);if(preg_match('#^admin/'.preg_quote($resource,'#').'/(\d+)$#',$route,$match)){if($method==='PUT')app_generic_save($dbResource,(int)$match[1]);if($method==='DELETE'){$delete=app_db()->prepare("DELETE FROM $dbResource WHERE id=?");$delete->execute([(int)$match[1]]);if($delete->rowCount()===0)app_error(404,'资源不存在','NOT_FOUND');app_public_cache_clear();app_json(['success'=>true]);}}}
         if ($method === 'GET' && $route === 'admin/profile') app_json(app_profile(false));
-        if ($method === 'PUT' && $route === 'admin/profile') { $b=app_body();$s=app_db()->prepare('UPDATE site_profile SET nickname=?,avatar=?,bio=?,bio_en=?,location=?,website=?,github=?,twitter=?,linkedin=?,email_public=?,tags=?,tags_en=?,welcome_text=?,welcome_text_en=?,cta_title=?,cta_title_en=?,cta_description=?,cta_description_en=?,coffee_count=?,stars_count=?,updated_at=NOW() WHERE id=1');$s->execute([trim((string)($b['nickname']??'')),trim((string)($b['avatar']??'')),(string)($b['bio']??''),(string)($b['bioEn']??''),trim((string)($b['location']??'')),trim((string)($b['website']??'')),trim((string)($b['github']??'')),trim((string)($b['twitter']??'')),trim((string)($b['linkedin']??'')),trim((string)($b['emailPublic']??'')),trim((string)($b['tags']??'')),trim((string)($b['tagsEn']??'')),trim((string)($b['welcomeText']??'')),trim((string)($b['welcomeTextEn']??'')),trim((string)($b['ctaTitle']??'')),trim((string)($b['ctaTitleEn']??'')),trim((string)($b['ctaDescription']??'')),trim((string)($b['ctaDescriptionEn']??'')),app_int($b['coffeeCount']??0),app_int($b['starsCount']??0)]);app_json(app_profile(false)); }
-        if ($method === 'POST' && $route === 'admin/profile/avatar') { $image=app_upload_image('avatar');app_db()->prepare('UPDATE site_profile SET avatar=?,updated_at=NOW() WHERE id=1')->execute([$image['url']]);app_json(['avatar'=>$image['url']]); }
-        if ($method === 'PUT' && $route === 'admin/account/password') { $b=app_body();$s=app_db()->prepare('SELECT * FROM admin_account WHERE id=?');$s->execute([$_SESSION['admin_id']]);$admin=$s->fetch();$new=(string)($b['newPassword']??'');if(!$admin||!password_verify((string)($b['currentPassword']??''),$admin['password_hash']))app_error(400,'当前密码不正确');if(strlen($new)<10)app_error(400,'新密码至少需要 10 位');app_db()->prepare('UPDATE admin_account SET password_hash=?,updated_at=NOW() WHERE id=?')->execute([password_hash($new,PASSWORD_DEFAULT),$admin['id']]);app_json(['message'=>'密码修改成功']); }
+        if ($method === 'PUT' && $route === 'admin/profile') { $b=app_body();$s=app_db()->prepare('UPDATE site_profile SET nickname=?,avatar=?,bio=?,bio_en=?,location=?,website=?,github=?,twitter=?,linkedin=?,email_public=?,tags=?,tags_en=?,welcome_text=?,welcome_text_en=?,cta_title=?,cta_title_en=?,cta_description=?,cta_description_en=?,coffee_count=?,stars_count=?,updated_at=NOW() WHERE id=1');$s->execute([trim((string)($b['nickname']??'')),trim((string)($b['avatar']??'')),(string)($b['bio']??''),(string)($b['bioEn']??''),trim((string)($b['location']??'')),trim((string)($b['website']??'')),trim((string)($b['github']??'')),trim((string)($b['twitter']??'')),trim((string)($b['linkedin']??'')),trim((string)($b['emailPublic']??'')),trim((string)($b['tags']??'')),trim((string)($b['tagsEn']??'')),trim((string)($b['welcomeText']??'')),trim((string)($b['welcomeTextEn']??'')),trim((string)($b['ctaTitle']??'')),trim((string)($b['ctaTitleEn']??'')),trim((string)($b['ctaDescription']??'')),trim((string)($b['ctaDescriptionEn']??'')),app_int($b['coffeeCount']??0),app_int($b['starsCount']??0)]);app_public_cache_clear();app_json(app_profile(false)); }
+        if ($method === 'POST' && $route === 'admin/profile/avatar') {
+            $image=app_upload_image('avatar');
+            try {
+                app_db()->prepare('UPDATE site_profile SET avatar=?,updated_at=NOW() WHERE id=1')->execute([$image['url']]);
+            } catch (Throwable $error) {
+                $path = app_upload_path_from_url((string) $image['url']);
+                if ($path !== null) @unlink($path);
+                throw $error;
+            }
+            app_public_cache_clear();
+            app_json(['avatar'=>$image['url']]);
+        }
+        if ($method === 'PUT' && $route === 'admin/account/password') {
+            $b=app_body(); $current=(string)($b['currentPassword']??''); $new=(string)($b['newPassword']??'');
+            if(strlen($new)<10 || strlen($new)>128) app_error(400,'新密码长度必须为 10 到 128 位');
+            $database=app_db(); $database->beginTransaction();
+            try {
+                $s=$database->prepare('SELECT * FROM admin_account WHERE id=? FOR UPDATE');$s->execute([$_SESSION['admin_id']]);$admin=$s->fetch();
+                if(!$admin || strlen($current)>1024 || !password_verify($current,$admin['password_hash'])) { $database->rollBack(); app_error(400,'当前密码不正确'); }
+                $database->prepare('UPDATE admin_account SET password_hash=?,session_version=session_version+1,updated_at=NOW() WHERE id=?')->execute([password_hash($new,PASSWORD_DEFAULT),$admin['id']]);
+                $database->commit();
+            } catch (Throwable $error) { if($database->inTransaction())$database->rollBack(); throw $error; }
+            app_json(['message'=>'密码修改成功，请重新登录']);
+        }
         if ($method === 'GET' && $route === 'admin/security-settings') app_json(app_admin_security_settings());
         if ($method === 'PUT' && $route === 'admin/security-settings') app_json(app_update_admin_security_settings());
         if ($method === 'GET' && $route === 'admin/upload-settings') app_json(app_upload_settings());
@@ -676,10 +1052,10 @@ function app_handle_request(): void
         if ($method === 'PUT' && preg_match('#^admin/live2d/models/(\d+)$#', $route, $match)) app_json(app_live2d_update_model((int) $match[1]));
         if ($method === 'PUT' && preg_match('#^admin/live2d/models/(\d+)/activate$#', $route, $match)) app_json(app_live2d_activate_model((int) $match[1]));
         if ($method === 'DELETE' && preg_match('#^admin/live2d/models/(\d+)$#', $route, $match)) app_json(app_live2d_delete_model((int) $match[1]));
-        if ($method === 'POST' && $route === 'admin/theme') { $b=app_body();if(isset($b['custom'])&&is_array($b['custom'])){$c=$b['custom'];$s=app_db()->prepare("UPDATE themes SET preset_key='custom',primary_color=?,secondary_color=?,accent_color=?,background=?,background_style=?,background_image=?,background_size=?,background_position=?,background_repeat=?,card_bg=?,text_primary=?,text_secondary=? WHERE id=1");$s->execute([(string)($c['primary']??'#6366f1'),(string)($c['secondary']??'#a855f7'),(string)($c['accent']??'#ec4899'),(string)($c['background']??''),(string)($c['backgroundStyle']??'gradient'),(string)($c['backgroundImage']??''),(string)($c['backgroundSize']??'cover'),(string)($c['backgroundPosition']??'center'),(string)($c['backgroundRepeat']??'no-repeat'),(string)($c['cardBg']??''),(string)($c['textPrimary']??''),(string)($c['textSecondary']??'')]);}else{$preset=app_theme_preset((string)preg_replace('/[^a-z0-9_-]/i','',(string)($b['preset']??'purple-pink')));app_db()->prepare('UPDATE themes SET preset_key=? WHERE id=1')->execute([$preset]);}app_json(app_theme()); }
+        if ($method === 'POST' && $route === 'admin/theme') { $b=app_body();if(isset($b['custom'])&&is_array($b['custom'])){$c=$b['custom'];$s=app_db()->prepare("UPDATE themes SET preset_key='custom',primary_color=?,secondary_color=?,accent_color=?,background=?,background_style=?,background_image=?,background_size=?,background_position=?,background_repeat=?,card_bg=?,text_primary=?,text_secondary=? WHERE id=1");$s->execute([(string)($c['primary']??'#6366f1'),(string)($c['secondary']??'#a855f7'),(string)($c['accent']??'#ec4899'),(string)($c['background']??''),(string)($c['backgroundStyle']??'gradient'),(string)($c['backgroundImage']??''),(string)($c['backgroundSize']??'cover'),(string)($c['backgroundPosition']??'center'),(string)($c['backgroundRepeat']??'no-repeat'),(string)($c['cardBg']??''),(string)($c['textPrimary']??''),(string)($c['textSecondary']??'')]);}else{$preset=app_theme_preset((string)preg_replace('/[^a-z0-9_-]/i','',(string)($b['preset']??'purple-pink')));app_db()->prepare('UPDATE themes SET preset_key=? WHERE id=1')->execute([$preset]);}app_public_cache_clear();app_json(app_theme()); }
         if ($method === 'GET' && $route === 'admin/theme/background-images') app_json(app_list_images('theme'));
         if ($method === 'POST' && $route === 'admin/theme/background-image') app_json(app_upload_image('theme'),201);
-        if ($method === 'DELETE' && preg_match('#^admin/theme/background-image/([^/]+)$#',$route,$match)) { $name=basename(rawurldecode($match[1]));$root=rtrim(app_config()['app']['upload_dir'],'/\\').'/theme';$deleted=false;if(is_dir($root)){foreach(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS)) as $file){if($file->isFile()&&hash_equals($file->getFilename(),$name)){$deleted=@unlink($file->getPathname());break;}}}app_json(['success'=>$deleted]); }
+        if ($method === 'DELETE' && preg_match('#^admin/theme/background-image/([^/]+)$#',$route,$match)) app_json(app_delete_theme_background(rawurldecode($match[1])));
         app_error(404, '接口不存在', 'NOT_FOUND');
     } catch (PDOException $error) {
         error_log($error->__toString());

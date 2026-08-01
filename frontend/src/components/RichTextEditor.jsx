@@ -9,9 +9,10 @@ import {
   Bold, Italic, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Code, Link2,
   Image, Table, Sigma, Minus, Eye, EyeOff, Maximize2, Minimize2,
-  UploadCloud, Loader, RefreshCw, Trash2, X
+  UploadCloud, RefreshCw, Trash2, X
 } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
+import LoadingIndicator from './LoadingIndicator'
 import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
 import { optimizeArticleImage } from '../utils/imageCompression'
 
@@ -340,7 +341,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
                 disabled={uploading}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium disabled:opacity-50"
               >
-                {uploading ? <Loader className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                {uploading ? <LoadingIndicator size={16} /> : <UploadCloud className="w-4 h-4" />}
                 {uploading ? '压缩并上传中...' : '上传图片'}
               </button>
               <button
@@ -349,7 +350,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
                 disabled={loadingImages}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium disabled:opacity-50"
               >
-                <RefreshCw className={`w-4 h-4 ${loadingImages ? 'animate-spin' : ''}`} />
+                {loadingImages ? <LoadingIndicator size={16} /> : <RefreshCw className="h-4 w-4" />}
                 刷新图库
               </button>
               <button
@@ -358,7 +359,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
                 disabled={cleaningImages}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-sm font-medium disabled:opacity-50"
               >
-                {cleaningImages ? <Loader className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {cleaningImages ? <LoadingIndicator size={16} /> : <Trash2 className="w-4 h-4" />}
                 清理失效
               </button>
               <span className="text-xs text-gray-500">支持 jpg、png、gif、webp；普通图片会自动压缩为适合网页的大小</span>
@@ -367,7 +368,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
             <div className="p-4 overflow-y-auto">
               {loadingImages ? (
                 <div className="py-12 flex items-center justify-center text-gray-500">
-                  <Loader className="w-5 h-5 animate-spin mr-2" />
+                  <LoadingIndicator size={20} className="mr-2" />
                   加载图片中...
                 </div>
               ) : images.length === 0 ? (

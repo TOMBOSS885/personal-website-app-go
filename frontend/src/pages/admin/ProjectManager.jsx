@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, Trash2, X, FolderGit, Star, ExternalLink, Loader } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, FolderGit, Star, ExternalLink } from 'lucide-react'
+import LoadingIndicator from '../../components/LoadingIndicator'
 
 const API_BASE = ''
 
@@ -139,7 +140,7 @@ export default function ProjectManager() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader className="w-6 h-6 animate-spin text-purple-500" />
+            <LoadingIndicator size={32} label="加载项目" />
             <span className="ml-2 text-gray-500">加载中...</span>
           </div>
         ) : projects.length === 0 ? (
@@ -326,7 +327,7 @@ export default function ProjectManager() {
                 >
                   {saving ? (
                     <>
-                      <Loader className="w-4 h-4 animate-spin" />
+                      <LoadingIndicator size={16} />
                       保存中...
                     </>
                   ) : '保存'}

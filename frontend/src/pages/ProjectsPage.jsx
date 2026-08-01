@@ -14,6 +14,7 @@ export default function ProjectsPage() {
   const [featuredFirst, setFeaturedFirst] = useState(false)
   const [techStacks, setTechStacks] = useState([])
   const [profile, setProfile] = useState(null)
+  const [messageSummaries, setMessageSummaries] = useState({})
   const { language } = useLanguage()
   const { t } = useTranslation()
 
@@ -37,6 +38,13 @@ export default function ProjectsPage() {
         setSelectedTech(t('common.all'))
       })
       .catch(() => {
+        if (!import.meta.env.DEV) {
+          setProjects([])
+          setFilteredProjects([])
+          setTechStacks([t('common.all')])
+          setSelectedTech(t('common.all'))
+          return
+        }
         // 如果后端不可用，使用 mock 数据
         import('../api/mockApi').then(module => {
           const api = module.default
@@ -61,6 +69,15 @@ export default function ProjectsPage() {
       .then(res => res.json())
       .then(data => setProfile(data))
       .catch(() => {})
+
+    fetch('/api/public/guest-message-targets')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        const summaries = {}
+        ;(Array.isArray(data?.projects) ? data.projects : []).forEach(item => { summaries[item.id] = item })
+        setMessageSummaries(summaries)
+      })
+      .catch(() => setMessageSummaries({}))
   }, [language])
 
   // 搜索和过滤
@@ -92,7 +109,7 @@ export default function ProjectsPage() {
     { icon: Rocket, value: projects.filter(p => p.featured).length, label: t('projects.stats.featured'), color: 'from-amber-500 to-orange-500' },
     { icon: Code, value: techStacks.length - 1, label: t('projects.stats.techStack'), color: 'from-emerald-500 to-teal-500' },
   ]
-  const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com')
+  const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : '')
 
   return (
     <div className="min-h-screen relative">
@@ -136,8 +153,7 @@ export default function ProjectsPage() {
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3 + index * 0.1 }}
-              whileHover={{ scale: 1.05 }}
-              className="card-glass p-6 text-center"
+              className="stack-card-hover card-glass p-6 text-center"
             >
               <div className={`inline-flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-r ${stat.color} mb-3`}>
                 <stat.icon className="w-6 h-6 text-white" />
@@ -233,7 +249,7 @@ export default function ProjectsPage() {
               className="grid md:grid-cols-2 gap-8"
             >
               {filteredProjects.map((project, index) => (
-                <ProjectCard key={project.id} project={project} index={index} />
+                <ProjectCard key={project.id} project={project} index={index} messageSummary={messageSummaries[project.id]} />
               ))}
             </motion.div>
           ) : (

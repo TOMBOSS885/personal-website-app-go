@@ -1,5 +1,6 @@
 param(
-    [switch]$SkipFrontendBuild
+    [switch]$SkipFrontendBuild,
+    [string]$AssetReleasePrefix = ('r' + (Get-Date -Format 'yyyyMMddHHmm'))
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,9 +37,16 @@ function New-PortableZipArchive {
 
 if (-not $SkipFrontendBuild) {
     Push-Location (Join-Path $repoRoot 'frontend')
+    $previousAssetReleasePrefix = $env:VITE_ASSET_RELEASE_PREFIX
     try {
+        $env:VITE_ASSET_RELEASE_PREFIX = $AssetReleasePrefix
         npm.cmd run build
     } finally {
+        if ($null -eq $previousAssetReleasePrefix) {
+            Remove-Item Env:VITE_ASSET_RELEASE_PREFIX -ErrorAction SilentlyContinue
+        } else {
+            $env:VITE_ASSET_RELEASE_PREFIX = $previousAssetReleasePrefix
+        }
         Pop-Location
     }
 }
@@ -54,12 +62,16 @@ if (Test-Path -LiteralPath $releaseRoot) {
 New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $releaseRoot 'api') -Force | Out-Null
 New-Item -ItemType Directory -Path (Join-Path $releaseRoot 'migrations') -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $releaseRoot 'server-config') -Force | Out-Null
 
 Copy-Item -LiteralPath (Join-Path $distRoot 'index.html') -Destination $releaseRoot -Force
 Copy-Item -LiteralPath (Join-Path $distRoot 'assets') -Destination $releaseRoot -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot 'php_backend\app') -Destination $releaseRoot -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot 'php_backend\public\api\index.php') -Destination (Join-Path $releaseRoot 'api\index.php') -Force
 Copy-Item -Path (Join-Path $repoRoot 'php_backend\migrations\*') -Destination (Join-Path $releaseRoot 'migrations') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'deploy\shared-host\.htaccess') -Destination (Join-Path $releaseRoot 'server-config\apache.htaccess') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'deploy\shared-host\nginx-rewrite.conf') -Destination (Join-Path $releaseRoot 'server-config\nginx-rewrite.conf') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\PHP-shared-host-security-performance-update.md') -Destination (Join-Path $releaseRoot 'DEPLOY-UPDATE.md') -Force
 
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
@@ -72,4 +84,7 @@ Write-Host "Update directory: $releaseRoot"
 Write-Host "Update archive: $zipPath"
 Write-Host "Uncompressed size: $([Math]::Round($totalBytes / 1MB, 2)) MB"
 Write-Host "Archive size: $([Math]::Round($zipBytes / 1MB, 2)) MB"
-Write-Host 'This update archive intentionally excludes config, uploads, setup.php, and .htaccess.'
+Write-Host 'This update archive intentionally excludes config, uploads, setup.php, and the live root .htaccess.'
+Write-Host "Frontend assets use release prefix: $AssetReleasePrefix"
+Write-Host 'Import migrations/006_security_performance_hardening.sql through 009_guest_message_targets.sql before replacing app files.'
+Write-Host 'Read DEPLOY-UPDATE.md before uploading.'

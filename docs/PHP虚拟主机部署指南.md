@@ -127,10 +127,10 @@ config/config.php
 浏览器打开：
 
 ```text
-https://你的域名/setup.php?key=你在配置中填写的setup_key
+https://你的域名/setup.php
 ```
 
-创建唯一管理员，密码至少 10 位。成功后立即在主机文件管理器中删除：
+在页面表单中填写 `setup_key`、管理员用户名和至少 10 位密码。初始化密钥不再放入 URL，避免被浏览器历史和访问日志记录。成功后立即在主机文件管理器中删除：
 
 ```text
 setup.php
@@ -218,7 +218,11 @@ JPEG、PNG 和普通图片会优先转为 WebP；动画 GIF 会保留原格式�
 
 ```text
 migrations/003_site_analytics.sql
+migrations/006_security_performance_hardening.sql
+migrations/008_site_monitor.sql
 ```
+
+站点监控页使用独立累计表，因此后续清理访问明细不会让总访问量倒退。首次导入 `008` 时只能从数据库当前仍保留的访问明细建立基线，已经被清理的历史记录无法恢复。站点流量来自浏览器 Resource Timing 的同源传输字节，只用于趋势参考，不等同于虚拟主机账单流量。
 
 ## 十三、伪静态故障处理
 
@@ -305,6 +309,7 @@ gzip_types text/plain text/css application/javascript application/json applicati
 - 静态前端 ZIP 可以导入并在文章页运行。
 - `https://你的域名/uploads/article-sites/任意路径` 返回 403 或 404。
 - “访问统计”在打开前台页面后出现记录。
+- `/friends` 可以显示友链和留言，后台“友链与留言”可以管理两类数据。
 - `https://你的域名/config/config.php` 返回 403。
 - `https://你的域名/uploads/test.php` 无法执行。
 - 已删除 `setup.php`。
@@ -316,6 +321,10 @@ gzip_types text/plain text/css application/javascript application/json applicati
 `CONFIG_MISSING`：`config/config.php` 没上传或路径不对。
 
 `DATABASE_ERROR`：数据库地址、库名、账号、密码错误，或没有导入 SQL。
+
+升级后只有 `/friends` 或后台“友链与留言”返回 `DATABASE_ERROR`：在 phpMyAdmin 中导入 `migrations/007_friends_guestbook.sql`。
+
+升级后 `/monitor` 无法读取数据：导入 `migrations/008_site_monitor.sql`。升级留言关联功能后，再导入 `migrations/009_guest_message_targets.sql`，访问 `/api/health` 并确认返回的 `schema` 为 `009`。
 
 首页或主题管理白屏，并且 `/api/public/theme` 返回 `{"preset":"default"}`：在 phpMyAdmin 导入 `migrations/002_fix_default_theme.sql`，然后强制刷新页面。
 

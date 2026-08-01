@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BarChart3, Clock3, Eye, Loader, MonitorSmartphone, MousePointerClick, Users } from 'lucide-react'
+import { BarChart3, Clock3, Eye, MonitorSmartphone, MousePointerClick, Users } from 'lucide-react'
+import LoadingIndicator from '../../components/LoadingIndicator'
 
 const EMPTY = {
   summary: { totalViews: 0, periodViews: 0, periodVisitors: 0, todayViews: 0, todayVisitors: 0 },
@@ -54,11 +55,11 @@ export default function AnalyticsManager() {
       </header>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-      {loading ? <div className="flex min-h-64 items-center justify-center"><Loader className="h-6 w-6 animate-spin text-indigo-500" /></div> : (
+      {loading ? <div className="flex min-h-64 items-center justify-center text-indigo-600 dark:text-indigo-300"><LoadingIndicator size={32} label="加载访问数据" /></div> : (
         <>
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {summary.map(({ label, value, icon: Icon }) => (
-              <div key={label} className="rounded-lg border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div key={label} className="stack-card-hover rounded-lg border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex items-center justify-between gap-3">
                   <div><p className="text-sm text-gray-500 dark:text-slate-400">{label}</p><p className="mt-2 text-2xl font-bold text-gray-900 dark:text-slate-100">{formatNumber(value)}</p></div>
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"><Icon className="h-5 w-5" /></div>

@@ -1,9 +1,11 @@
-import { Github, ExternalLink, Star, GitBranch, Code } from 'lucide-react'
+import { Github, ExternalLink, Star, Code, MessageCircle } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { useLanguage } from '../contexts/LanguageContext'
 import { safeExternalHref } from '../utils/safeUrl'
+import { guestbookTargetUrl, guestMessageUrl } from '../utils/guestMessageTarget'
 
-export default function ProjectCard({ project, index = 0 }) {
+export default function ProjectCard({ project, index = 0, messageSummary = null }) {
   const { language } = useLanguage()
   const githubHref = safeExternalHref(project.githubUrl)
   const demoHref = safeExternalHref(project.demoUrl)
@@ -25,13 +27,14 @@ export default function ProjectCard({ project, index = 0 }) {
 
   return (
     <motion.div
+      id={`project-${project.id}`}
       initial={{ opacity: 0, y: 40 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.15 }}
-      className="group h-full"
+      className="stack-card-hover group h-full scroll-mt-28 rounded-2xl"
     >
-      <div className="relative h-full rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/20 transition-all duration-500 transform hover:-translate-y-2 preserve-3d">
+      <div className="relative h-full rounded-2xl overflow-hidden bg-gradient-to-br from-white to-gray-50 shadow-xl hover:shadow-2xl hover:shadow-indigo-500/20 transition-shadow duration-500 preserve-3d">
         {/* 背景装饰 */}
         <div className={`absolute top-0 right-0 w-40 h-40 bg-gradient-to-br ${gradient} opacity-5 rounded-bl-full transform translate-x-10 -translate-y-10 group-hover:opacity-10 transition-opacity duration-500`} />
         
@@ -101,7 +104,7 @@ export default function ProjectCard({ project, index = 0 }) {
           )}
 
           {/* 底部链接 */}
-          <div className="flex items-center space-x-4 pt-4 border-t border-gray-100">
+          <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-4 dark:border-slate-700">
             {githubHref && (
               <motion.a
                 href={githubHref}
@@ -128,6 +131,14 @@ export default function ProjectCard({ project, index = 0 }) {
                 <span>{language === 'en' ? 'Demo' : '演示'}</span>
               </motion.a>
             )}
+            <Link
+              to={messageSummary?.messageCount > 0 ? guestMessageUrl(messageSummary.latestMessageId) : guestbookTargetUrl('project', project.id)}
+              className="theme-action-surface ml-auto inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50/80 px-3 py-2 text-sm font-medium text-indigo-800 transition hover:border-indigo-400 dark:border-indigo-400/25 dark:bg-indigo-500/10 dark:text-indigo-100"
+              title={messageSummary?.messageCount > 0 ? '查看引用这个项目的最新留言' : '为这个项目留言'}
+            >
+              <MessageCircle className="h-4 w-4" />
+              <span>{messageSummary?.messageCount > 0 ? `${messageSummary.messageCount} 条留言` : '留言'}</span>
+            </Link>
           </div>
         </div>
 

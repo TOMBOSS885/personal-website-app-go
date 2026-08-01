@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Loader, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
+import LoadingIndicator from './LoadingIndicator'
 
 const CROP_SIZE = 256
 const OUTPUT_SIZE = 512
@@ -231,7 +232,7 @@ export default function AvatarCropper({ file, onCancel, onConfirm, onError, proc
 			disabled={busy}
             className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-500 px-4 py-2 font-medium text-white hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50"
           >
-			{busy ? <Loader className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+			{busy ? <LoadingIndicator size={16} /> : <Check className="h-4 w-4" />}
 			{compressing ? '压缩中...' : processing ? '上传中...' : '使用头像'}
           </button>
         </div>

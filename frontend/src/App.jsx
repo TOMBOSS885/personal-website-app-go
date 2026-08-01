@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Navigate, Outlet, Route, Routes } from 'react-router-dom'
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './contexts/LanguageContext'
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext'
@@ -8,8 +8,10 @@ import Navbar from './components/Navbar'
 import CursorEffects from './components/CursorEffects'
 import DeferredMount from './components/DeferredMount'
 import VisitTracker from './components/VisitTracker'
+import LoadingIndicator from './components/LoadingIndicator'
 import { fetchWithTimeout } from './utils/network'
 import { getAdminBasePath } from './utils/adminEntry'
+import { fetchPublicHomeData, invalidatePublicHomeData } from './utils/publicHomeData'
 
 installAdminFetchInterceptor()
 
@@ -18,6 +20,8 @@ const BlogPage = lazy(() => import('./pages/BlogPage'))
 const ArticleDetailPage = lazy(() => import('./pages/ArticleDetailPage'))
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
 const SearchPage = lazy(() => import('./pages/SearchPage'))
+const FriendsPage = lazy(() => import('./pages/FriendsPage'))
+const SiteMonitorPage = lazy(() => import('./pages/SiteMonitorPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
@@ -31,6 +35,7 @@ const Live2DManager = lazy(() => import('./pages/admin/Live2DManager'))
 const AnalyticsManager = lazy(() => import('./pages/admin/AnalyticsManager'))
 const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsManager'))
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
+const SocialManager = lazy(() => import('./pages/admin/SocialManager'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Footer = lazy(() => import('./components/Footer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
@@ -38,13 +43,14 @@ const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
 
 function PageLoading() {
   return (
-    <div className="flex min-h-[40vh] items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+    <div className="flex min-h-[40vh] items-center justify-center text-white">
+      <LoadingIndicator size={64} label="加载中" />
     </div>
   )
 }
 
 function App() {
+  const profileRequestId = useRef(0)
   const [profile, setProfile] = useState(() => {
     try {
       const cached = localStorage.getItem('website-profile')
@@ -54,10 +60,20 @@ function App() {
     }
   })
 
-  const loadProfile = useCallback(() => {
-    fetchWithTimeout('/api/public/profile', {}, 7000)
-      .then(res => res.json())
+  const loadProfile = useCallback((forceProfileRequest = false) => {
+    const requestId = ++profileRequestId.current
+    const isHomePage = window.location.pathname === '/' || window.location.pathname === ''
+    const language = localStorage.getItem('language') === 'en' ? 'en' : 'zh'
+    const request = !forceProfileRequest && isHomePage
+      ? fetchPublicHomeData(language).then(data => data.profile)
+      : fetchWithTimeout('/api/public/profile', {}, 7000).then(res => {
+          if (!res.ok) throw new Error('Profile request failed')
+          return res.json()
+        })
+
+    request
       .then(data => {
+        if (!data || requestId !== profileRequestId.current) return
         setProfile(data)
         localStorage.setItem('website-profile', JSON.stringify(data))
         if (data.nickname) document.title = `${data.nickname} - 个人网站`
@@ -66,9 +82,19 @@ function App() {
   }, [])
 
   useEffect(() => {
-    loadProfile()
-    window.addEventListener('profile:updated', loadProfile)
-    return () => window.removeEventListener('profile:updated', loadProfile)
+    const isHomePage = window.location.pathname === '/' || window.location.pathname === ''
+    // On article and admin routes, the profile only decorates the navigation.
+    // Leave the first connection slots for the route's own API request.
+    const initialProfileTimer = window.setTimeout(() => loadProfile(), isHomePage ? 0 : 3500)
+    const handleProfileUpdated = () => {
+      invalidatePublicHomeData()
+      loadProfile(true)
+    }
+    window.addEventListener('profile:updated', handleProfileUpdated)
+    return () => {
+      window.clearTimeout(initialProfileTimer)
+      window.removeEventListener('profile:updated', handleProfileUpdated)
+    }
   }, [loadProfile])
 
   return (
@@ -94,6 +120,7 @@ function App() {
                     <Route path="analytics" element={<AnalyticsManager />} />
                     <Route path="upload-settings" element={<UploadSettingsManager />} />
                     <Route path="account" element={<AccountSettings />} />
+                    <Route path="social" element={<SocialManager />} />
                     <Route path="*" element={<Navigate to="." replace />} />
                   </Route>
                   <Route path="/" element={<PublicLayout profile={profile} />}>
@@ -102,6 +129,9 @@ function App() {
                     <Route path="blog/:id" element={<ArticleDetailPage />} />
                     <Route path="projects" element={<ProjectsPage />} />
                     <Route path="search" element={<SearchPage />} />
+                    <Route path="friends" element={<FriendsPage />} />
+                    <Route path="guestbook" element={<FriendsPage />} />
+                    <Route path="monitor" element={<SiteMonitorPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                   </Route>
                 </Routes>
@@ -116,14 +146,14 @@ function App() {
 
 function PublicLayout({ profile }) {
   return (
-    <>
+    <div className="public-shell contents">
       <VisitTracker />
       <Navbar profile={profile} />
       <main className="flex-1"><Outlet /></main>
-      <DeferredMount timeout={900}><Suspense fallback={null}><Footer profile={profile} /></Suspense></DeferredMount>
-      <DeferredMount timeout={1400}><Suspense fallback={null}><HomeBackgroundCustomizer /></Suspense></DeferredMount>
-      <DeferredMount delay={8000} timeout={3000}><Suspense fallback={null}><Live2DWidget /></Suspense></DeferredMount>
-    </>
+      <DeferredMount afterLoad delay={3000} timeout={1500}><Suspense fallback={null}><Footer profile={profile} /></Suspense></DeferredMount>
+      <DeferredMount afterLoad delay={6000} timeout={2500}><Suspense fallback={null}><HomeBackgroundCustomizer /></Suspense></DeferredMount>
+      <DeferredMount afterLoad delay={30000} timeout={5000}><Suspense fallback={null}><Live2DWidget /></Suspense></DeferredMount>
+    </div>
   )
 }
 

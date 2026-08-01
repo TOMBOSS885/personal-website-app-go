@@ -1,18 +1,16 @@
 import { Github, Twitter, Linkedin, Mail, Heart, Coffee, ExternalLink } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Link, useLocation } from 'react-router-dom'
-import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import { safeExternalHref } from '../utils/safeUrl'
 import ProfileAvatar from './ProfileAvatar'
 
 export default function Footer({ profile }) {
   const currentYear = new Date().getFullYear()
-  const { language } = useLanguage()
   const { t } = useTranslation()
   const location = useLocation()
   const isArticleDetail = /^\/blog\/[^/]+\/?$/.test(location.pathname)
-  const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com')
+  const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : '')
 
   const footerLinks = [
     {
@@ -21,15 +19,16 @@ export default function Footer({ profile }) {
         { label: t('nav.home'), path: '/' },
         { label: t('nav.blog'), path: '/blog' },
         { label: t('nav.projects'), path: '/projects' },
+        { label: t('nav.monitor'), path: '/monitor' },
       ]
     },
     {
       title: t('footer.contact'),
       links: [
-        { label: 'GitHub', href: safeExternalHref(profile?.github || 'https://github.com'), external: true },
-        { label: 'LinkedIn', href: safeExternalHref(profile?.linkedin || 'https://linkedin.com'), external: true },
+        { label: 'GitHub', href: safeExternalHref(profile?.github || ''), external: true },
+        { label: 'LinkedIn', href: safeExternalHref(profile?.linkedin || ''), external: true },
         { label: 'Email', href: emailHref, external: true },
-      ]
+      ].filter(link => link.href)
     }
   ]
 
@@ -63,7 +62,7 @@ export default function Footer({ profile }) {
                 />
               </div>
               <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
-                {profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')}
+                {profile?.nickname || ''}
               </span>
             </motion.div>
 
@@ -74,7 +73,7 @@ export default function Footer({ profile }) {
               transition={{ delay: 0.1 }}
               className="text-gray-400 mb-6 max-w-md leading-relaxed"
             >
-              {profile?.bio || t('home.defaultBio')}
+              {profile?.bio || ''}
             </motion.p>
 
             {/* Social Links */}
@@ -86,9 +85,9 @@ export default function Footer({ profile }) {
               className="flex space-x-3"
             >
               {[
-                { icon: Github, href: safeExternalHref(profile?.github || 'https://github.com'), label: 'GitHub' },
-                { icon: Twitter, href: safeExternalHref(profile?.twitter || 'https://twitter.com'), label: 'Twitter' },
-                { icon: Linkedin, href: safeExternalHref(profile?.linkedin || 'https://linkedin.com'), label: 'LinkedIn' },
+                { icon: Github, href: safeExternalHref(profile?.github || ''), label: 'GitHub' },
+                { icon: Twitter, href: safeExternalHref(profile?.twitter || ''), label: 'Twitter' },
+                { icon: Linkedin, href: safeExternalHref(profile?.linkedin || ''), label: 'LinkedIn' },
                 { icon: Mail, href: emailHref, label: 'Email' },
               ].map((social, index) => (
                 social.href && (
@@ -164,7 +163,7 @@ export default function Footer({ profile }) {
             <span>© {currentYear}</span>
             <span className="mx-2">·</span>
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400 font-medium">
-              {profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')}
+              {profile?.nickname || ''}
             </span>
             <span className="mx-2">·</span>
             <span>{t('footer.rights')}</span>

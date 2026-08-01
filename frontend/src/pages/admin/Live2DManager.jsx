@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, Check, FolderUp, HardDrive, Loader, Save, Trash2 } from 'lucide-react'
+import { Bot, Check, FolderUp, HardDrive, Save, Trash2 } from 'lucide-react'
 import { buildLive2DBundle, createLive2DSelection } from '../../utils/live2dImport'
+import LoadingIndicator from '../../components/LoadingIndicator'
 
 const DEFAULT_SETTINGS = {
   enabled: false,
@@ -138,7 +139,7 @@ export default function Live2DManager() {
   }
 
   if (loading) {
-    return <div className="flex min-h-64 items-center justify-center"><Loader className="h-6 w-6 animate-spin text-indigo-500" /></div>
+    return <div className="flex min-h-64 items-center justify-center text-indigo-600 dark:text-indigo-300"><LoadingIndicator size={32} label="加载 Live2D 设置" /></div>
   }
 
   return (
@@ -187,7 +188,7 @@ export default function Live2DManager() {
               </div>
             )}
             <button type="submit" disabled={importing || !entryPath || models.length >= maxModels} className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
-              {importing ? <Loader className="h-4 w-4 animate-spin" /> : <FolderUp className="h-4 w-4" />}
+              {importing ? <LoadingIndicator size={16} /> : <FolderUp className="h-4 w-4" />}
               {importing ? '压缩并导入中' : '导入文件夹'}
             </button>
           </form>
@@ -210,7 +211,7 @@ export default function Live2DManager() {
               <input className="admin-input" type="number" min="160" max="420" value={settings.size} onChange={event => setSettings(current => ({ ...current, size: Number(event.target.value) }))} />
             </Field>
             <button type="button" onClick={saveSettings} disabled={savingSettings} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
-              {savingSettings ? <Loader className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}保存设置
+              {savingSettings ? <LoadingIndicator size={16} /> : <Save className="h-4 w-4" />}保存设置
             </button>
           </div>
         </section>

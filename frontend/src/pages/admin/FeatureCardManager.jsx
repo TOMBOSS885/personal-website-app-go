@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Plus, Edit2, Trash2, X, Loader, LayoutGrid, Code, Database, Globe, Rocket, PenTool, Briefcase, Sparkles, Zap, Cpu } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, LayoutGrid, Code, Database, Globe, Rocket, PenTool, Briefcase, Sparkles, Zap, Cpu } from 'lucide-react'
+import LoadingIndicator from '../../components/LoadingIndicator'
 
 const API_BASE = ''
 
@@ -155,7 +156,7 @@ export default function FeatureCardManager() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader className="w-6 h-6 animate-spin text-purple-500" />
+            <LoadingIndicator size={32} label="加载功能卡片" />
             <span className="ml-2 text-gray-500">加载中...</span>
           </div>
         ) : cards.length === 0 ? (
@@ -272,7 +273,7 @@ export default function FeatureCardManager() {
                   取消
                 </button>
                 <button type="submit" disabled={saving} className="flex-1 py-2.5 px-4 text-white rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2" style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}>
-                  {saving ? <><Loader className="w-4 h-4 animate-spin" />保存中...</> : '保存'}
+                  {saving ? <><LoadingIndicator size={16} />保存中...</> : '保存'}
                 </button>
               </div>
             </form>

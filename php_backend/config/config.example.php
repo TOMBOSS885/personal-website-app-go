@@ -17,6 +17,8 @@ return [
         // Existing installations without this key temporarily keep the legacy /admin entry.
         'admin_path_suffix' => 'control-k8x4m2q7',
         'setup_key' => 'CHANGE_THIS_TO_A_LONG_RANDOM_STRING',
+        // Optional: use the same random value on primary and backup hosts.
+        'analytics_key' => 'CHANGE_THIS_TO_ANOTHER_LONG_RANDOM_STRING',
         'article_site_url_ttl_seconds' => 3600,
         'upload_dir' => dirname(__DIR__) . '/uploads',
         'upload_url' => '/uploads',

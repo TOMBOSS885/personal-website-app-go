@@ -14,5 +14,6 @@ CREATE TABLE IF NOT EXISTS site_visits (
     visited_at DATETIME NOT NULL,
     INDEX idx_site_visits_time (visited_at),
     INDEX idx_site_visits_visitor_time (visitor_hash, visited_at),
+    INDEX idx_site_visits_visitor_path_time (visitor_hash, path(100), visited_at),
     INDEX idx_site_visits_path_time (path(100), visited_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

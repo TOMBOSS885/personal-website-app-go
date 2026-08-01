@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Check, Image as ImageIcon, Loader, Palette, RefreshCw, Settings2, X } from 'lucide-react'
+import { Check, Image as ImageIcon, Palette, RefreshCw, Settings2, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import OptimizedImage from './OptimizedImage'
+import LoadingIndicator from './LoadingIndicator'
 
 const API_BASE = ''
 
@@ -238,14 +239,14 @@ export default function HomeBackgroundCustomizer() {
                       disabled={loading}
                       className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+                      {loading ? <LoadingIndicator size={14} /> : <RefreshCw className="h-3.5 w-3.5" />}
                       刷新
                     </button>
                   </div>
 
                   {loading ? (
                     <div className="flex h-32 items-center justify-center rounded-xl border border-dashed border-gray-200 text-sm text-gray-500">
-                      <Loader className="mr-2 h-4 w-4 animate-spin" />
+                      <LoadingIndicator size={16} className="mr-2" />
                       加载中...
                     </div>
                   ) : backgroundImages.length === 0 ? (

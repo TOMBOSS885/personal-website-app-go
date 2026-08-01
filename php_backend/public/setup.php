@@ -5,15 +5,16 @@ require $root . '/app/bootstrap.php';
 
 $config = app_config();
 $expectedKey = (string) ($config['app']['setup_key'] ?? '');
-$providedKey = (string) ($_GET['key'] ?? $_POST['key'] ?? '');
-if ($expectedKey === '' || $expectedKey === 'CHANGE_THIS_TO_A_LONG_RANDOM_STRING' || !hash_equals($expectedKey, $providedKey)) {
+$providedKey = (string) ($_POST['key'] ?? '');
+$isPost = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
+if ($isPost && ($expectedKey === '' || $expectedKey === 'CHANGE_THIS_TO_A_LONG_RANDOM_STRING' || !hash_equals($expectedKey, $providedKey))) {
     http_response_code(403);
     exit('Invalid setup key. Edit config/config.php first.');
 }
 
 $count = (int) app_db()->query('SELECT COUNT(*) FROM admin_account')->fetchColumn();
 $message = '';
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $count === 0) {
+if ($isPost && $count === 0) {
     $username = trim((string) ($_POST['username'] ?? 'admin'));
     $password = (string) ($_POST['password'] ?? '');
     if ($username === '' || strlen($password) < 10) {
@@ -37,5 +38,5 @@ if (isset($bootstrapSuffix)) {
 <h1>初始化唯一管理员</h1>
 <?php if ($message !== ''): ?><p class="msg"><?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
 <?php if ($count > 0): ?><p>管理员已经存在。为安全起见，请立即从主机删除 <code>setup.php</code>。</p><?php else: ?>
-<form method="post"><input type="hidden" name="key" value="<?= htmlspecialchars($providedKey, ENT_QUOTES, 'UTF-8') ?>"><label>用户名<br><input name="username" value="admin" required></label><label>密码（至少 10 位）<br><input type="password" name="password" minlength="10" required></label><button type="submit">创建管理员</button></form>
+  <form method="post"><label>初始化密钥<br><input type="password" name="key" autocomplete="one-time-code" required></label><label>用户名<br><input name="username" value="admin" required></label><label>密码（至少 10 位）<br><input type="password" name="password" minlength="10" required></label><button type="submit">创建管理员</button></form>
 <?php endif; ?></body></html>

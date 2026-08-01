@@ -21,9 +21,10 @@ export default function ArticleCard({ article, index = 0 }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.1 }}
+      className="stack-card-hover h-full rounded-2xl"
     >
       <Link to={`/blog/${article.id}`} className="group block">
-        <div className="relative h-full rounded-2xl overflow-hidden bg-white shadow-lg hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-500 transform hover:-translate-y-2">
+        <div className="relative h-full rounded-2xl overflow-hidden bg-white shadow-lg hover:shadow-2xl hover:shadow-indigo-500/10 transition-shadow duration-500">
           {/* 封面图片区域 */}
           <div className="relative h-48 overflow-hidden">
             {article.coverImage ? (

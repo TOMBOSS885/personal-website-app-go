@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { User, Mail, Tag, MessageSquare, Target, Coffee, Star, Loader, ChevronDown, ChevronUp, Globe, Upload } from 'lucide-react'
+import { User, Mail, Tag, MessageSquare, Target, Coffee, Star, ChevronDown, ChevronUp, Globe, Upload } from 'lucide-react'
 import AvatarCropper from '../../components/AvatarCropper'
 import ProfileAvatar from '../../components/ProfileAvatar'
+import LoadingIndicator from '../../components/LoadingIndicator'
 
 const API_BASE = ''
 const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024
@@ -129,7 +130,7 @@ export default function ProfileManager() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader className="w-6 h-6 animate-spin text-purple-500" />
+        <LoadingIndicator size={32} label="加载个人资料" />
         <span className="ml-2 text-gray-500">加载中...</span>
       </div>
     )
@@ -431,7 +432,7 @@ export default function ProfileManager() {
             disabled={saving}
             className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {saving && <Loader className="w-4 h-4 animate-spin" />}
+            {saving && <LoadingIndicator size={16} />}
             {saving ? '保存中...' : '保存'}
           </button>
         </div>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Eye, EyeOff, KeyRound, Link2, Loader, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, Link2, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../../contexts/AdminAuthContext'
 import { getAdminBasePath } from '../../utils/adminEntry'
+import LoadingIndicator from '../../components/LoadingIndicator'
 
 const API_BASE = ''
 
@@ -55,8 +56,8 @@ export default function AccountSettings() {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.message || '保存后台地址失败')
-      setEntryMessage('后台地址已更新，正在跳转到新地址...')
-      window.setTimeout(() => window.location.replace(`/${data.adminPathSuffix}/account`), 700)
+      setEntryMessage('后台地址已更新，请使用新地址重新登录...')
+      window.setTimeout(() => window.location.replace(`/${data.adminPathSuffix}/login`), 700)
     } catch (requestError) {
       setEntryError(requestError instanceof Error ? requestError.message : '保存后台地址失败')
     } finally {
@@ -171,7 +172,7 @@ export default function AccountSettings() {
           </label>
 
           <button type="submit" disabled={entryLoading || entrySaving} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
-            {entrySaving && <Loader className="h-4 w-4 animate-spin" />}
+            {entrySaving && <LoadingIndicator size={16} />}
             {entrySaving ? '保存中...' : '更新后台地址'}
           </button>
         </form>
@@ -260,7 +261,7 @@ export default function AccountSettings() {
               disabled={saving}
               className="px-6 py-2 bg-gradient-to-r from-purple-500 to-indigo-500 text-white rounded-lg font-medium hover:from-purple-600 hover:to-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {saving && <Loader className="w-4 h-4 animate-spin" />}
+              {saving && <LoadingIndicator size={16} />}
               {saving ? '保存中...' : '保存新密码'}
             </button>
           </div>

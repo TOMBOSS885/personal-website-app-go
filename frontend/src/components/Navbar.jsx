@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search } from 'lucide-react'
+import { Activity, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
@@ -28,9 +28,9 @@ export default function Navbar({ profile }) {
   const location = useLocation()
   const { language } = useLanguage()
   const { t } = useTranslation()
-  const { colorMode, toggleColorMode } = useTheme()
-  const githubHref = safeExternalHref(profile?.github || 'https://github.com')
-  const identityName = profile?.nickname || (language === 'en' ? 'My Website' : '我的网站')
+  const { colorMode, toggleColorMode, surfaceMode, toggleSurfaceMode } = useTheme()
+  const githubHref = safeExternalHref(profile?.github || '')
+  const identityName = profile?.nickname || ''
 
   useEffect(() => {
     const handleScroll = () => {
@@ -44,6 +44,8 @@ export default function Navbar({ profile }) {
     { path: '/', label: t('nav.home'), icon: Home },
     { path: '/blog', label: t('nav.blog'), icon: FileText },
     { path: '/projects', label: t('nav.projects'), icon: Folder },
+    { path: '/friends', label: t('nav.friends'), icon: Users },
+    { path: '/monitor', label: t('nav.monitor'), icon: Activity },
     { path: '/search', label: '搜索', icon: Search },
   ]
 
@@ -59,10 +61,10 @@ export default function Navbar({ profile }) {
         }`}
       >
         <div className="mx-auto max-w-7xl px-3 sm:px-4">
-          <div className={`flex justify-between items-center rounded-2xl transition-all duration-500 ${
+          <div className={`theme-nav-surface flex justify-between items-center rounded-2xl transition-all duration-500 ${
             scrolled 
-              ? 'backdrop-blur-xl bg-white/80 shadow-lg shadow-indigo-500/5 border border-white/50 px-6 py-3' 
-              : 'bg-transparent px-2'
+              ? 'border border-white/50 bg-white/80 px-6 py-3 shadow-lg shadow-indigo-500/5 backdrop-blur-xl dark:border-slate-700/70 dark:bg-slate-950/85 dark:shadow-black/25'
+              : 'border border-white/40 bg-white/65 px-4 py-2.5 shadow-sm backdrop-blur-md dark:border-slate-700/70 dark:bg-slate-950/80 dark:shadow-black/20'
           }`}>
             {/* Logo */}
             <Link
@@ -103,8 +105,8 @@ export default function Navbar({ profile }) {
                   <motion.div
                     className={`flex items-center space-x-2 rounded-xl px-3 py-2.5 font-medium transition-all duration-300 xl:px-4 ${
                       location.pathname === path
-                        ? 'text-indigo-600'
-                        : 'text-gray-600 hover:text-indigo-600'
+                        ? 'text-indigo-600 dark:text-indigo-200'
+                        : 'text-gray-600 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-white'
                     }`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
@@ -119,13 +121,13 @@ export default function Navbar({ profile }) {
                   {location.pathname === path && (
                     <motion.div
                       layoutId="activeNav"
-                      className="absolute inset-0 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl -z-10"
+                      className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-400/25 dark:to-cyan-400/15"
                       transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
                     />
                   )}
                   
                   {/* Hover effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/0 to-purple-500/0 group-hover:from-indigo-50 group-hover:to-purple-50 rounded-xl -z-10 transition-all duration-300" />
+                  <div className="absolute inset-0 -z-10 rounded-xl bg-gradient-to-r from-indigo-500/0 to-purple-500/0 transition-all duration-300 group-hover:from-indigo-50 group-hover:to-purple-50 dark:group-hover:from-white/5 dark:group-hover:to-white/10" />
                 </Link>
               ))}
             </div>
@@ -138,10 +140,23 @@ export default function Navbar({ profile }) {
 
               <motion.button
                 type="button"
+                onClick={toggleSurfaceMode}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="theme-action-surface flex h-10 w-10 items-center justify-center rounded-xl border border-white/70 bg-white/90 text-gray-700 shadow-sm shadow-indigo-500/10 backdrop-blur-md transition-colors hover:bg-white hover:text-gray-950 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700"
+                title={surfaceMode === 'transparent' ? '恢复毛玻璃框' : '切换为透明框'}
+                aria-label={surfaceMode === 'transparent' ? '恢复毛玻璃框' : '切换为透明框'}
+                aria-pressed={surfaceMode === 'transparent'}
+              >
+                <Layers className="h-5 w-5" />
+              </motion.button>
+
+              <motion.button
+                type="button"
                 onClick={toggleColorMode}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/70 bg-white/90 text-gray-700 shadow-sm shadow-indigo-500/10 backdrop-blur-md transition-colors hover:bg-white hover:text-gray-950 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700"
+                className="theme-action-surface flex h-10 w-10 items-center justify-center rounded-xl border border-white/70 bg-white/90 text-gray-700 shadow-sm shadow-indigo-500/10 backdrop-blur-md transition-colors hover:bg-white hover:text-gray-950 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700"
                 title={colorMode === 'dark' ? '切换到亮色模式' : '切换到暗色模式'}
               >
                 <AnimatePresence mode="wait" initial={false}>
@@ -177,7 +192,7 @@ export default function Navbar({ profile }) {
                   rel="noopener noreferrer"
                   whileHover={{ scale: 1.1, rotate: 5 }}
                   whileTap={{ scale: 0.9 }}
-                  className="hidden h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 xl:flex"
+                  className="theme-action-surface hidden h-10 w-10 items-center justify-center rounded-xl border border-transparent bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700 xl:flex"
                   title="GitHub"
                   aria-label="GitHub"
                 >
@@ -189,7 +204,7 @@ export default function Navbar({ profile }) {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 p-2.5 text-indigo-600 transition-colors hover:from-indigo-100 hover:to-purple-100 lg:hidden"
+                className="rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 p-2.5 text-indigo-600 transition-colors hover:from-indigo-100 hover:to-purple-100 dark:from-slate-800 dark:to-slate-800 dark:text-slate-100 dark:hover:from-slate-700 dark:hover:to-slate-700 lg:hidden"
                 onClick={() => setIsOpen(!isOpen)}
                 aria-label={isOpen ? '关闭导航菜单' : '打开导航菜单'}
                 aria-expanded={isOpen}
@@ -272,7 +287,7 @@ export default function Navbar({ profile }) {
                         className={`flex items-center space-x-4 px-5 py-4 rounded-xl transition-all duration-300 ${
                           location.pathname === path
                             ? 'text-white'
-                            : 'text-gray-700 hover:bg-gray-100'
+                            : 'text-gray-700 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800'
                         }`}
                         style={location.pathname === path ? { background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' } : {}}
                       >
@@ -284,14 +299,14 @@ export default function Navbar({ profile }) {
                 </div>
 
                 {/* Divider */}
-                <div className="my-8 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
+                <div className="my-8 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-slate-700" />
 
                 {/* Additional Links */}
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.3 }}
-                  className="text-center text-gray-500 text-sm"
+                  className="text-center text-sm text-gray-500 dark:text-slate-400"
                 >
                   <p>{language === 'en' ? 'Thanks for visiting ✨' : '感谢访问 ✨'}</p>
                 </motion.div>
