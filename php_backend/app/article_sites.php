@@ -254,11 +254,79 @@ function app_article_site_send_html(string $target, string $baseUrl): void
         $head = stripos($html, '<head>');
         $html = $head === false ? $base . $html : substr($html, 0, $head + 6) . $base . substr($html, $head + 6);
     }
+    $resizeBridge = app_article_site_resize_bridge();
+    $bodyEnd = strripos($html, '</body>');
+    $html = $bodyEnd === false
+        ? $html . $resizeBridge
+        : substr($html, 0, $bodyEnd) . $resizeBridge . substr($html, $bodyEnd);
     header('Content-Type: text/html; charset=utf-8');
     header("Content-Security-Policy: sandbox allow-scripts allow-forms allow-modals allow-pointer-lock allow-popups allow-downloads allow-presentation; default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https:");
     header('Content-Length: ' . strlen($html));
     if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'HEAD') echo $html;
     exit;
+}
+
+function app_article_site_resize_bridge(): string
+{
+    return <<<'HTML'
+<script data-omblog-resize-bridge>
+(function () {
+  if (window.parent === window || window.__OMBLOG_STATIC_RESIZE__) return;
+  window.__OMBLOG_STATIC_RESIZE__ = true;
+  var messageType = 'omblog:static-site-size';
+  var lastHeight = 0;
+  var lastWidth = window.innerWidth;
+  var frame = 0;
+
+  function measure() {
+    frame = 0;
+    var root = document.documentElement;
+    var body = document.body;
+    var height = Math.ceil(Math.max(
+      root ? root.scrollHeight : 0,
+      root ? root.offsetHeight : 0,
+      body ? body.scrollHeight : 0,
+      body ? body.offsetHeight : 0
+    ));
+    if (!Number.isFinite(height) || height < 1 || height === lastHeight) return;
+    lastHeight = height;
+    window.parent.postMessage({ type: messageType, height: height }, '*');
+  }
+
+  function scheduleMeasure() {
+    if (frame) return;
+    frame = window.requestAnimationFrame(measure);
+  }
+
+  window.addEventListener('load', scheduleMeasure);
+  window.addEventListener('resize', function () {
+    if (window.innerWidth === lastWidth) return;
+    lastWidth = window.innerWidth;
+    scheduleMeasure();
+  }, { passive: true });
+  document.addEventListener('load', scheduleMeasure, true);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scheduleMeasure, { once: true });
+  } else {
+    scheduleMeasure();
+  }
+
+  if ('MutationObserver' in window) {
+    new MutationObserver(scheduleMeasure).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'hidden', 'open'],
+      characterData: true
+    });
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleMeasure);
+  window.setTimeout(scheduleMeasure, 250);
+  window.setTimeout(scheduleMeasure, 1000);
+})();
+</script>
+HTML;
 }
 
 function app_article_site_send_file(string $target, string $extension): void

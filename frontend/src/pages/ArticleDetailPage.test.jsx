@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildToc, buildTocTree, findActiveHeadingIndex } from './ArticleDetailPage'
+import { buildToc, buildTocTree, findActiveHeadingIndex, normalizeStaticSiteHeight } from './ArticleDetailPage'
 
 describe('article table of contents', () => {
   it('builds unique H2-H6 entries and ignores fenced code blocks', () => {
@@ -46,5 +46,16 @@ describe('article table of contents', () => {
     expect(findActiveHeadingIndex(offsets, 760)).toBe(1)
     expect(findActiveHeadingIndex(offsets, 1900)).toBe(2)
     expect(findActiveHeadingIndex(offsets, 9999)).toBe(3)
+  })
+})
+
+describe('static article iframe sizing', () => {
+  it('rejects invalid values and clamps valid document heights', () => {
+    expect(normalizeStaticSiteHeight('1200')).toBeNull()
+    expect(normalizeStaticSiteHeight(Number.NaN)).toBeNull()
+    expect(normalizeStaticSiteHeight(-1)).toBeNull()
+    expect(normalizeStaticSiteHeight(320)).toBe(480)
+    expect(normalizeStaticSiteHeight(2687.2)).toBe(2688)
+    expect(normalizeStaticSiteHeight(90000)).toBe(50000)
   })
 })

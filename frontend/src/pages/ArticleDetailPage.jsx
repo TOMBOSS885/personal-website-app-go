@@ -16,6 +16,15 @@ function loadMarkdownRenderer() {
 
 const MarkdownArticleRenderer = lazy(loadMarkdownRenderer)
 
+const STATIC_SITE_SIZE_MESSAGE = 'omblog:static-site-size'
+const STATIC_SITE_MIN_HEIGHT = 480
+const STATIC_SITE_MAX_HEIGHT = 50000
+
+export function normalizeStaticSiteHeight(value) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
+  return Math.min(Math.max(Math.ceil(value), STATIC_SITE_MIN_HEIGHT), STATIC_SITE_MAX_HEIGHT)
+}
+
 export default function ArticleDetailPage() {
   const { id } = useParams()
   const [article, setArticle] = useState(null)
@@ -25,6 +34,8 @@ export default function ArticleDetailPage() {
   const [unlocking, setUnlocking] = useState(false)
   const [unlockError, setUnlockError] = useState('')
   const [relatedMessages, setRelatedMessages] = useState([])
+  const [staticSiteHeight, setStaticSiteHeight] = useState(null)
+  const staticSiteFrameRef = useRef(null)
   const isStaticArticle = article?.contentType === 'static'
   const tocItems = useMemo(() => buildToc(isStaticArticle ? '' : article?.content || ''), [article?.content, isStaticArticle])
   const headingIdsByLine = useMemo(() => new Map(
@@ -67,6 +78,23 @@ export default function ArticleDetailPage() {
       })
     return () => controller.abort()
   }, [id])
+
+  useEffect(() => {
+    setStaticSiteHeight(null)
+    if (!isStaticArticle || !article?.staticSiteUrl) return undefined
+
+    const handleStaticSiteSize = (event) => {
+      if (event.source !== staticSiteFrameRef.current?.contentWindow) return
+      const message = event.data
+      if (!message || typeof message !== 'object' || message.type !== STATIC_SITE_SIZE_MESSAGE) return
+      const nextHeight = normalizeStaticSiteHeight(message.height)
+      if (nextHeight === null) return
+      setStaticSiteHeight(current => current === nextHeight ? current : nextHeight)
+    }
+
+    window.addEventListener('message', handleStaticSiteSize)
+    return () => window.removeEventListener('message', handleStaticSiteSize)
+  }, [article?.staticSiteUrl, isStaticArticle])
 
   const handleShare = async () => {
     const shareUrl = window.location.href
@@ -244,17 +272,21 @@ export default function ArticleDetailPage() {
         className="mx-auto max-w-[92rem] px-4 pb-12 pt-8"
       >
         <div className={isStaticArticle ? '' : 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem]'}>
-          <div className={`rounded-3xl border border-white/60 bg-white/75 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 ${isStaticArticle ? 'mx-auto max-w-[80rem] p-2 md:p-3' : 'px-5 py-6 md:px-8 md:py-8 lg:col-start-2'}`}>
+          <div className={isStaticArticle
+            ? 'mx-auto max-w-[80rem] overflow-hidden bg-transparent'
+            : 'rounded-3xl border border-white/60 bg-white/75 px-5 py-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:px-8 md:py-8 lg:col-start-2'}>
             {isStaticArticle ? (
               article.staticSiteUrl ? (
                 <iframe
+                  ref={staticSiteFrameRef}
                   title={article.title}
                   src={article.staticSiteUrl}
                   sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock allow-popups allow-downloads allow-presentation"
                   allow="autoplay; fullscreen; picture-in-picture"
                   referrerPolicy="no-referrer"
                   loading="lazy"
-                  className="h-[75vh] min-h-[480px] w-full rounded-2xl border-0 bg-white md:min-h-[620px]"
+                  style={{ height: staticSiteHeight ? `${staticSiteHeight}px` : '75vh' }}
+                  className="block min-h-[480px] w-full border-0 bg-white md:min-h-[620px]"
                 />
               ) : (
                 <div className="flex min-h-[420px] items-center justify-center rounded-2xl bg-gray-50 px-6 text-center text-gray-500 dark:bg-slate-900 dark:text-slate-400">静态前端资源暂时不可用，请稍后重试。</div>
