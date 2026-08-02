@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { Calendar, Eye, ArrowRight, Lock } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
 
-export default function ArticleCard({ article, index = 0 }) {
+export default function ArticleCard({ article, index = 0, priority = false }) {
   // 根据分类生成渐变色
   const categoryGradients = {
     '技术': 'from-blue-500 to-cyan-500',
@@ -31,8 +31,8 @@ export default function ArticleCard({ article, index = 0 }) {
               <OptimizedImage
                 src={article.coverImage}
                 alt={article.title}
-                loading={index === 0 ? 'eager' : 'lazy'}
-                fetchPriority={index === 0 ? 'high' : 'auto'}
+                loading={priority ? 'eager' : 'lazy'}
+                fetchPriority={priority ? 'high' : 'auto'}
                 sizes="(min-width: 768px) 33vw, 100vw"
                 wrapperClassName="block w-full h-full"
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"

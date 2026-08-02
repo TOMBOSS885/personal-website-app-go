@@ -1,3 +1,5 @@
+import { responsiveImageSourceSet } from '../utils/responsiveImages'
+
 export default function ProfileAvatar({
   profile,
   sizeClass = 'h-12 w-12',
@@ -28,6 +30,8 @@ export default function ProfileAvatar({
       {avatarSrc ? (
         <img
           src={avatarSrc}
+          srcSet={responsiveImageSourceSet(avatarSrc)}
+          sizes="(min-width: 768px) 128px, 96px"
           alt={profile?.nickname || 'avatar'}
           loading="lazy"
           decoding="async"

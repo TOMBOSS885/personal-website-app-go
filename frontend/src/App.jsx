@@ -8,6 +8,7 @@ import Navbar from './components/Navbar'
 import CursorEffects from './components/CursorEffects'
 import DeferredMount from './components/DeferredMount'
 import VisitTracker from './components/VisitTracker'
+import RouteMetadata from './components/RouteMetadata'
 import LoadingIndicator from './components/LoadingIndicator'
 import { fetchWithTimeout } from './utils/network'
 import { getAdminBasePath } from './utils/adminEntry'
@@ -39,7 +40,7 @@ const SocialManager = lazy(() => import('./pages/admin/SocialManager'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Footer = lazy(() => import('./components/Footer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
-const Live2DWidget = lazy(() => import('./components/Live2DWidget'))
+const Live2DController = lazy(() => import('./components/Live2DController'))
 
 function PageLoading() {
   return (
@@ -76,7 +77,6 @@ function App() {
         if (!data || requestId !== profileRequestId.current) return
         setProfile(data)
         localStorage.setItem('website-profile', JSON.stringify(data))
-        if (data.nickname) document.title = `${data.nickname} - 个人网站`
       })
       .catch(() => {})
   }, [])
@@ -147,12 +147,13 @@ function App() {
 function PublicLayout({ profile }) {
   return (
     <div className="public-shell contents">
+      <RouteMetadata profile={profile} />
       <VisitTracker />
       <Navbar profile={profile} />
       <main className="flex-1"><Outlet /></main>
       <DeferredMount afterLoad delay={3000} timeout={1500}><Suspense fallback={null}><Footer profile={profile} /></Suspense></DeferredMount>
       <DeferredMount afterLoad delay={6000} timeout={2500}><Suspense fallback={null}><HomeBackgroundCustomizer /></Suspense></DeferredMount>
-      <DeferredMount afterLoad delay={30000} timeout={5000}><Suspense fallback={null}><Live2DWidget /></Suspense></DeferredMount>
+      <DeferredMount afterLoad delay={6000} timeout={2500}><Suspense fallback={null}><Live2DController /></Suspense></DeferredMount>
     </div>
   )
 }

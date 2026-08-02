@@ -10,6 +10,7 @@ import ProfileAvatar from '../components/ProfileAvatar'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import { safeExternalHref } from '../utils/safeUrl'
+import { fetchPublicHomeData } from '../utils/publicHomeData'
 
 export default function HomePage() {
   const [articles, setArticles] = useState([])
@@ -27,17 +28,10 @@ export default function HomePage() {
   const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.95])
 
   useEffect(() => {
-    const controller = new AbortController()
     let cancelled = false
 
-    const readJson = async (url) => {
-      const res = await fetch(url, { signal: controller.signal })
-      if (!res.ok) throw new Error(`Request failed: ${url}`)
-      return res.json()
-    }
-
     async function loadHomeData() {
-      const result = await readJson(`/api/public/home?lang=${language}`)
+      const result = await fetchPublicHomeData(language)
 
       if (cancelled) return
 	  setArticles(Array.isArray(result.articles) ? result.articles : [])
@@ -49,7 +43,6 @@ export default function HomePage() {
     }
 
 	loadHomeData().catch((err) => {
-	  if (err.name === 'AbortError') return
 	  import('../api/mockApi').then(module => {
 		if (cancelled) return
 		setArticles(module.default.getArticles().slice(0, 3))
@@ -61,7 +54,6 @@ export default function HomePage() {
 
     return () => {
       cancelled = true
-      controller.abort()
     }
   }, [language])
 
@@ -533,7 +525,7 @@ export default function HomePage() {
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.1 }}
                 >
-                  <ArticleCard article={article} />
+                  <ArticleCard article={article} index={index} />
                 </motion.div>
               ))}
             </div>

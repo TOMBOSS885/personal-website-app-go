@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { fetchWithTimeout } from '../utils/network'
+import { responsiveImageUrlForWidth } from '../utils/responsiveImages'
 
 const ThemeContext = createContext(null)
 const API_BASE = ''
@@ -144,6 +145,10 @@ function getStoredTheme() {
 }
 
 function getResponsiveBackgroundImage(url) {
+  if (url?.includes('@responsive-') && typeof window !== 'undefined') {
+    const pixelRatio = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2)
+    return responsiveImageUrlForWidth(url, window.innerWidth * pixelRatio)
+  }
   if (!url || !url.match(/@desktop\.(webp|jpg)$/) || typeof window === 'undefined') {
     return url
   }

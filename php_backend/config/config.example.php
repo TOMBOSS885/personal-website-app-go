@@ -19,6 +19,8 @@ return [
         'setup_key' => 'CHANGE_THIS_TO_A_LONG_RANDOM_STRING',
         // Optional: use the same random value on primary and backup hosts.
         'analytics_key' => 'CHANGE_THIS_TO_ANOTHER_LONG_RANDOM_STRING',
+        // Optional canonical URL used by robots.txt and sitemap.xml.
+        'site_url' => 'https://omblog.tombossking.xyz',
         'article_site_url_ttl_seconds' => 3600,
         'upload_dir' => dirname(__DIR__) . '/uploads',
         'upload_url' => '/uploads',

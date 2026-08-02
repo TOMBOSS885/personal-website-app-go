@@ -296,7 +296,7 @@ export default function BlogPage() {
               }
             >
               {filteredArticles.map((article, index) => (
-                <ArticleCard key={article.id} article={article} index={index} />
+                <ArticleCard key={article.id} article={article} index={index} priority={index === 0} />
               ))}
             </motion.div>
           ) : (

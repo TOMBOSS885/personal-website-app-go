@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, MessageCircle, Share2, Tag } from 'lucide-react'
 import LoadingIndicator from '../components/LoadingIndicator'
 import { guestbookTargetUrl, guestMessageUrl } from '../utils/guestMessageTarget'
+import { usePageMetadata } from '../utils/pageMetadata'
 
 let markdownRendererPromise
 
@@ -41,6 +42,14 @@ export default function ArticleDetailPage() {
   const headingIdsByLine = useMemo(() => new Map(
     parseToc(article?.content || '').map(item => [item.sourceLine, item.id]),
   ), [article?.content])
+  const articleMetadata = useMemo(() => article ? {
+    title: `${article.title} - tombossking`,
+    description: article.summary || 'tombossking 的博客文章。',
+    image: article.coverImage || '',
+    type: 'article',
+    siteName: 'tombossking',
+  } : null, [article])
+  usePageMetadata(articleMetadata)
 
   useEffect(() => {
     let active = true

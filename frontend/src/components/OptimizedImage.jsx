@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { responsiveImageSourceSet } from '../utils/responsiveImages'
 
 export default function OptimizedImage({
   src,
@@ -23,11 +24,14 @@ export default function OptimizedImage({
     return fallback || null
   }
 
+  const responsiveSrcSet = responsiveImageSourceSet(src)
+
   return (
     <span className={`optimized-image-wrap ${wrapperClassName}`}>
       {!loaded && <span className="optimized-image-placeholder" aria-hidden="true" />}
       <img
         src={src}
+        srcSet={responsiveSrcSet}
         alt={alt || ''}
         loading={loading}
         decoding="async"

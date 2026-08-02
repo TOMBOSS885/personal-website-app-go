@@ -562,6 +562,91 @@ function app_inspect_image(string $path): array
     return [$mime, $dimensions];
 }
 
+function app_responsive_image_widths(string $kind): array
+{
+    if ($kind === 'avatar') return [96, 256];
+    if ($kind === 'theme') return [640, 1280, 1920];
+    return [320, 640, 960, 1280];
+}
+
+function app_image_gd_source(string $path, string $mime)
+{
+    $readers = [
+        'image/jpeg' => 'imagecreatefromjpeg',
+        'image/png' => 'imagecreatefrompng',
+        'image/webp' => 'imagecreatefromwebp',
+    ];
+    $reader = $readers[$mime] ?? null;
+    if ($reader === null || !function_exists($reader)) return false;
+    return @$reader($path);
+}
+
+function app_image_gd_write($image, string $path, string $mime): bool
+{
+    if ($mime === 'image/jpeg' && function_exists('imagejpeg')) return @imagejpeg($image, $path, 82);
+    if ($mime === 'image/png' && function_exists('imagepng')) return @imagepng($image, $path, 6);
+    if ($mime === 'image/webp' && function_exists('imagewebp')) return @imagewebp($image, $path, 80);
+    return false;
+}
+
+function app_generate_responsive_image_variants(string $sourcePath, string $basePath, string $extension, string $mime, array $dimensions, array $requestedWidths): array
+{
+    $sourceWidth = (int) ($dimensions[0] ?? 0);
+    $sourceHeight = (int) ($dimensions[1] ?? 0);
+    if ($mime === 'image/gif' || $sourceWidth < 2 || $sourceHeight < 2 || $sourceWidth * $sourceHeight > 16000000) return [];
+
+    $widths = array_values(array_filter(array_unique(array_map('intval', $requestedWidths)), function (int $width) use ($sourceWidth): bool {
+        return $width >= 64 && $width < $sourceWidth;
+    }));
+    sort($widths, SORT_NUMERIC);
+    if (count($widths) === 0) return [];
+
+    $source = app_image_gd_source($sourcePath, $mime);
+    if ($source === false) return [];
+    $createdPaths = [];
+    try {
+        foreach ($widths as $width) {
+            $height = max(1, (int) round($sourceHeight * ($width / $sourceWidth)));
+            $variant = imagecreatetruecolor($width, $height);
+            if ($variant === false) throw new RuntimeException('Unable to allocate responsive image');
+            if ($mime === 'image/png' || $mime === 'image/webp') {
+                imagealphablending($variant, false);
+                imagesavealpha($variant, true);
+                $transparent = imagecolorallocatealpha($variant, 0, 0, 0, 127);
+                imagefilledrectangle($variant, 0, 0, $width, $height, $transparent);
+            }
+            $copied = imagecopyresampled($variant, $source, 0, 0, 0, 0, $width, $height, $sourceWidth, $sourceHeight);
+            $path = $basePath . '@' . $width . 'w.' . $extension;
+            $written = $copied && app_image_gd_write($variant, $path, $mime);
+            imagedestroy($variant);
+            if (!$written) {
+                @unlink($path);
+                throw new RuntimeException('Unable to encode responsive image');
+            }
+            @chmod($path, 0644);
+            $createdPaths[] = $path;
+        }
+    } catch (Throwable $error) {
+        foreach ($createdPaths as $path) @unlink($path);
+        error_log('Responsive image generation skipped: ' . $error->getMessage());
+        return [];
+    } finally {
+        imagedestroy($source);
+    }
+    return $widths;
+}
+
+function app_delete_responsive_image_family(string $sourcePath): bool
+{
+    $deleted = !is_file($sourcePath) || @unlink($sourcePath);
+    if (preg_match('/^(.*)@responsive-[0-9-]+(\.[^.]+)$/i', $sourcePath, $match)) {
+        foreach (glob($match[1] . '@*w' . $match[2]) ?: [] as $variantPath) {
+            if (is_file($variantPath) && !@unlink($variantPath)) $deleted = false;
+        }
+    }
+    return $deleted;
+}
+
 function app_upload_image(string $kind): array
 {
     if (empty($_FILES['file']) || !is_array($_FILES['file'])) app_error(400, '请选择要上传的图片', 'FILE_REQUIRED');
@@ -592,11 +677,38 @@ function app_upload_image(string $kind): array
     $relative = $folder . '/' . date('Y/m');
     $directory = rtrim($config['upload_dir'], '/\\') . '/' . $relative;
     if (!is_dir($directory) && !mkdir($directory, 0755, true) && !is_dir($directory)) app_error(500, '无法创建上传目录', 'UPLOAD_DIR_FAILED');
-    $name = date('YmdHis') . '-' . bin2hex(random_bytes(12)) . '.' . $types[$mime];
+    $baseName = date('YmdHis') . '-' . bin2hex(random_bytes(12));
+    $name = $baseName . '.' . $types[$mime];
     $target = $directory . '/' . $name;
     if (!move_uploaded_file($_FILES['file']['tmp_name'], $target)) app_error(500, '保存图片失败', 'UPLOAD_FAILED');
     @chmod($target, 0644);
-    return ['name' => $name, 'url' => rtrim($config['upload_url'], '/') . '/' . $relative . '/' . $name, 'size' => (int) $_FILES['file']['size']];
+
+    $widths = app_generate_responsive_image_variants(
+        $target,
+        $directory . '/' . $baseName,
+        $types[$mime],
+        $mime,
+        $dimensions,
+        app_responsive_image_widths($kind)
+    );
+    if (count($widths) > 0) {
+        $responsiveName = $baseName . '@responsive-' . implode('-', $widths) . '.' . $types[$mime];
+        $responsiveTarget = $directory . '/' . $responsiveName;
+        if (@rename($target, $responsiveTarget)) {
+            $name = $responsiveName;
+            $target = $responsiveTarget;
+        } else {
+            foreach ($widths as $width) @unlink($directory . '/' . $baseName . '@' . $width . 'w.' . $types[$mime]);
+            $widths = [];
+        }
+    }
+
+    return [
+        'name' => $name,
+        'url' => rtrim($config['upload_url'], '/') . '/' . $relative . '/' . $name,
+        'size' => (int) $_FILES['file']['size'],
+        'responsiveWidths' => $widths,
+    ];
 }
 
 function app_list_images(string $folder): array
@@ -608,6 +720,7 @@ function app_list_images(string $folder): array
     $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
     foreach ($iterator as $file) {
         if (!$file->isFile() || !preg_match('/\.(?:jpe?g|png|gif|webp)$/i', $file->getFilename())) continue;
+        if (preg_match('/@[0-9]+w\.(?:jpe?g|png|webp)$/i', $file->getFilename())) continue;
         $relative = str_replace('\\', '/', substr($file->getPathname(), strlen(rtrim($config['upload_dir'], '/\\')) + 1));
         $items[] = ['name' => $file->getFilename(), 'url' => rtrim($config['upload_url'], '/') . '/' . $relative, 'size' => $file->getSize(), 'updatedAt' => date(DATE_ATOM, $file->getMTime())];
     }
@@ -654,6 +767,8 @@ function app_cleanup_upload_assets(string $kind): array
         $relative = str_replace('\\', '/', substr($file->getPathname(), strlen(rtrim((string) $config['upload_dir'], '/\\')) + 1));
         $url = rtrim((string) $config['upload_url'], '/') . '/' . $relative;
         if (strpos($references, $url) !== false) continue;
+        if (preg_match('/^(.*)@[0-9]+w(\.[^.]+)$/i', $url, $variantMatch)
+            && strpos($references, $variantMatch[1] . '@responsive-') !== false) continue;
         $size = $file->getSize();
         if (@unlink($file->getPathname())) { $removed++; $reclaimed += $size; }
     }
@@ -681,7 +796,7 @@ function app_delete_theme_background(string $name): array
 
     $statement = app_db()->prepare("UPDATE themes SET background_image = '' WHERE id = 1 AND background_image = ?");
     $statement->execute([$url]);
-    $deleted = @unlink($target);
+    $deleted = app_delete_responsive_image_family($target);
     app_public_cache_clear();
     if (!$deleted) return ['success' => false, 'warning' => '主题引用已清除，但文件删除失败，请检查 uploads/theme 权限'];
     return ['success' => true];
@@ -879,6 +994,80 @@ function app_generic_save(string $resource, ?int $id): void
     app_json(['success'=>true,'id'=>$id ?? (int) app_db()->lastInsertId()], $id===null?201:200);
 }
 
+function app_public_site_url(): string
+{
+    $configured = trim((string) (app_config()['app']['site_url'] ?? ''));
+    $configuredScheme = strtolower((string) parse_url($configured, PHP_URL_SCHEME));
+    if ($configured !== '' && in_array($configuredScheme, ['http', 'https'], true) && filter_var($configured, FILTER_VALIDATE_URL)) return rtrim($configured, '/');
+
+    $host = strtolower(trim((string) ($_SERVER['HTTP_HOST'] ?? '')));
+    if (!preg_match('/^[a-z0-9.-]+(?::\d{1,5})?$/', $host)) $host = 'localhost';
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443;
+    return ($https ? 'https://' : 'http://') . $host;
+}
+
+function app_public_text_response(string $body, string $contentType, int $maxAge = 3600): void
+{
+    $etag = '"' . hash('sha256', $body) . '"';
+    header('Content-Type: ' . $contentType);
+    header('Cache-Control: public, max-age=' . max(0, $maxAge) . ', stale-while-revalidate=300');
+    header('ETag: ' . $etag);
+    if (trim((string) ($_SERVER['HTTP_IF_NONE_MATCH'] ?? '')) === $etag) {
+        http_response_code(304);
+        exit;
+    }
+    if (strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')) !== 'HEAD') echo $body;
+    exit;
+}
+
+function app_public_robots(): void
+{
+    $siteUrl = app_public_site_url();
+    $body = "User-agent: *\n"
+        . "Allow: /\n"
+        . "Disallow: /api/admin/\n"
+        . "Disallow: /api/auth/\n"
+        . "Disallow: /app/\n"
+        . "Disallow: /config/\n"
+        . "Disallow: /migrations/\n"
+        . "Disallow: /uploads/article-sites/\n\n"
+        . 'Sitemap: ' . $siteUrl . "/sitemap.xml\n";
+    app_public_text_response($body, 'text/plain; charset=utf-8', 3600);
+}
+
+function app_public_sitemap(): void
+{
+    $siteUrl = app_public_site_url();
+    $escape = function (string $value): string {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_XML1, 'UTF-8');
+    };
+    $entries = [
+        ['path' => '/', 'priority' => '1.0'],
+        ['path' => '/blog', 'priority' => '0.9'],
+        ['path' => '/projects', 'priority' => '0.8'],
+        ['path' => '/friends', 'priority' => '0.6'],
+        ['path' => '/monitor', 'priority' => '0.4'],
+    ];
+    $articles = app_db()->query('SELECT id, updated_at FROM articles WHERE published=1 ORDER BY updated_at DESC')->fetchAll();
+    foreach ($articles as $article) {
+        $entries[] = [
+            'path' => '/blog/' . (int) $article['id'],
+            'priority' => '0.8',
+            'lastmod' => !empty($article['updated_at']) ? date('Y-m-d', strtotime((string) $article['updated_at'])) : '',
+        ];
+    }
+
+    $body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        . "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+    foreach ($entries as $entry) {
+        $body .= "  <url>\n    <loc>" . $escape($siteUrl . $entry['path']) . "</loc>\n";
+        if (!empty($entry['lastmod'])) $body .= '    <lastmod>' . $escape((string) $entry['lastmod']) . "</lastmod>\n";
+        $body .= '    <priority>' . $entry['priority'] . "</priority>\n  </url>\n";
+    }
+    $body .= "</urlset>\n";
+    app_public_text_response($body, 'application/xml; charset=utf-8', 3600);
+}
+
 function app_handle_request(): void
 {
     header('X-Content-Type-Options: nosniff');
@@ -904,6 +1093,8 @@ function app_handle_request(): void
     if ($needsSession) app_start_session();
 
     try {
+        if (in_array($method, ['GET', 'HEAD'], true) && $route === 'robots.txt') app_public_robots();
+        if (in_array($method, ['GET', 'HEAD'], true) && $route === 'sitemap.xml') app_public_sitemap();
         if ($method === 'GET' && $route === 'health') {
             app_db()->query('SELECT 1');
             app_db()->query('SELECT session_version FROM admin_account LIMIT 1');
@@ -1020,13 +1211,16 @@ function app_handle_request(): void
         if ($method === 'PUT' && $route === 'admin/profile') { $b=app_body();$s=app_db()->prepare('UPDATE site_profile SET nickname=?,avatar=?,bio=?,bio_en=?,location=?,website=?,github=?,twitter=?,linkedin=?,email_public=?,tags=?,tags_en=?,welcome_text=?,welcome_text_en=?,cta_title=?,cta_title_en=?,cta_description=?,cta_description_en=?,coffee_count=?,stars_count=?,updated_at=NOW() WHERE id=1');$s->execute([trim((string)($b['nickname']??'')),trim((string)($b['avatar']??'')),(string)($b['bio']??''),(string)($b['bioEn']??''),trim((string)($b['location']??'')),trim((string)($b['website']??'')),trim((string)($b['github']??'')),trim((string)($b['twitter']??'')),trim((string)($b['linkedin']??'')),trim((string)($b['emailPublic']??'')),trim((string)($b['tags']??'')),trim((string)($b['tagsEn']??'')),trim((string)($b['welcomeText']??'')),trim((string)($b['welcomeTextEn']??'')),trim((string)($b['ctaTitle']??'')),trim((string)($b['ctaTitleEn']??'')),trim((string)($b['ctaDescription']??'')),trim((string)($b['ctaDescriptionEn']??'')),app_int($b['coffeeCount']??0),app_int($b['starsCount']??0)]);app_public_cache_clear();app_json(app_profile(false)); }
         if ($method === 'POST' && $route === 'admin/profile/avatar') {
             $image=app_upload_image('avatar');
+            $previousAvatar=(string)(app_db()->query('SELECT avatar FROM site_profile WHERE id=1')->fetchColumn() ?: '');
             try {
                 app_db()->prepare('UPDATE site_profile SET avatar=?,updated_at=NOW() WHERE id=1')->execute([$image['url']]);
             } catch (Throwable $error) {
                 $path = app_upload_path_from_url((string) $image['url']);
-                if ($path !== null) @unlink($path);
+                if ($path !== null) app_delete_responsive_image_family($path);
                 throw $error;
             }
+            $previousPath=app_upload_path_from_url($previousAvatar);
+            if($previousPath!==null && $previousAvatar!==$image['url']) app_delete_responsive_image_family($previousPath);
             app_public_cache_clear();
             app_json(['avatar'=>$image['url']]);
         }

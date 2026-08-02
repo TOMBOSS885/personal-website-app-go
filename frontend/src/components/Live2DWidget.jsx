@@ -110,7 +110,7 @@ export default function Live2DWidget() {
           model: widgetModels.length === 1 ? widgetModels[0] : widgetModels,
           position: settings.position || 'bottom-right',
           size: lowEnd || window.innerWidth < 640
-            ? Math.min(numberOr(settings.size, 280), 220)
+            ? Math.min(numberOr(settings.size, 280), 180)
             : numberOr(settings.size, 280),
           primaryColor: settings.primaryColor || 'rgba(96,165,250,0.92)',
           transitionType: settings.transitionType || 'slide',
@@ -130,12 +130,12 @@ export default function Live2DWidget() {
 
       // Live2D is decorative. Keep its network, parsing, and WebGL work out of
       // the critical path so the page is interactive before the model starts.
-      const delay = constrained || lowEnd ? 2500 : 1000
+      const delay = 0
       startTimer = window.setTimeout(() => {
         idleHandle = requestIdle(() => {
           idleHandle = null
           void loadModel()
-        }, constrained || lowEnd ? 5000 : 2500)
+        }, constrained || lowEnd ? 2500 : 1200)
       }, delay)
     }
 

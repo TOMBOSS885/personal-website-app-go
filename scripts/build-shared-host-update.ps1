@@ -87,4 +87,5 @@ Write-Host "Archive size: $([Math]::Round($zipBytes / 1MB, 2)) MB"
 Write-Host 'This update archive intentionally excludes config, uploads, setup.php, and the live root .htaccess.'
 Write-Host "Frontend assets use release prefix: $AssetReleasePrefix"
 Write-Host 'Import migrations/006_security_performance_hardening.sql through 009_guest_message_targets.sql before replacing app files.'
+Write-Host 'No new database migration is required for the responsive-image, SEO, and Live2D update.'
 Write-Host 'Read DEPLOY-UPDATE.md before uploading.'

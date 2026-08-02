@@ -12,6 +12,17 @@ const emptyForm = {
 const DRAFT_KEY = 'php-shared-host:article-draft'
 const PAGE_SIZE = 20
 
+export function validateStaticSiteZipSelection(files) {
+  const selected = Array.from(files || [])
+  if (selected.length === 0) return { file: null, error: '请选择 ZIP 文件' }
+  if (selected.length > 1) return { file: null, error: '一次只能上传一个 ZIP 文件' }
+  const file = selected[0]
+  if (!file?.name || !file.name.toLowerCase().endsWith('.zip')) {
+    return { file: null, error: '静态前端必须使用 .zip 压缩包' }
+  }
+  return { file, error: '' }
+}
+
 export default function ArticleManager() {
   const [articles, setArticles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -23,11 +34,14 @@ export default function ArticleManager() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadingSite, setUploadingSite] = useState(false)
+  const [siteDragActive, setSiteDragActive] = useState(false)
+  const [siteUploadError, setSiteUploadError] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editingArticle, setEditingArticle] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const fileInputRef = useRef(null)
   const siteFileInputRef = useRef(null)
+  const siteDragDepthRef = useRef(0)
 
   const fetchArticles = async (requestedPage = page) => {
     setLoading(true)
@@ -68,6 +82,9 @@ export default function ArticleManager() {
     try { draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null') } catch { draft = null }
     setEditingArticle(null)
     setForm(draft ? { ...emptyForm, ...draft } : emptyForm)
+    setSiteUploadError('')
+    setSiteDragActive(false)
+    siteDragDepthRef.current = 0
     setShowModal(true)
   }
 
@@ -84,6 +101,9 @@ export default function ArticleManager() {
         tags: detail.tags || '',
         accessPassword: '',
       })
+      setSiteUploadError('')
+      setSiteDragActive(false)
+      siteDragDepthRef.current = 0
       setShowModal(true)
     } catch (error) {
       alert(error.message || '加载文章正文失败')
@@ -96,6 +116,9 @@ export default function ArticleManager() {
     setShowModal(false)
     setEditingArticle(null)
     setForm(emptyForm)
+    setSiteUploadError('')
+    setSiteDragActive(false)
+    siteDragDepthRef.current = 0
   }
 
   const uploadCover = async file => {
@@ -119,6 +142,7 @@ export default function ArticleManager() {
 
   const uploadArticleSite = async file => {
     if (!file) return
+    setSiteUploadError('')
     setUploadingSite(true)
     try {
       const body = new FormData()
@@ -133,11 +157,53 @@ export default function ArticleManager() {
         staticSiteName: data.name || file.name,
       }))
     } catch (error) {
-      alert(error.message || '静态前端上传失败')
+      setSiteUploadError(error.message || '静态前端上传失败')
     } finally {
       setUploadingSite(false)
       if (siteFileInputRef.current) siteFileInputRef.current.value = ''
     }
+  }
+
+  const selectArticleSiteZip = files => {
+    if (uploadingSite) return
+    const selection = validateStaticSiteZipSelection(files)
+    if (selection.error) {
+      setSiteUploadError(selection.error)
+      if (siteFileInputRef.current) siteFileInputRef.current.value = ''
+      return
+    }
+    setSiteUploadError('')
+    void uploadArticleSite(selection.file)
+  }
+
+  const handleSiteDragEnter = event => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (uploadingSite || !Array.from(event.dataTransfer?.types || []).includes('Files')) return
+    siteDragDepthRef.current += 1
+    setSiteDragActive(true)
+  }
+
+  const handleSiteDragOver = event => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.dataTransfer) event.dataTransfer.dropEffect = uploadingSite ? 'none' : 'copy'
+  }
+
+  const handleSiteDragLeave = event => {
+    event.preventDefault()
+    event.stopPropagation()
+    siteDragDepthRef.current = Math.max(0, siteDragDepthRef.current - 1)
+    if (siteDragDepthRef.current === 0) setSiteDragActive(false)
+  }
+
+  const handleSiteDrop = event => {
+    event.preventDefault()
+    event.stopPropagation()
+    siteDragDepthRef.current = 0
+    setSiteDragActive(false)
+    if (uploadingSite) return
+    selectArticleSiteZip(event.dataTransfer?.files)
   }
 
   const handleSubmit = async event => {
@@ -238,12 +304,26 @@ export default function ArticleManager() {
                   </div>
                 </div>
                 {form.contentType === 'static' ? (
-                  <div className="flex min-h-[360px] items-center justify-center rounded-lg border border-dashed border-cyan-300 bg-cyan-50/60 p-6 dark:border-cyan-500/30 dark:bg-cyan-500/5">
-                    <input ref={siteFileInputRef} type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={event => uploadArticleSite(event.target.files?.[0])} className="hidden" />
+                  <div
+                    data-testid="static-site-dropzone"
+                    aria-label="静态前端 ZIP 上传区域"
+                    aria-busy={uploadingSite}
+                    onDragEnter={handleSiteDragEnter}
+                    onDragOver={handleSiteDragOver}
+                    onDragLeave={handleSiteDragLeave}
+                    onDrop={handleSiteDrop}
+                    className={`flex min-h-[360px] items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors ${siteDragActive
+                      ? 'border-cyan-600 bg-cyan-100 ring-4 ring-cyan-500/15 dark:border-cyan-300 dark:bg-cyan-400/10'
+                      : siteUploadError
+                        ? 'border-red-300 bg-red-50/70 dark:border-red-500/40 dark:bg-red-500/5'
+                        : 'border-cyan-300 bg-cyan-50/60 dark:border-cyan-500/30 dark:bg-cyan-500/5'}`}
+                  >
+                    <input ref={siteFileInputRef} type="file" accept=".zip,application/zip,application/x-zip-compressed" onChange={event => selectArticleSiteZip(event.target.files)} className="hidden" />
                     <div className="max-w-xl text-center">
-                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-lg bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300">{uploadingSite ? <LoadingIndicator size={24} /> : <FileArchive className="h-6 w-6" />}</div>
-                      <h3 className="mt-4 text-lg font-semibold text-gray-900 dark:text-slate-100">{form.staticSiteKey ? '静态前端已就绪' : '上传静态前端 ZIP'}</h3>
-                      <p className="mt-2 text-sm leading-6 text-gray-500 dark:text-slate-400">入口必须是 index.html。可以直接压缩 Vite、React 或 Vue 构建后的 dist 目录，资源请使用相对路径。</p>
+                      <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-lg ${siteDragActive ? 'bg-cyan-600 text-white' : 'bg-cyan-100 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300'}`}>{uploadingSite ? <LoadingIndicator size={24} /> : siteDragActive ? <UploadCloud className="h-7 w-7" /> : <FileArchive className="h-6 w-6" />}</div>
+                      <h3 className="mt-4 text-lg font-semibold text-gray-900 dark:text-slate-100">{siteDragActive ? '松开即可上传 ZIP' : form.staticSiteKey ? '静态前端已就绪' : '拖拽或选择静态前端 ZIP'}</h3>
+                      <p className="mt-2 text-sm leading-6 text-gray-600 dark:text-slate-300">仅支持单个 .zip 文件，入口必须是 index.html；资源请使用相对路径。</p>
+                      {siteUploadError && <p role="alert" className="mt-3 rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 dark:border-red-500/30 dark:bg-slate-900 dark:text-red-300">{siteUploadError}</p>}
                       {form.staticSiteKey && <div className="mt-3 truncate rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm text-cyan-800 dark:border-cyan-500/20 dark:bg-slate-900 dark:text-cyan-200">{form.staticSiteName || form.staticSiteKey}</div>}
                       <div className="mt-5 flex flex-wrap justify-center gap-2">
                         <button type="button" disabled={uploadingSite} onClick={() => siteFileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg bg-cyan-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-cyan-700 disabled:opacity-50"><UploadCloud className="h-4 w-4" />{uploadingSite ? '上传并检查中...' : form.staticSiteKey ? '替换 ZIP' : '选择 ZIP'}</button>

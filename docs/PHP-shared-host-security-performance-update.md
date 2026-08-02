@@ -2,6 +2,18 @@
 
 本补丁用于已经部署过 PHP 迁移版的网站。补丁不会包含或覆盖 `config/`、`uploads/` 和 `setup.php`。
 
+## 本次性能与 SEO 更新
+
+- 首页导航和首页正文共享同一次 `/api/public/home` 请求。
+- 首页下方文章封面全部懒加载，博客列表只优先加载第一张封面。
+- 新上传的文章图片、头像和主题背景在主机支持 PHP GD 时自动生成响应式尺寸；缺少对应编码器时保留原图，不会导致上传失败。
+- Live2D 仅在桌面首页空闲时自动加载；移动端、省流量、弱设备和内容页改为点击左下角按钮后加载。
+- `robots.txt` 和 `sitemap.xml` 由 PHP 动态输出，站点地图会包含公开文章。
+- 页面路由会更新标题、描述、canonical、Open Graph 和 Twitter 元数据。
+- Nginx 配置增加静态页面安全响应头和 CSP Report-Only。
+
+本次没有新增数据库迁移。已经完成 `009` 的站点不需要再次导入 SQL。
+
 ## 部署前
 
 1. 在主机面板备份网站文件和 MySQL 数据库。
@@ -46,6 +58,20 @@ Nginx 规则中 `/assets/` 的一年缓存和 `immutable` 可以保留，因为�
 6. `/uploads/article-sites/任意路径` 返回 403 或 404。
 7. `/friends` 能显示友链和留言区，后台“友链与留言”可以添加友链、隐藏或删除留言。
 8. `/monitor` 能显示总访问量、独立访客和估算站点流量，悬停卡片时旋转暂停。
+9. `/robots.txt` 返回 `text/plain`，内容包含 `Sitemap:`，不能再返回 React HTML。
+10. `/sitemap.xml` 返回 `application/xml`，并包含 `/blog/文章ID`。
+11. 打开浏览器开发者工具，首页只出现一次 `/api/public/home?lang=zh` 请求。
+12. 移动端和文章页不会自动下载 `.moc3`；点击左下角模型按钮后才开始加载。
+
+首次部署后，请在后台重新上传当前头像、背景图和最常用的文章封面，使现有图片获得响应式变体。旧图片继续兼容，但只有重新上传后的文件名包含 `@responsive-`，浏览器才会使用 `srcset`。生成的 `@320w`、`@640w` 等文件由系统自动管理，不要单独删除或在图库中引用。
+
+如果线上域名并非当前请求的域名，可以在 `config/config.php` 的 `app` 配置中加入：
+
+```php
+'site_url' => 'https://你的正式域名',
+```
+
+未填写时，`robots.txt` 和 `sitemap.xml` 会使用当前请求域名自动生成地址。
 
 如果 `/api/health` 返回 `DATABASE_ERROR`，通常表示第 2 步迁移没有成功导入。先恢复旧 `app` 目录，检查 phpMyAdmin 中的 SQL 报错，不要反复覆盖 `config` 或清空数据库。
 

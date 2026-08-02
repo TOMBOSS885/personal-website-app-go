@@ -2,6 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+.live2d-launcher {
+  position: fixed;
+  left: 1.5rem;
+  bottom: 1.5rem;
+  z-index: 45;
+  display: inline-flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--theme-border);
+  border-radius: 9999px;
+  color: #ffffff;
+  background: var(--theme-gradient);
+  box-shadow: var(--theme-shadow);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.live2d-launcher:hover,
+.live2d-launcher:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--theme-shadow-lg);
+}
+
+.live2d-launcher:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--theme-primary) 45%, white);
+  outline-offset: 3px;
+}
+
+@media (max-width: 640px) {
+  .live2d-launcher {
+    left: 1rem;
+    bottom: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live2d-launcher {
+    transition: none;
+  }
+}
+
 html {
   color-scheme: light;
 }
@@ -1988,6 +2030,16 @@ textarea.guestbook-field__control {
   opacity: 1;
 }
 
+/* Native select popups do not consistently follow the page color-scheme on
+   Windows. Give their rows an explicit surface so inherited field text stays
+   readable when the browser renders a light popup in dark/transparent mode. */
+select.guestbook-field__control option,
+select.guestbook-field__control optgroup {
+  background-color: #ffffff;
+  color: #0f172a;
+  text-shadow: none;
+}
+
 .guestbook-field__icon {
   position: relative;
   z-index: 3;
@@ -2114,6 +2166,12 @@ html.theme-dark .guestbook-field__control::placeholder {
   color: #94a3b8 !important;
 }
 
+html.theme-dark select.guestbook-field__control option,
+html.theme-dark select.guestbook-field__control optgroup {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
 html.theme-dark .guestbook-field__icon {
   color: #cbd5e1;
 }
@@ -2131,6 +2189,13 @@ html.surfaces-transparent .friends-page .guestbook-field__control {
 
 html.surfaces-transparent .friends-page .guestbook-field__control::placeholder {
   color: #cbd5e1 !important;
+}
+
+html.surfaces-transparent .friends-page select.guestbook-field__control option,
+html.surfaces-transparent .friends-page select.guestbook-field__control optgroup {
+  background-color: #020617;
+  color: #f8fafc;
+  text-shadow: none;
 }
 
 html.surfaces-transparent .friends-page .guestbook-field__icon {
