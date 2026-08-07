@@ -30,7 +30,7 @@
 
 1. PHP 8.1 或更高版本（最低建议 PHP 7.4）。
 2. MySQL 5.7/8.0，数据库配额至少 200MB。
-3. 已启用 `PDO MySQL`、`session`、`mbstring` 和 `ZipArchive`；建议启用 `fileinfo`，未启用时迁移版会使用图片解析结果识别上传类型。
+3. 已启用 `PDO MySQL`、`session`、`mbstring`、`ZipArchive` 和 `OpenSSL`；建议启用 `fileinfo`，未启用时迁移版会使用图片解析结果识别上传类型。
 4. 支持 `.htaccess` 和 Apache `mod_rewrite`，或面板提供“伪静态”设置。
 5. 网站根目录允许 PHP 写入 `uploads`。
 6. 域名已经解析到主机，面板可以开启免费 HTTPS。

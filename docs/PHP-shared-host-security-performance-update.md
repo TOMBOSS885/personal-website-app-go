@@ -12,7 +12,7 @@
 - 页面路由会更新标题、描述、canonical、Open Graph 和 Twitter 元数据。
 - Nginx 配置增加静态页面安全响应头和 CSP Report-Only。
 
-本次没有新增数据库迁移。已经完成 `009` 的站点不需要再次导入 SQL。
+本安全性能部分对应迁移 `006` 至 `009`；本次内容沉淀功能还需要额外导入 `010_content_discovery.sql`，完整顺序请以 `DEPLOY-UPDATE.md` 为准。
 
 ## 部署前
 
@@ -23,11 +23,11 @@
 ## 部署顺序
 
 1. 打开 phpMyAdmin，选择网站数据库。
-2. 依次导入 `migrations/006_security_performance_hardening.sql`、`migrations/007_friends_guestbook.sql`、`migrations/008_site_monitor.sql` 和 `migrations/009_guest_message_targets.sql`。这些脚本都可以重复导入。
+2. 依次导入 `migrations/006_security_performance_hardening.sql`、`migrations/007_friends_guestbook.sql`、`migrations/008_site_monitor.sql`、`migrations/009_guest_message_targets.sql` 和 `migrations/010_content_discovery.sql`。这些脚本都可以重复导入。
 3. 在网站根目录把现有 `assets` 目录改名为 `assets-backup`。不要删除 `uploads` 或 `config`。
 4. 将补丁 ZIP 上传到网站根目录并直接解压覆盖。
 5. 确认新的 `assets` 目录已经生成，再删除 `assets-backup`。
-6. Apache 主机将 `server-config/apache.htaccess` 的内容同步到网站根目录 `.htaccess`；Nginx 主机将 `server-config/nginx-rewrite.conf` 粘贴到面板的伪静态配置。
+6. Apache 主机将 `server-config/apache.htaccess` 的内容同步到网站根目录 `.htaccess`，并将 `server-config/uploads.htaccess` 上传为 `uploads/.htaccess`；Nginx 主机将 `server-config/nginx-rewrite.conf` 粘贴到面板的伪静态配置。
 7. 如果域名正在使用代理/CDN，再清除对应缓存；仅 DNS 模式直接在浏览器强制刷新一次。
 
 ## 增量部署（本主机推荐）
@@ -50,7 +50,7 @@ Nginx 规则中 `/assets/` 的一年缓存和 `immutable` 可以保留，因为�
 
 依次检查：
 
-1. `/api/health` 返回 `{"status":"ok","database":"ok","schema":"009"}`。
+1. `/api/health` 返回 `{"status":"ok","database":"ok","schema":"010"}`。
 2. 首页、博客列表和主题可以正常打开。
 3. 管理员可以登录；连续输错密码 5 次后只锁定当前来源 15 分钟。
 4. 加密文章连续输错 5 次后返回 `ARTICLE_PASSWORD_LOCKED`。

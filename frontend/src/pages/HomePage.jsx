@@ -195,6 +195,8 @@ export default function HomePage() {
                     className="hero-avatar-glow"
                     imageClassName="ring-4 ring-white/40"
                     fallbackClassName="hero-avatar-gradient"
+                    loading="eager"
+                    fetchPriority="high"
                   />
                 </div>
                 {/* 状态指示器 */}

@@ -71,7 +71,10 @@ Copy-Item -LiteralPath (Join-Path $repoRoot 'php_backend\public\api\index.php') 
 Copy-Item -Path (Join-Path $repoRoot 'php_backend\migrations\*') -Destination (Join-Path $releaseRoot 'migrations') -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot 'deploy\shared-host\.htaccess') -Destination (Join-Path $releaseRoot 'server-config\apache.htaccess') -Force
 Copy-Item -LiteralPath (Join-Path $repoRoot 'deploy\shared-host\nginx-rewrite.conf') -Destination (Join-Path $releaseRoot 'server-config\nginx-rewrite.conf') -Force
-Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\PHP-shared-host-security-performance-update.md') -Destination (Join-Path $releaseRoot 'DEPLOY-UPDATE.md') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'deploy\shared-host\uploads\.htaccess') -Destination (Join-Path $releaseRoot 'server-config\uploads.htaccess') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\PHP-shared-host-security-performance-update.md') -Destination (Join-Path $releaseRoot 'SECURITY-UPDATE.md') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\PHP-content-discovery-update.md') -Destination (Join-Path $releaseRoot 'DEPLOY-UPDATE.md') -Force
+Copy-Item -LiteralPath (Join-Path $repoRoot 'docs\PHP-markdown-rendering.md') -Destination (Join-Path $releaseRoot 'MARKDOWN-RENDERING.md') -Force
 
 if (Test-Path -LiteralPath $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
@@ -86,6 +89,6 @@ Write-Host "Uncompressed size: $([Math]::Round($totalBytes / 1MB, 2)) MB"
 Write-Host "Archive size: $([Math]::Round($zipBytes / 1MB, 2)) MB"
 Write-Host 'This update archive intentionally excludes config, uploads, setup.php, and the live root .htaccess.'
 Write-Host "Frontend assets use release prefix: $AssetReleasePrefix"
-Write-Host 'Import migrations/006_security_performance_hardening.sql through 009_guest_message_targets.sql before replacing app files.'
-Write-Host 'No new database migration is required for the responsive-image, SEO, and Live2D update.'
-Write-Host 'Read DEPLOY-UPDATE.md before uploading.'
+Write-Host 'Import migrations/006_security_performance_hardening.sql through 010_content_discovery.sql before replacing app files.'
+Write-Host 'Migration 010 adds optional article series metadata used by article navigation.'
+Write-Host 'Read DEPLOY-UPDATE.md before uploading. SECURITY-UPDATE.md contains the earlier hardening notes.'

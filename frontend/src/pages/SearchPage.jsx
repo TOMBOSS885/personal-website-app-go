@@ -1,25 +1,29 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { FileText, Folder, Search, Zap } from 'lucide-react'
+import { FileText, Folder, MessageCircle, Search, Zap } from 'lucide-react'
 import LoadingIndicator from '../components/LoadingIndicator'
 
 export default function SearchPage() {
   const [params, setParams] = useSearchParams()
   const [query, setQuery] = useState(params.get('q') || '')
+  const [type, setType] = useState(params.get('type') || 'all')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const keyword = params.get('q') || ''
+    const selectedType = params.get('type') || 'all'
     setQuery(keyword)
+    setType(selectedType)
     if (!keyword.trim()) {
       setResults([])
+      setLoading(false)
       return
     }
 
     const controller = new AbortController()
     setLoading(true)
-    fetch(`/api/public/search?q=${encodeURIComponent(keyword.trim())}`, { signal: controller.signal })
+    fetch(`/api/public/search?q=${encodeURIComponent(keyword.trim())}&type=${encodeURIComponent(selectedType)}`, { signal: controller.signal })
       .then(res => res.ok ? res.json() : [])
       .then(data => setResults(Array.isArray(data) ? data : []))
       .catch(() => {
@@ -35,11 +39,21 @@ export default function SearchPage() {
   const submitSearch = (event) => {
     event.preventDefault()
     const keyword = query.trim()
+    const nextParams = {}
     if (keyword) {
-      setParams({ q: keyword })
-    } else {
-      setParams({})
+      nextParams.q = keyword
     }
+    if (type !== 'all') nextParams.type = type
+    setParams(nextParams)
+  }
+
+  const updateType = (event) => {
+    const nextType = event.target.value
+    setType(nextType)
+    const nextParams = {}
+    if (query.trim()) nextParams.q = query.trim()
+    if (nextType !== 'all') nextParams.type = nextType
+    setParams(nextParams)
   }
 
   return (
@@ -50,7 +64,7 @@ export default function SearchPage() {
             <Search className="h-8 w-8" style={{ color: 'var(--theme-primary)' }} />
             全站搜索
           </h1>
-          <form onSubmit={submitSearch} className="mt-6 flex gap-3">
+          <form onSubmit={submitSearch} className="mt-6 flex flex-col gap-3 sm:flex-row">
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -67,6 +81,16 @@ export default function SearchPage() {
               搜索
             </button>
           </form>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <label htmlFor="search-type" className="text-sm font-medium text-gray-600 dark:text-slate-300">筛选范围</label>
+            <select id="search-type" value={type} onChange={updateType} className="rounded-xl border border-gray-200 bg-white/90 px-3 py-2 text-sm text-gray-800 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+              <option value="all">全部内容</option>
+              <option value="article">文章</option>
+              <option value="project">项目</option>
+              <option value="message">留言</option>
+              <option value="skill">技能</option>
+            </select>
+          </div>
         </div>
 
         <div className="mt-6 overflow-hidden rounded-3xl border border-white/60 bg-white/75 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60">
@@ -82,7 +106,7 @@ export default function SearchPage() {
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-slate-800">
               {results.map((item) => {
-                const Icon = item.type === 'article' ? FileText : item.type === 'project' ? Folder : Zap
+                const Icon = item.type === 'article' ? FileText : item.type === 'project' ? Folder : item.type === 'message' ? MessageCircle : Zap
                 return (
                   <Link
                     key={`${item.type}-${item.id}`}
@@ -94,10 +118,10 @@ export default function SearchPage() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-base font-semibold text-gray-900 transition group-hover:text-indigo-600 dark:text-slate-100">
-                        {item.title}
+                        {highlightText(item.title, params.get('q'))}
                       </span>
                       <span className="mt-1 block line-clamp-2 text-sm text-gray-500 dark:text-slate-400">
-                        {typeLabel(item.type)} · {item.description || '暂无描述'}
+                        {typeLabel(item.type)} · {highlightText(item.description || '暂无描述', params.get('q'))}
                       </span>
                     </span>
                   </Link>
@@ -115,5 +139,17 @@ function typeLabel(type) {
   if (type === 'article') return '文章'
   if (type === 'project') return '项目'
   if (type === 'skill') return '技能'
+  if (type === 'message') return '留言'
   return type
+}
+
+function highlightText(value, keyword) {
+  const text = String(value || '')
+  const needle = String(keyword || '').trim()
+  if (!needle) return text
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`(${escaped})`, 'ig')
+  return text.split(pattern).map((part, index) => part.toLowerCase() === needle.toLowerCase()
+    ? <mark key={`${part}-${index}`} className="rounded bg-amber-200/80 px-0.5 text-inherit dark:bg-amber-400/30">{part}</mark>
+    : part)
 }

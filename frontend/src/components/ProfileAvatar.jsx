@@ -7,6 +7,8 @@ export default function ProfileAvatar({
   className = '',
   imageClassName = '',
   fallbackClassName = '',
+  loading = 'lazy',
+  fetchPriority = 'auto',
 }) {
   const initial = profile?.nickname?.trim()?.charAt(0)?.toUpperCase() || 'W'
   const avatarSrc = typeof profile?.avatar === 'string' && profile.avatar.startsWith('/uploads/avatars/')
@@ -33,7 +35,8 @@ export default function ProfileAvatar({
           srcSet={responsiveImageSourceSet(avatarSrc)}
           sizes="(min-width: 768px) 128px, 96px"
           alt={profile?.nickname || 'avatar'}
-          loading="lazy"
+          loading={loading}
+          fetchPriority={fetchPriority}
           decoding="async"
           className={`h-full w-full rounded-full object-cover ${imageClassName}`}
         />

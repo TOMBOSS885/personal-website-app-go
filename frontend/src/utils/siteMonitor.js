@@ -5,6 +5,7 @@ export function normalizeSiteMonitor(data) {
     totalViews: normalizeMetric(data?.totalViews),
     totalVisitors: normalizeMetric(data?.totalVisitors),
     estimatedTransferBytes: normalizeMetric(data?.estimatedTransferBytes),
+    startedAt: normalizeDate(data?.startedAt),
     updatedAt: typeof data?.updatedAt === 'string' ? data.updatedAt : '',
   }
 }
@@ -50,8 +51,28 @@ export function formatTransferBytes(value, language = 'zh') {
   }).format(amount)} ${units[unitIndex]}`
 }
 
+export function formatSiteUptime(startedAt, now = Date.now(), language = 'zh') {
+  const startedTime = Date.parse(startedAt)
+  const currentTime = Number(now)
+  if (!Number.isFinite(startedTime) || !Number.isFinite(currentTime) || currentTime < startedTime) return '--'
+
+  const totalSeconds = Math.floor((currentTime - startedTime) / 1000)
+  const days = Math.floor(totalSeconds / 86400)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const clock = [hours, minutes, seconds].map(value => String(value).padStart(2, '0')).join(':')
+
+  if (days === 0) return clock
+  return language === 'en' ? `${days}d ${clock}` : `${days}天 ${clock}`
+}
+
 function normalizeMetric(value) {
   const number = Number(value)
   if (!Number.isFinite(number) || number <= 0) return 0
   return Math.min(MAX_SAFE_METRIC, Math.floor(number))
+}
+
+function normalizeDate(value) {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : ''
 }

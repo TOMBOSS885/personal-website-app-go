@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Check, Image as ImageIcon, Palette, RefreshCw, Settings2, X } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
@@ -37,20 +37,37 @@ export default function HomeBackgroundCustomizer() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [backgroundImages, setBackgroundImages] = useState([])
+  const backgroundRequestRef = useRef(null)
 
   const activeTheme = getActiveTheme()
 
   const fetchBackgroundImages = async () => {
+    // Opening the image picker and switching to image mode can happen in the
+    // same render. Reuse the in-flight request so a slow shared host does not
+    // receive duplicate requests for the same immutable list.
+    if (backgroundRequestRef.current) return backgroundRequestRef.current
+
     setLoading(true)
-    try {
-      const res = await fetch(`${API_BASE}/api/public/theme/background-images`)
-      const data = res.ok ? await res.json() : []
-      setBackgroundImages(Array.isArray(data) ? data : [])
-    } catch {
-      setBackgroundImages([])
-    } finally {
-      setLoading(false)
-    }
+    const request = fetch(`${API_BASE}/api/public/theme/background-images`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        const images = Array.isArray(data) ? data : []
+        setBackgroundImages(images)
+        return images
+      })
+      .catch(() => {
+        setBackgroundImages([])
+        return []
+      })
+      .finally(() => {
+        setLoading(false)
+        if (backgroundRequestRef.current === request) {
+          backgroundRequestRef.current = null
+        }
+      })
+
+    backgroundRequestRef.current = request
+    return request
   }
 
   useEffect(() => {

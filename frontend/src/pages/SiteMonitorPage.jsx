@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, BarChart3, RefreshCw, Users, Wifi } from 'lucide-react'
+import { Activity, BarChart3, Clock3, RefreshCw, Users, Wifi } from 'lucide-react'
 import LoadingIndicator from '../components/LoadingIndicator'
 import { useLanguage } from '../contexts/LanguageContext'
 import { fetchWithTimeout } from '../utils/network'
 import {
   formatSiteMetric,
+  formatSiteUptime,
   formatTransferBytes,
   normalizeSiteMonitor,
 } from '../utils/siteMonitor'
@@ -18,9 +19,11 @@ const COPY = {
     views: '总访问量',
     visitors: '访问人数',
     traffic: '站点流量',
+    uptime: '运行时间',
     viewsDetail: '通过安全去重后累计记录的页面访问次数。',
     visitorsDetail: '按浏览器识别的独立访客数量。',
     trafficDetail: '浏览器记录的同源资源实际传输字节估算。',
+    uptimeDetail: '从本站现存的最早文章或访问记录起累计计算，并在浏览器本地实时更新。',
     loading: '正在读取监控数据',
     error: '监控数据暂时无法读取，请稍后重试。',
     refresh: '刷新监控数据',
@@ -33,9 +36,11 @@ const COPY = {
     views: 'Total views',
     visitors: 'Visitors',
     traffic: 'Site traffic',
+    uptime: 'Uptime',
     viewsDetail: 'Page visits recorded after secure deduplication.',
     visitorsDetail: 'Unique visitors identified by browser.',
     trafficDetail: 'Estimated bytes transferred for same-origin resources observed by browsers.',
+    uptimeDetail: 'Calculated from the earliest available article or visit record and updated locally in real time.',
     loading: 'Loading monitoring data',
     error: 'Monitoring data is temporarily unavailable. Please try again.',
     refresh: 'Refresh monitoring data',
@@ -53,6 +58,7 @@ export default function SiteMonitorPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
 
   const loadStats = useCallback(async (showLoading = false) => {
     requestRef.current?.abort()
@@ -90,6 +96,13 @@ export default function SiteMonitorPage() {
     }
   }, [loadStats])
 
+  useEffect(() => {
+    if (!stats.startedAt) return undefined
+    setNow(Date.now())
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [stats.startedAt])
+
   const cards = useMemo(() => [
     {
       key: 'views',
@@ -116,7 +129,15 @@ export default function SiteMonitorPage() {
       color: 'var(--theme-accent)',
       estimated: true,
     },
-  ], [language, stats, text])
+    {
+      key: 'uptime',
+      label: text.uptime,
+      value: formatSiteUptime(stats.startedAt, now, language),
+      detail: text.uptimeDetail,
+      icon: Clock3,
+      color: '#14b8a6',
+    },
+  ], [language, now, stats, text])
   const activeCard = cards[activeIndex] || cards[0]
   const ActiveIcon = activeCard.icon
 

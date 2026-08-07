@@ -5,7 +5,7 @@ import LoadingIndicator from '../../components/LoadingIndicator'
 import { optimizeCoverImage } from '../../utils/imageCompression'
 
 const emptyForm = {
-  title: '', summary: '', content: '', category: '', tags: '', coverImage: '',
+  title: '', summary: '', content: '', category: '', tags: '', seriesName: '', seriesOrder: 0, coverImage: '',
   published: true, contentType: 'markdown', staticSiteKey: '', staticSiteName: '',
   isLocked: false, accessPassword: '',
 }
@@ -295,6 +295,7 @@ export default function ArticleManager() {
               <div className="grid gap-4 md:grid-cols-[1fr_auto]"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">封面 URL<input value={form.coverImage} onChange={event => setForm({ ...form, coverImage: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label><div className="flex items-end"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => uploadCover(event.target.files?.[0])} className="hidden" /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200">{uploading ? <LoadingIndicator size={16} /> : <Upload className="h-4 w-4" />}{uploading ? '压缩并上传中...' : '上传封面'}</button></div></div>
               {form.coverImage && <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-600 dark:bg-slate-950"><Image className="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{form.coverImage}</span></div>}
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">标签（英文逗号分隔）<input value={form.tags} onChange={event => setForm({ ...form, tags: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
+              <div className="grid gap-4 md:grid-cols-[1fr_10rem]"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">文章专题（可选）<input value={form.seriesName} onChange={event => setForm({ ...form, seriesName: event.target.value })} placeholder="例如：PHP 主机迁移" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">专题顺序<input type="number" min="0" value={form.seriesOrder} onChange={event => setForm({ ...form, seriesOrder: Number(event.target.value) || 0 })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label></div>
               <div>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <div className="text-sm font-medium text-gray-700 dark:text-slate-300">正文类型</div>

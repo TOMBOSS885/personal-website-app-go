@@ -40,12 +40,15 @@ export function fetchWithTimeout(input, init = {}, timeout = 8000) {
   const controller = new AbortController()
   const timer = window.setTimeout(() => controller.abort(), timeout)
   const { signal, ...rest } = init
+  let removeAbortListener = null
 
   if (signal) {
     if (signal.aborted) {
       controller.abort()
     } else {
-      signal.addEventListener('abort', () => controller.abort(), { once: true })
+      const onAbort = () => controller.abort()
+      signal.addEventListener('abort', onAbort, { once: true })
+      removeAbortListener = () => signal.removeEventListener('abort', onAbort)
     }
   }
 
@@ -54,5 +57,6 @@ export function fetchWithTimeout(input, init = {}, timeout = 8000) {
     signal: controller.signal,
   }).finally(() => {
     window.clearTimeout(timer)
+    removeAbortListener?.()
   })
 }

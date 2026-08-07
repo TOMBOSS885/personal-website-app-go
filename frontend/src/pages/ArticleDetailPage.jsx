@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, MessageCircle, Share2, Tag } from 'lucide-react'
@@ -36,6 +36,7 @@ export default function ArticleDetailPage() {
   const [unlockError, setUnlockError] = useState('')
   const [relatedMessages, setRelatedMessages] = useState([])
   const [staticSiteHeight, setStaticSiteHeight] = useState(null)
+  const [markdownRenderVersion, setMarkdownRenderVersion] = useState(0)
   const staticSiteFrameRef = useRef(null)
   const isStaticArticle = article?.contentType === 'static'
   const tocItems = useMemo(() => buildToc(isStaticArticle ? '' : article?.content || ''), [article?.content, isStaticArticle])
@@ -50,6 +51,10 @@ export default function ArticleDetailPage() {
     siteName: 'tombossking',
   } : null, [article])
   usePageMetadata(articleMetadata)
+
+  const handleMarkdownRendered = useCallback(() => {
+    setMarkdownRenderVersion(current => current + 1)
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -303,7 +308,7 @@ export default function ArticleDetailPage() {
             ) : (
               <motion.article initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }} className="article-content">
                 <Suspense fallback={<ArticleContentPreview content={article.content} />}>
-                  <MarkdownArticleRenderer content={article.content} resolveHeadingId={resolveHeadingId} />
+                  <MarkdownArticleRenderer content={article.content} resolveHeadingId={resolveHeadingId} onRendered={handleMarkdownRendered} />
                 </Suspense>
               </motion.article>
             )}
@@ -311,10 +316,29 @@ export default function ArticleDetailPage() {
 
           {!isStaticArticle && tocItems.length > 0 && (
             <aside className="hidden lg:col-start-3 lg:block">
-              <ArticleTableOfContents items={tocItems} />
+              <ArticleTableOfContents items={tocItems} renderVersion={markdownRenderVersion} />
             </aside>
           )}
         </div>
+
+        {article.navigation && (
+          <section className="mx-auto mt-10 grid max-w-[56rem] gap-5 md:grid-cols-2" aria-label="文章导航">
+            <ArticleNavigationCard label="上一篇" article={article.navigation.previous} direction="previous" />
+            <ArticleNavigationCard label="下一篇" article={article.navigation.next} direction="next" />
+            {article.navigation.series?.length > 1 && (
+              <div className="adaptive-surface md:col-span-2 rounded-2xl border border-white/60 bg-white/70 p-5 backdrop-blur-md dark:border-slate-700/50 dark:bg-slate-950/60">
+                <div className="mb-3 flex items-center justify-between gap-3"><h2 className="font-semibold text-gray-900 dark:text-slate-100">专题：{article.navigation.seriesName}</h2><span className="text-xs text-gray-500 dark:text-slate-400">{article.navigation.series.length} 篇</span></div>
+                <div className="flex flex-wrap gap-2">{article.navigation.series.map(item => <Link key={item.id} to={`/blog/${item.id}`} className={`rounded-lg px-3 py-2 text-sm transition ${item.current ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-indigo-500/20'}`}>{item.order > 0 ? `${item.order}. ` : ''}{item.title}</Link>)}</div>
+              </div>
+            )}
+            {article.navigation.related?.length > 0 && (
+              <div className="adaptive-surface md:col-span-2 rounded-2xl border border-white/60 bg-white/70 p-5 backdrop-blur-md dark:border-slate-700/50 dark:bg-slate-950/60">
+                <h2 className="mb-3 font-semibold text-gray-900 dark:text-slate-100">相关文章</h2>
+                <div className="grid gap-3 sm:grid-cols-2">{article.navigation.related.map(item => <Link key={item.id} to={`/blog/${item.id}`} className="rounded-xl border border-gray-200/70 bg-white/50 p-3 transition hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-900/40 dark:hover:border-indigo-400"><p className="font-medium text-gray-800 dark:text-slate-100">{item.title}</p>{item.summary && <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500 dark:text-slate-400">{item.summary}</p>}</Link>)}</div>
+              </div>
+            )}
+          </section>
+        )}
 
         <section aria-labelledby="related-messages-heading" className="adaptive-surface mx-auto mt-10 max-w-[56rem] border-y border-white/60 bg-white/75 px-5 py-7 backdrop-blur-md dark:border-slate-700/60 dark:bg-slate-950/70 md:px-7">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -357,6 +381,17 @@ export default function ArticleDetailPage() {
   )
 }
 
+function ArticleNavigationCard({ label, article, direction }) {
+  if (!article) return <div className="hidden md:block" aria-hidden="true" />
+  return (
+    <Link to={`/blog/${article.id}`} className="adaptive-surface group rounded-2xl border border-white/60 bg-white/70 p-5 backdrop-blur-md transition hover:-translate-y-0.5 hover:border-indigo-300 dark:border-slate-700/50 dark:bg-slate-950/60 dark:hover:border-indigo-400">
+      <div className="flex items-center justify-between gap-3 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400"><span>{label}</span><span aria-hidden="true">{direction === 'previous' ? '←' : '→'}</span></div>
+      <p className="mt-2 line-clamp-2 font-semibold text-gray-900 group-hover:text-indigo-700 dark:text-slate-100 dark:group-hover:text-indigo-300">{article.title}</p>
+      {article.summary && <p className="mt-1 line-clamp-2 text-sm leading-6 text-gray-500 dark:text-slate-400">{article.summary}</p>}
+    </Link>
+  )
+}
+
 function formatGuestMessageDate(value) {
   if (!value) return ''
   try {
@@ -386,7 +421,7 @@ function toReadablePreview(content) {
     .trim()
 }
 
-function ArticleTableOfContents({ items }) {
+function ArticleTableOfContents({ items, renderVersion }) {
   const tree = useMemo(() => buildTocTree(items), [items])
   const branchIds = useMemo(() => collectBranchIds(tree), [tree])
   const ancestorMap = useMemo(() => buildAncestorMap(tree), [tree])
@@ -421,12 +456,10 @@ function ArticleTableOfContents({ items }) {
   }, [ancestorMap, items])
 
   useEffect(() => {
-    const headings = items
-      .map(item => document.getElementById(item.id))
-      .filter(Boolean)
     const scrollingElement = document.scrollingElement || document.documentElement
-    if (!headings.length || !scrollingElement) return undefined
+    if (!scrollingElement) return undefined
 
+    let headings = []
     let headingOffsets = []
     let updateFrame = 0
     let measureFrame = 0
@@ -469,6 +502,15 @@ function ArticleTableOfContents({ items }) {
     const measureHeadings = () => {
       measureFrame = 0
       if (disposed) return
+      // The renderer is lazy-loaded. Resolve headings here so the TOC also
+      // attaches after the fallback is replaced by the rendered Markdown.
+      headings = items
+        .map(item => document.getElementById(item.id))
+        .filter(Boolean)
+      if (!headings.length) {
+        headingOffsets = []
+        return
+      }
       const scrollTop = getScrollTop()
       headingOffsets = headings.map(heading => heading.getBoundingClientRect().top + scrollTop)
       scheduleUpdate()
@@ -483,8 +525,12 @@ function ArticleTableOfContents({ items }) {
     window.addEventListener('resize', scheduleMeasure, { passive: true })
 
     const resizeObserver = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(scheduleMeasure)
-    const articleBody = headings[0].closest('.article-content')
+    const articleBody = document.querySelector('.article-content')
     if (articleBody) resizeObserver?.observe(articleBody)
+    const mutationObserver = typeof MutationObserver === 'undefined' || !articleBody
+      ? null
+      : new MutationObserver(scheduleMeasure)
+    mutationObserver?.observe(articleBody, { childList: true, subtree: true, characterData: true })
     if (document.fonts?.ready) void document.fonts.ready.then(scheduleMeasure, scheduleMeasure)
     scheduleMeasure()
 
@@ -493,10 +539,11 @@ function ArticleTableOfContents({ items }) {
       window.removeEventListener('scroll', scheduleUpdate)
       window.removeEventListener('resize', scheduleMeasure)
       resizeObserver?.disconnect()
+      mutationObserver?.disconnect()
       if (updateFrame) window.cancelAnimationFrame(updateFrame)
       if (measureFrame) window.cancelAnimationFrame(measureFrame)
     }
-  }, [ancestorMap, items])
+  }, [ancestorMap, items, renderVersion])
 
   useEffect(() => {
     const navigation = tocScrollRef.current

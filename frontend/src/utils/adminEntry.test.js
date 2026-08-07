@@ -16,6 +16,7 @@ describe('admin entry paths', () => {
   it('does not treat public routes or unsafe segments as an admin entry', () => {
     expect(getAdminEntrySuffix('/blog/1')).toBe('')
     expect(getAdminEntrySuffix('/projects')).toBe('')
+    expect(getAdminEntrySuffix('/monitor')).toBe('')
     expect(getAdminEntrySuffix('/short')).toBe('')
     expect(getAdminEntrySuffix('/bad/path')).toBe('')
   })

@@ -100,26 +100,38 @@ function app_analytics_record_visit(): array
 
 function app_analytics_public_monitor(): array
 {
-    $cacheKey = 'public-site-monitor-v1';
+    $cacheKey = 'public-site-monitor-v2';
     $cached = app_analytics_cache_get($cacheKey);
     if ($cached !== null) return $cached;
 
     try {
-        $row = app_db()->query('SELECT total_views, total_visitors, estimated_transfer_bytes, updated_at FROM site_analytics_totals WHERE id = 1')->fetch() ?: [];
+        $row = app_db()->query("SELECT
+            total_views,
+            total_visitors,
+            estimated_transfer_bytes,
+            updated_at,
+            NULLIF(LEAST(
+                COALESCE((SELECT MIN(created_at) FROM articles), '9999-12-31 23:59:59'),
+                COALESCE((SELECT MIN(first_seen_at) FROM site_analytics_visitors), '9999-12-31 23:59:59'),
+                COALESCE((SELECT MIN(visited_at) FROM site_visits), '9999-12-31 23:59:59')
+            ), '9999-12-31 23:59:59') AS started_at
+            FROM site_analytics_totals WHERE id = 1")->fetch() ?: [];
         $report = [
             'totalViews' => (int) ($row['total_views'] ?? 0),
             'totalVisitors' => (int) ($row['total_visitors'] ?? 0),
             'estimatedTransferBytes' => (int) ($row['estimated_transfer_bytes'] ?? 0),
+            'startedAt' => !empty($row['started_at']) ? app_now_iso($row['started_at']) : null,
             'updatedAt' => !empty($row['updated_at']) ? app_now_iso($row['updated_at']) : null,
         ];
     } catch (PDOException $error) {
         // Keep the public page usable during a rolling deployment. Traffic is
         // unavailable until migration 008 has added the aggregate tables.
-        $row = app_db()->query('SELECT COUNT(*) AS total_views, COUNT(DISTINCT visitor_hash) AS total_visitors FROM site_visits')->fetch() ?: [];
+        $row = app_db()->query('SELECT COUNT(*) AS total_views, COUNT(DISTINCT visitor_hash) AS total_visitors, MIN(visited_at) AS started_at FROM site_visits')->fetch() ?: [];
         $report = [
             'totalViews' => (int) ($row['total_views'] ?? 0),
             'totalVisitors' => (int) ($row['total_visitors'] ?? 0),
             'estimatedTransferBytes' => 0,
+            'startedAt' => !empty($row['started_at']) ? app_now_iso($row['started_at']) : null,
             'updatedAt' => null,
         ];
     }

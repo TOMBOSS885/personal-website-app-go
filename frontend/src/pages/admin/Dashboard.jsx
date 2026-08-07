@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { FileText, Folder, Award, BarChart3, TrendingUp, Sparkles } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { FileText, Folder, Award, BarChart3, Download, Upload, TrendingUp, Sparkles, Database, RefreshCw } from 'lucide-react'
 import { getAdminBasePath } from '../../utils/adminEntry'
 
 const API_BASE = ''
@@ -7,6 +7,12 @@ const API_BASE = ''
 export default function Dashboard() {
   const adminBasePath = getAdminBasePath()
   const [stats, setStats] = useState({ articles: 0, projects: 0, skills: 0, visits: 0 })
+  const [health, setHealth] = useState(null)
+  const [healthLoading, setHealthLoading] = useState(true)
+  const [backupLoading, setBackupLoading] = useState(false)
+  const [restoreLoading, setRestoreLoading] = useState(false)
+  const [backupNotice, setBackupNotice] = useState('')
+  const backupFileRef = useRef(null)
   const [loading, setLoading] = useState(true)
   useEffect(() => {
     fetch(`${API_BASE}/api/admin/dashboard-stats`)
@@ -22,6 +28,69 @@ export default function Dashboard() {
       .catch(err => console.error('获取统计失败:', err))
       .finally(() => setLoading(false))
   }, [])
+
+  const loadHealth = () => {
+    setHealthLoading(true)
+    fetch(`${API_BASE}/api/admin/health`, { cache: 'no-store' })
+      .then(r => r.json())
+      .then(setHealth)
+      .catch(() => setHealth(null))
+      .finally(() => setHealthLoading(false))
+  }
+
+  useEffect(() => { loadHealth() }, [])
+
+  const downloadBackup = async () => {
+    const password = window.prompt('请设置备份密码（至少 12 个字符，恢复时必须使用相同密码）')
+    if (!password) return
+    if (password.length < 12) { setBackupNotice('备份密码至少需要 12 个字符'); return }
+    setBackupLoading(true)
+    setBackupNotice('')
+    try {
+      const response = await fetch(`${API_BASE}/api/admin/backup-export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) })
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.message || '备份生成失败')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `personal-website-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.zip`
+      link.click()
+      URL.revokeObjectURL(url)
+      setBackupNotice('完整备份已下载，请安全保存备份密码')
+    } catch (error) {
+      setBackupNotice(error.message || '备份生成失败')
+    } finally {
+      setBackupLoading(false)
+    }
+  }
+
+  const importBackup = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!window.confirm('导入会替换当前数据库和 uploads 文件，确定继续吗？')) return
+    const password = window.prompt('请输入备份密码')
+    if (!password) return
+    setRestoreLoading(true)
+    setBackupNotice('')
+    try {
+      const form = new FormData()
+      form.append('backup', file)
+      form.append('password', password)
+      const response = await fetch(`${API_BASE}/api/admin/backup-import`, { method: 'POST', body: form })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || '备份恢复失败')
+      setBackupNotice('恢复成功，正在返回登录页面...')
+      window.setTimeout(() => { window.location.href = `${adminBasePath}/login` }, 700)
+    } catch (error) {
+      setBackupNotice(error.message || '备份恢复失败')
+    } finally {
+      setRestoreLoading(false)
+    }
+  }
 
   const cards = [
     { label: '文章总数', value: stats.articles, icon: FileText, color: 'blue', bg: 'from-blue-500 to-cyan-500' },
@@ -57,6 +126,12 @@ export default function Dashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="mt-6 rounded-xl border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-slate-100"><Database className="h-5 w-5 text-emerald-500" />站点健康与备份</h2><div className="flex flex-wrap items-center gap-2"><button type="button" onClick={downloadBackup} disabled={backupLoading || restoreLoading} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-50 dark:border-emerald-500/30 dark:text-emerald-300 dark:hover:bg-emerald-500/10"><Download className="h-4 w-4" />{backupLoading ? '打包中...' : '导出完整备份'}</button><button type="button" onClick={() => backupFileRef.current?.click()} disabled={backupLoading || restoreLoading} className="inline-flex items-center gap-2 rounded-lg border border-amber-200 px-3 py-2 text-sm text-amber-700 hover:bg-amber-50 disabled:cursor-wait disabled:opacity-50 dark:border-amber-500/30 dark:text-amber-300 dark:hover:bg-amber-500/10"><Upload className="h-4 w-4" />{restoreLoading ? '恢复中...' : '导入完整备份'}</button><input ref={backupFileRef} type="file" accept=".zip,application/zip" onChange={importBackup} className="hidden" /><button type="button" onClick={loadHealth} className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><RefreshCw className={`h-4 w-4 ${healthLoading ? 'animate-spin' : ''}`} />刷新</button></div></div>
+        {health?.manifest ? <div className="mt-4 grid gap-3 text-sm text-gray-600 dark:text-slate-300 sm:grid-cols-3"><div><span className="block text-xs text-gray-400">数据库结构</span><strong className="text-gray-900 dark:text-slate-100">schema {health.schema}</strong></div><div><span className="block text-xs text-gray-400">上传目录</span><strong className="text-gray-900 dark:text-slate-100">{formatBytes(health.manifest.uploadBytes)} · {health.manifest.uploadFiles?.length ?? 0} 个文件</strong></div><div><span className="block text-xs text-gray-400">文章 / 留言</span><strong className="text-gray-900 dark:text-slate-100">{health.manifest.tables?.articles ?? '-'} / {health.manifest.tables?.guest_messages ?? '-'}</strong></div></div> : <p className="mt-4 text-sm text-gray-500 dark:text-slate-400">{healthLoading ? '正在检查数据库和上传目录...' : '健康检查暂时不可用，请确认已导入迁移。'}</p>}
+        {backupNotice && <p className="mt-3 text-sm text-emerald-600 dark:text-emerald-300" role="status">{backupNotice}</p>}
       </div>
 
       <div 
@@ -124,4 +199,11 @@ export default function Dashboard() {
       </div>
     </div>
   )
+}
+
+function formatBytes(value) {
+  const bytes = Number(value) || 0
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
