@@ -3,7 +3,7 @@
 # It builds l2d-widget, the React/Vite frontend, and the Go API, then runs
 # Nginx plus the Go API in one small runtime container.
 
-FROM node:24-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 
 ARG NPM_REGISTRY=https://registry.npmmirror.com
 RUN npm config set registry "$NPM_REGISTRY" \
