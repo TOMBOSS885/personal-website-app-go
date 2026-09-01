@@ -1,8 +1,10 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
 import { Award, BarChart3, Bot, ClipboardList, FileText, Folder, LayoutDashboard, LayoutGrid, LogOut, Moon, Palette, ShieldCheck, Sparkles, Sun, UploadCloud, User, Users } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAdminAuth } from '../../contexts/AdminAuthContext'
 import { getAdminBasePath } from '../../utils/adminEntry'
+import LogoutConfirmDialog from '../../components/LogoutConfirmDialog'
 
 const navItems = adminBasePath => [
   { path: adminBasePath, label: '概览', icon: LayoutDashboard, exact: true },
@@ -18,18 +20,27 @@ const navItems = adminBasePath => [
   { path: `${adminBasePath}/upload-settings`, label: '上传限制', icon: UploadCloud },
   { path: `${adminBasePath}/account`, label: '账号安全', icon: ShieldCheck },
   { path: `${adminBasePath}/audit-logs`, label: '操作日志', icon: ClipboardList },
+  { path: `${adminBasePath}/users`, label: '用户账号', icon: Users },
 ]
 
 export default function AdminLayout() {
   const navigate = useNavigate()
   const { admin, logout } = useAdminAuth()
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [logoutBusy, setLogoutBusy] = useState(false)
   const { colorMode, toggleColorMode } = useTheme()
   const username = admin?.username || 'Admin'
   const adminBasePath = getAdminBasePath()
 
   const handleLogout = async () => {
-    await logout()
-    navigate(`${adminBasePath}/login`, { replace: true })
+    setLogoutBusy(true)
+    try {
+      await logout()
+      navigate(`${adminBasePath}/login`, { replace: true })
+    } finally {
+      setLogoutBusy(false)
+      setLogoutConfirmOpen(false)
+    }
   }
 
   return (
@@ -58,12 +69,13 @@ export default function AdminLayout() {
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-600 text-sm font-medium text-white">{username.charAt(0).toUpperCase()}</div>
             <span className="text-sm text-gray-600 dark:text-slate-300">{username}</span>
           </div>
-          <button type="button" onClick={handleLogout} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-slate-400 lg:w-full lg:gap-3 lg:px-4">
+          <button type="button" onClick={() => setLogoutConfirmOpen(true)} className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-gray-500 hover:bg-red-50 hover:text-red-600 dark:text-slate-400 lg:w-full lg:gap-3 lg:px-4">
             <LogOut className="h-5 w-5" /><span className="font-medium">退出登录</span>
           </button>
         </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8"><Outlet /></main>
+      <LogoutConfirmDialog open={logoutConfirmOpen} identity={username} busy={logoutBusy} onCancel={() => setLogoutConfirmOpen(false)} onConfirm={() => void handleLogout()} />
     </div>
   )
 }

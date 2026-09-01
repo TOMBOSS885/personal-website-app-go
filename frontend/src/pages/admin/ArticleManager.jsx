@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Code2, Edit2, FileArchive, FileText, Image, Layers3, Lock, Plus, Save, Trash2, Upload, UploadCloud, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Code2, Edit2, FileArchive, FileText, Image, Layers3, Lock, Plus, Save, Search, Trash2, Upload, UploadCloud, X } from 'lucide-react'
 import RichTextEditor from '../../components/RichTextEditor'
 import LoadingIndicator from '../../components/LoadingIndicator'
 import { optimizeCoverImage } from '../../utils/imageCompression'
@@ -7,7 +7,7 @@ import { optimizeCoverImage } from '../../utils/imageCompression'
 const emptyForm = {
   title: '', summary: '', content: '', category: '', tags: '', seriesName: '', seriesOrder: 0, featured: false, displayOrder: 0, coverImage: '',
   published: true, contentType: 'markdown', staticSiteKey: '', staticSiteName: '',
-  isLocked: false, accessPassword: '',
+  isLocked: false, accessPassword: '', loginRequired: false,
 }
 const DRAFT_KEY = 'php-shared-host:article-draft'
 const PAGE_SIZE = 20
@@ -40,17 +40,26 @@ export default function ArticleManager() {
   const [editingArticle, setEditingArticle] = useState(null)
   const [availableSeries, setAvailableSeries] = useState([])
   const [form, setForm] = useState(emptyForm)
+  const [selectedIds, setSelectedIds] = useState([])
+  const [searchInput, setSearchInput] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
   const fileInputRef = useRef(null)
   const siteFileInputRef = useRef(null)
   const siteDragDepthRef = useRef(0)
+  const articleRequestRef = useRef(0)
 
-  const fetchArticles = async (requestedPage = page) => {
+  const fetchArticles = async (requestedPage = page, requestedQuery = searchQuery) => {
+    const requestId = ++articleRequestRef.current
     setLoading(true)
     setLoadError('')
     try {
-      const response = await fetch(`/api/admin/articles?page=${requestedPage}&size=${PAGE_SIZE}`, { cache: 'no-store' })
+      const params = new URLSearchParams({ page: String(requestedPage), size: String(PAGE_SIZE) })
+      if (requestedQuery) params.set('q', requestedQuery)
+      const response = await fetch(`/api/admin/articles?${params.toString()}`, { cache: 'no-store' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.message || '加载文章失败')
+      if (requestId !== articleRequestRef.current) return
       const nextArticles = Array.isArray(data.content) ? data.content : []
       const nextTotalPages = Number(data.totalPages) || 0
       if (requestedPage > 0 && nextArticles.length === 0 && nextTotalPages <= requestedPage) {
@@ -58,17 +67,30 @@ export default function ArticleManager() {
         return
       }
       setArticles(nextArticles)
+      setSelectedIds([])
       setTotalPages(nextTotalPages)
       setTotalElements(Number(data.totalElements) || 0)
     } catch (error) {
+      if (requestId !== articleRequestRef.current) return
       setArticles([])
       setLoadError(error.message || '加载文章失败')
     } finally {
-      setLoading(false)
+      if (requestId === articleRequestRef.current) setLoading(false)
     }
   }
 
   useEffect(() => { void fetchArticles(page) }, [page])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const nextQuery = searchInput.trim()
+      setSearchQuery(current => current === nextQuery ? current : nextQuery)
+      setPage(0)
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [searchInput])
+
+  useEffect(() => { if (searchQuery || searchInput.trim() === '') void fetchArticles(0, searchQuery) }, [searchQuery])
 
   useEffect(() => {
     fetch('/api/admin/article-series', { cache: 'no-store' })
@@ -258,6 +280,24 @@ export default function ArticleManager() {
     else alert('删除失败')
   }
 
+  const toggleSelected = id => setSelectedIds(current => current.includes(id) ? current.filter(value => value !== id) : [...current, id])
+  const togglePageSelection = () => {
+    const pageIds = articles.map(article => article.id)
+    setSelectedIds(current => pageIds.every(id => current.includes(id)) ? current.filter(id => !pageIds.includes(id)) : Array.from(new Set([...current, ...pageIds])))
+  }
+  const handleBulk = async action => {
+    if (!selectedIds.length) return
+    if (action === 'delete' && !confirm(`确定删除选中的 ${selectedIds.length} 篇文章吗？此操作无法撤销。`)) return
+    setBulkBusy(true)
+    try {
+      const response = await fetch('/api/admin/articles/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: selectedIds, action, confirm: action === 'delete' }) })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data.message || '批量操作失败')
+      setSelectedIds([])
+      await fetchArticles(page)
+    } catch (error) { alert(error.message || '批量操作失败') } finally { setBulkBusy(false) }
+  }
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -266,12 +306,21 @@ export default function ArticleManager() {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 bg-gray-50/80 px-5 py-3 dark:border-slate-800 dark:bg-slate-950/60">
+          <div className="relative min-w-[240px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input type="search" value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="搜索标题、摘要、分类、标签或正文" className="admin-input w-full pl-9 pr-3" spellCheck="false" autoComplete="off" />
+          </div>
+          {searchQuery && <span className="text-xs text-gray-500 dark:text-slate-400">匹配 {totalElements} 篇文章</span>}
+        </div>
+        {!loading && !loadError && articles.length > 0 && <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-5 py-3 text-sm dark:border-slate-800 dark:bg-slate-950"><label className="mr-2 inline-flex items-center gap-2 font-medium"><input type="checkbox" checked={articles.length > 0 && articles.every(article => selectedIds.includes(article.id))} onChange={togglePageSelection} className="h-4 w-4 rounded" />全选本页</label><span className="text-gray-500">已选 {selectedIds.length} 篇</span>{selectedIds.length > 0 && <><button type="button" disabled={bulkBusy} onClick={() => handleBulk('login-required')} className="rounded-md border border-indigo-200 px-2.5 py-1.5 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">设为登录可见</button><button type="button" disabled={bulkBusy} onClick={() => handleBulk('public')} className="rounded-md border border-emerald-200 px-2.5 py-1.5 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">设为公开</button><button type="button" disabled={bulkBusy} onClick={() => handleBulk('publish')} className="rounded-md border border-cyan-200 px-2.5 py-1.5 text-cyan-700 hover:bg-cyan-50 disabled:opacity-50">批量发布</button><button type="button" disabled={bulkBusy} onClick={() => handleBulk('unpublish')} className="rounded-md border border-amber-200 px-2.5 py-1.5 text-amber-700 hover:bg-amber-50 disabled:opacity-50">转为草稿</button><button type="button" disabled={bulkBusy} onClick={() => handleBulk('delete')} className="rounded-md border border-red-200 px-2.5 py-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50">批量删除</button></>}</div>}
         {loading ? <div className="flex items-center justify-center py-16 text-gray-500"><LoadingIndicator size={20} className="mr-2" />加载中...</div> : loadError ? <div className="py-16 text-center text-red-600"><p>{loadError}</p><button type="button" onClick={() => fetchArticles(page)} className="mt-4 rounded-lg border border-red-200 px-4 py-2 text-sm font-medium hover:bg-red-50">重新加载</button></div> : articles.length === 0 ? <div className="py-16 text-center text-gray-500">暂无文章</div> : (
           <table className="w-full min-w-[720px]">
-            <thead className="border-b border-gray-100 bg-gray-50 text-left text-xs uppercase text-gray-500 dark:border-slate-800 dark:bg-slate-950"><tr><th className="px-5 py-4">标题</th><th className="px-5 py-4">分类</th><th className="px-5 py-4">状态</th><th className="px-5 py-4">阅读</th><th className="px-5 py-4 text-right">操作</th></tr></thead>
+            <thead className="border-b border-gray-100 bg-gray-50 text-left text-xs uppercase text-gray-500 dark:border-slate-800 dark:bg-slate-950"><tr><th className="w-12 px-5 py-4"><span className="sr-only">选择</span></th><th className="px-5 py-4">标题</th><th className="px-5 py-4">分类</th><th className="px-5 py-4">状态</th><th className="px-5 py-4">阅读</th><th className="px-5 py-4 text-right">操作</th></tr></thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
               {articles.map(article => (
                 <tr key={article.id} className="text-sm text-gray-700 dark:text-slate-300">
+                  <td className="px-5 py-4"><input type="checkbox" checked={selectedIds.includes(article.id)} onChange={() => toggleSelected(article.id)} className="h-4 w-4 rounded" aria-label={`选择 ${article.title}`} /></td>
                   <td className="px-5 py-4"><div className="flex flex-wrap items-center gap-2 font-medium text-gray-900 dark:text-slate-100"><span>{article.title}</span>{article.contentType === 'static' && <span className="inline-flex items-center gap-1 rounded-md bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300"><Code2 className="h-3 w-3" />静态前端</span>}{article.seriesName && <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"><Layers3 className="h-3 w-3" />{article.seriesName}{article.seriesOrder > 0 ? ` · ${article.seriesOrder}` : ''}</span>}</div><div className="mt-1 max-w-xl truncate text-xs text-gray-500">{article.summary}</div></td>
                   <td className="px-5 py-4">{article.category || '-'}</td>
                   <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs ${article.published ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{article.published ? '已发布' : '草稿'}</span>{article.isLocked && <Lock className="ml-2 inline h-4 w-4 text-amber-500" />}</td>
@@ -349,7 +398,7 @@ export default function ArticleManager() {
                   </div>
                 ) : <RichTextEditor value={form.content} onChange={content => setForm(current => ({ ...current, content }))} height={520} />}
               </div>
-              <div className="grid gap-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-950 sm:grid-cols-2"><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.published} onChange={event => setForm({ ...form, published: event.target.checked })} className="h-4 w-4 rounded" />立即发布</label><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} className="h-4 w-4 rounded" />设为精选文章</label>{form.featured && <label className="block text-sm text-gray-600 dark:text-slate-300">精选顺序<input type="number" min="0" value={form.displayOrder} onChange={event => setForm({ ...form, displayOrder: Number(event.target.value) || 0 })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-900" /></label>}<label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.isLocked} onChange={event => setForm({ ...form, isLocked: event.target.checked })} className="h-4 w-4 rounded" />使用独立访问密码</label>{form.isLocked && <input type="password" value={form.accessPassword} onChange={event => setForm({ ...form, accessPassword: event.target.value })} placeholder={editingArticle?.isLocked ? '留空则保持原密码' : '设置访问密码'} className="rounded-lg border border-gray-300 px-3 py-2 sm:col-span-2 dark:border-slate-700 dark:bg-slate-900" />}</div>
+              <div className="grid gap-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-950 sm:grid-cols-2"><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.published} onChange={event => setForm({ ...form, published: event.target.checked })} className="h-4 w-4 rounded" />立即发布</label><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} className="h-4 w-4 rounded" />设为精选文章</label>{form.featured && <label className="block text-sm text-gray-600 dark:text-slate-300">精选顺序<input type="number" min="0" value={form.displayOrder} onChange={event => setForm({ ...form, displayOrder: Number(event.target.value) || 0 })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-900" /></label>}<label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.loginRequired} onChange={event => setForm({ ...form, loginRequired: event.target.checked })} className="h-4 w-4 rounded" />登录后才能查看</label><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.isLocked} onChange={event => setForm({ ...form, isLocked: event.target.checked })} className="h-4 w-4 rounded" />使用独立访问密码</label>{form.isLocked && <input type="password" value={form.accessPassword} onChange={event => setForm({ ...form, accessPassword: event.target.value })} placeholder={editingArticle?.isLocked ? '留空则保持原密码' : '设置访问密码'} className="rounded-lg border border-gray-300 px-3 py-2 sm:col-span-2 dark:border-slate-700 dark:bg-slate-900" />}</div>
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-800"><button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:border-slate-700 dark:text-slate-200">取消</button><button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50">{saving ? <LoadingIndicator size={16} /> : <Save className="h-4 w-4" />}{saving ? '保存中...' : '保存文章'}</button></div>
             </form>
           </div>

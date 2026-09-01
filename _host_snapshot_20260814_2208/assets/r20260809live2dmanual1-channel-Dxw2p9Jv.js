@@ -1,1 +1,0 @@
-import{nt as e,tt as t}from"./r20260809live2dmanual1-chunk-ABZYJK2D-C5IvCMIS.js";var n=(n,r)=>e.lang.round(t.parse(n)[r]);export{n as t};

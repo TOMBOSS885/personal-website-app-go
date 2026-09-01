@@ -1,1 +1,0 @@
-import"./r20260813live2dseries1-chunk-KEIR6QF5-BfrZ3jm6.js";import{M as e}from"./r20260813live2dseries1-mermaid-parser.core-B1wGlYSJ.js";export{e as createArchitectureServices};

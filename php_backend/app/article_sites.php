@@ -203,6 +203,12 @@ function app_article_site_signed_url(array $article): string
 
 function app_article_site_serve(int $id, string $key, int $version, int $expires, string $signature, string $requested): void
 {
+    if (function_exists('app_require_schema_014')) app_require_schema_014();
+    elseif (function_exists('app_require_schema_013')) app_require_schema_013();
+    // Static article assets are a separate route from /public/articles/{id};
+    // start the same session here so login-gated articles cannot be reached
+    // with an otherwise valid (or previously issued) signed URL.
+    app_start_session();
     if ($id <= 0 || !app_article_site_valid_key($key) || $version <= 0 || $expires < time()) {
         app_error(403, '静态前端链接无效或已过期', 'ARTICLE_SITE_LINK_EXPIRED');
     }
@@ -211,7 +217,7 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
         app_error(403, '静态前端签名无效', 'ARTICLE_SITE_SIGNATURE_INVALID');
     }
 
-    $statement = app_db()->prepare('SELECT id, published, content_type, static_site_key, is_locked, access_password_hash, updated_at FROM articles WHERE id = ?');
+    $statement = app_db()->prepare('SELECT id, published, content_type, static_site_key, is_locked, login_required, access_password_hash, updated_at FROM articles WHERE id = ?');
     $statement->execute([$id]);
     $article = $statement->fetch();
     $currentVersion = $article ? app_article_site_version($article) : 0;
@@ -219,17 +225,40 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
         || !hash_equals((string) $article['static_site_key'], $key) || $currentVersion !== $version) {
         app_error(404, '静态前端不存在', 'NOT_FOUND');
     }
+    $loginGated = !empty($article['login_required']);
+    if ($loginGated) {
+        if (!empty($_SESSION['user_id'])) app_user_required();
+        elseif (!empty($_SESSION['admin_id'])) app_admin_required();
+    }
+    if ($loginGated && empty($_SESSION['user_id']) && empty($_SESSION['admin_id'])) {
+        header('Cache-Control: no-store');
+        app_error(401, '请先登录后再查看文章', 'USER_UNAUTHENTICATED');
+    }
+
+    // A signed URL is not a substitute for the article's independent access
+    // password. Re-check the unlock token here because this endpoint serves
+    // the actual static HTML/assets and can be called directly.
+    if (!empty($article['is_locked'])) {
+        $unlockValue = $_SESSION['article_unlocks'][$id] ?? '';
+        $unlocked = is_string($unlockValue)
+            && function_exists('app_article_unlock_token')
+            && hash_equals(app_article_unlock_token($article), $unlockValue);
+        if (!$unlocked) {
+            header('Cache-Control: no-store');
+            app_error(403, '请先输入文章访问密码', 'ARTICLE_PASSWORD_REQUIRED');
+        }
+    }
 
     $path = $requested === '' ? 'index.html' : rawurldecode($requested);
     $cleaned = app_article_site_clean_path($path);
     if ($cleaned === null) app_error(404, '静态资源不存在', 'NOT_FOUND');
     $root = app_article_site_root() . DIRECTORY_SEPARATOR . $key;
     if ($cleaned === APP_ARTICLE_SITE_RESIZE_JS) {
-        app_article_site_headers($expires);
+        app_article_site_headers($expires, $loginGated);
         app_article_site_send_js(app_article_site_resize_bridge_js());
     }
     if (preg_match('/^' . preg_quote(APP_ARTICLE_SITE_COMPAT_JS_PREFIX, '/') . '(\d+)\.js$/', $cleaned, $match)) {
-        app_article_site_headers($expires);
+        app_article_site_headers($expires, $loginGated);
         app_article_site_send_compat_js($root . DIRECTORY_SEPARATOR . 'index.html', (int) $match[1]);
     }
     $target = app_article_site_target($root, $cleaned);
@@ -239,7 +268,7 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
         else app_error(404, '静态资源不存在', 'NOT_FOUND');
     }
 
-    app_article_site_headers($expires);
+    app_article_site_headers($expires, $loginGated);
     $extension = strtolower(pathinfo($target, PATHINFO_EXTENSION));
     if (in_array($extension, ['html', 'htm'], true)) {
         app_article_site_send_html($target, app_article_site_base_url($id, $key, $version, $expires, $signature));
@@ -511,10 +540,10 @@ function app_article_site_send_file(string $target, string $extension): void
     exit;
 }
 
-function app_article_site_headers(int $expires): void
+function app_article_site_headers(int $expires, bool $noStore = false): void
 {
     $remaining = max(0, min(3600, $expires - time()));
-    header('Cache-Control: private, max-age=' . $remaining);
+    header('Cache-Control: ' . ($noStore ? 'no-store' : 'private, max-age=' . $remaining));
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: no-referrer');
 }

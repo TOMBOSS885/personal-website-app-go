@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Plus, Edit2, Trash2, X, FolderGit, Star, ExternalLink } from 'lucide-react'
 import LoadingIndicator from '../../components/LoadingIndicator'
 import { safeExternalHref } from '../../utils/safeUrl'
+import AdminSmartSearch from '../../components/AdminSmartSearch'
+import { smartSearch } from '../../utils/smartSearch'
 
 const API_BASE = ''
 
@@ -20,6 +22,8 @@ export default function ProjectManager() {
     featured: false, 
     displayOrder: 0 
   })
+  const [search, setSearch] = useState('')
+  const filteredProjects = useMemo(() => smartSearch(projects, search, ['name', 'description', 'techStack', 'githubUrl', 'demoUrl']), [projects, search])
 
   useEffect(() => { fetchProjects() }, [])
 
@@ -139,6 +143,9 @@ export default function ProjectManager() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="border-b border-gray-100 bg-gray-50/80 px-5 py-3 dark:border-slate-800 dark:bg-slate-950/60">
+          <AdminSmartSearch value={search} onChange={setSearch} placeholder="搜索项目名称、描述、技术栈或链接" resultCount={search.trim() ? filteredProjects.length : undefined} />
+        </div>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <LoadingIndicator size={32} label="加载项目" />
@@ -149,6 +156,8 @@ export default function ProjectManager() {
             <FolderGit className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p>暂无项目，点击上方按钮创建</p>
           </div>
+        ) : filteredProjects.length === 0 ? (
+          <div className="py-12 text-center text-gray-500">没有找到匹配的项目</div>
         ) : (
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -161,7 +170,7 @@ export default function ProjectManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {projects.map(p => (
+              {filteredProjects.map(p => (
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">{p.name}</div>

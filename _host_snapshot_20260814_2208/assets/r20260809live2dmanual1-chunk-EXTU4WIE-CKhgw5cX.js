@@ -1,1 +1,0 @@
-import{h as e,p as t}from"./r20260809live2dmanual1-src-CajFUuCe.js";import{b as n}from"./r20260809live2dmanual1-chunk-ABZYJK2D-C5IvCMIS.js";var r=e(e=>{let{securityLevel:r}=n(),i=t(`body`);return r===`sandbox`&&(i=t((t(`#i${e}`).node()?.contentDocument??document).body)),i.select(`#${e}`)},`selectSvgElement`);export{r as t};

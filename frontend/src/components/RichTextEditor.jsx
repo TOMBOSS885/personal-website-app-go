@@ -15,12 +15,14 @@ import OptimizedImage from './OptimizedImage'
 import LoadingIndicator from './LoadingIndicator'
 import { KATEX_OPTIONS, normalizeMarkdownMath, remarkSingleLineDisplayMath } from '../utils/markdownMath'
 import { optimizeArticleImage } from '../utils/imageCompression'
+import { normalizeImportedMarkdown, validateMarkdownImportFile } from '../utils/markdownImport'
 
 const API_BASE = ''
 
 export default function RichTextEditor({ value, onChange, height = 500 }) {
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
+  const markdownFileInputRef = useRef(null)
   const [preview, setPreview] = useState('edit')
   const [fullscreen, setFullscreen] = useState(false)
   const [showImageLibrary, setShowImageLibrary] = useState(false)
@@ -28,6 +30,9 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const [loadingImages, setLoadingImages] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [cleaningImages, setCleaningImages] = useState(false)
+  const [markdownDropActive, setMarkdownDropActive] = useState(false)
+  const [markdownImporting, setMarkdownImporting] = useState(false)
+  const [markdownImportError, setMarkdownImportError] = useState('')
 
   const focusAt = (position) => {
     window.setTimeout(() => {
@@ -210,6 +215,49 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
     setShowImageLibrary(false)
   }
 
+  const importMarkdownFile = useCallback(async file => {
+    const validation = validateMarkdownImportFile(file)
+    if (!validation.valid) {
+      setMarkdownImportError(validation.error)
+      return false
+    }
+    if (String(value || '').trim() && !window.confirm('导入 Markdown 将覆盖当前正文，是否继续？')) return false
+    setMarkdownImporting(true)
+    setMarkdownImportError('')
+    try {
+      const content = normalizeImportedMarkdown(await file.text())
+      onChange(content)
+      setPreview('edit')
+      focusAt(content.length)
+      return true
+    } catch (error) {
+      setMarkdownImportError(error.message || 'Markdown 文件读取失败')
+      return false
+    } finally {
+      setMarkdownImporting(false)
+      if (markdownFileInputRef.current) markdownFileInputRef.current.value = ''
+    }
+  }, [onChange, value])
+
+  const handleMarkdownDragOver = event => {
+    if (preview === 'preview' || !Array.from(event.dataTransfer?.types || []).includes('Files')) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setMarkdownDropActive(true)
+  }
+
+  const handleMarkdownDragLeave = event => {
+    if (!event.currentTarget.contains(event.relatedTarget)) setMarkdownDropActive(false)
+  }
+
+  const handleMarkdownDrop = event => {
+    if (preview === 'preview' || !Array.from(event.dataTransfer?.types || []).includes('Files')) return
+    event.preventDefault()
+    setMarkdownDropActive(false)
+    const file = event.dataTransfer.files?.[0]
+    if (file) void importMarkdownFile(file)
+  }
+
   const toolbarItems = [
     { command: 'bold', icon: Bold, title: '粗体 (Ctrl+B)' },
     { command: 'italic', icon: Italic, title: '斜体 (Ctrl+I)' },
@@ -262,6 +310,25 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
           {preview === 'live' ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
         </button>
 
+        <div className="w-px h-6 bg-gray-300 mx-2" />
+        <input
+          ref={markdownFileInputRef}
+          type="file"
+          accept=".md,.markdown,text/markdown,text/plain"
+          className="hidden"
+          onChange={event => { const file = event.target.files?.[0]; if (file) void importMarkdownFile(file) }}
+        />
+        <button
+          type="button"
+          onClick={() => markdownFileInputRef.current?.click()}
+          disabled={markdownImporting}
+          className="inline-flex items-center gap-1 rounded-lg px-2 py-2 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-900 disabled:cursor-wait disabled:opacity-50"
+          title="导入 Markdown 文件"
+        >
+          {markdownImporting ? <LoadingIndicator size={14} /> : <UploadCloud className="h-4 w-4" />}
+          <span>导入 MD</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setPreview('preview')}
@@ -283,7 +350,14 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
         </button>
       </div>
 
-      <div className="border border-gray-200 rounded-b-xl overflow-hidden bg-white" style={{ height: editorHeight }}>
+      <div
+        className={`markdown-import-surface border border-gray-200 rounded-b-xl overflow-hidden bg-white ${markdownDropActive ? 'markdown-import-surface--active' : ''}`}
+        style={{ height: editorHeight }}
+        aria-label="Markdown 编辑与导入区域"
+        onDragOver={handleMarkdownDragOver}
+        onDragLeave={handleMarkdownDragLeave}
+        onDrop={handleMarkdownDrop}
+      >
         {preview === 'preview' ? (
           <div className="h-full overflow-auto p-5 article-content article-editor-preview">
             {previewContent}
@@ -305,12 +379,21 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
             )}
           </div>
         )}
+        {markdownDropActive && (
+          <div className="markdown-import-overlay" aria-live="polite">
+            <UploadCloud className="h-8 w-8" />
+            <span>松开即可导入 Markdown</span>
+          </div>
+        )}
       </div>
+
+      {markdownImportError && <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700" role="alert">{markdownImportError}</p>}
 
       <div className="mt-2 text-xs text-gray-400 flex flex-wrap gap-3">
         <span>快捷键：</span>
         <span><kbd>Ctrl+B</kbd> 粗体</span>
         <span><kbd>Ctrl+I</kbd> 斜体</span>
+        <span>可拖拽 .md 文件到编辑区导入（最大 5 MB）</span>
         <span>点击图片按钮可上传或选择服务器图片</span>
       </div>
 

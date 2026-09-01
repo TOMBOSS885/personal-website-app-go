@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowUpRight, Bookmark, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Clock3, ListTree, Lock, MessageCircle, Share2, Tag } from 'lucide-react'
 import LoadingIndicator from '../components/LoadingIndicator'
@@ -7,6 +7,7 @@ import { guestbookTargetUrl, guestMessageUrl } from '../utils/guestMessageTarget
 import { usePageMetadata } from '../utils/pageMetadata'
 import { estimateArticleReading, getArticlePosition, isArticleFavorite, recordArticleVisit, saveArticlePosition, toggleArticleFavorite } from '../utils/readingLibrary'
 import { safeStaticSiteSrc } from '../utils/safeUrl'
+import { useUserAuth } from '../contexts/UserAuthContext'
 
 let markdownRendererPromise
 
@@ -30,6 +31,8 @@ export function normalizeStaticSiteHeight(value) {
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
+  const location = useLocation()
+  const { user, loading: userLoading } = useUserAuth()
   const [article, setArticle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [shareStatus, setShareStatus] = useState('idle')
@@ -248,6 +251,26 @@ export default function ArticleDetailPage() {
             <ArrowLeft className="h-4 w-4" />
             返回博客
           </Link>
+        </div>
+      </div>
+    )
+  }
+
+  // Keep a client-side guard for stale/incorrect cached responses. The API
+  // explicitly marks an administrator session so that admins can read gated
+  // articles even though the public shell does not load admin context.
+  if (article.requiresLogin || (article.loginRequired && !userLoading && !user && !article.adminAuthenticated)) {
+    const redirect = `${location.pathname}${location.search}`
+    return (
+      <div className="min-h-screen bg-transparent px-4 pb-12 pt-28">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-white/60 bg-white/80 p-6 shadow-xl backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/70 md:p-8">
+          <Link to="/blog" className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-100"><ArrowLeft className="h-4 w-4" />返回博客</Link>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">{article.title}</h1>
+          {article.summary && <p className="mt-3 text-gray-600 dark:text-slate-300">{article.summary}</p>}
+          <div className="mt-6 rounded-2xl border border-indigo-100 bg-indigo-50/70 p-5 dark:border-indigo-500/20 dark:bg-indigo-500/10">
+            <p className="text-gray-700 dark:text-slate-200">该文章登录后可查看。</p>
+            <Link to={`/login?redirect=${encodeURIComponent(redirect)}`} className="mt-4 inline-flex items-center rounded-lg bg-indigo-600 px-4 py-2.5 font-medium text-white hover:bg-indigo-700">登录后阅读</Link>
+          </div>
         </div>
       </div>
     )

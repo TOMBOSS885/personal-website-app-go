@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Plus, Edit2, Trash2, X, Zap } from 'lucide-react'
 import LoadingIndicator from '../../components/LoadingIndicator'
+import AdminSmartSearch from '../../components/AdminSmartSearch'
+import { smartSearch } from '../../utils/smartSearch'
 
 const API_BASE = ''
 
@@ -11,6 +13,8 @@ export default function SkillManager() {
   const [showModal, setShowModal] = useState(false)
   const [editingSkill, setEditingSkill] = useState(null)
   const [form, setForm] = useState({ name: '', category: '', proficiency: 80, displayOrder: 0 })
+  const [search, setSearch] = useState('')
+  const filteredSkills = useMemo(() => smartSearch(skills, search, ['name', 'category', 'icon']), [skills, search])
 
   useEffect(() => { fetchSkills() }, [])
 
@@ -133,6 +137,9 @@ export default function SkillManager() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="border-b border-gray-100 bg-gray-50/80 px-5 py-3">
+          <AdminSmartSearch value={search} onChange={setSearch} placeholder="搜索技能名称、分类或图标" resultCount={search.trim() ? filteredSkills.length : undefined} />
+        </div>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <LoadingIndicator size={32} label="加载技能" />
@@ -143,6 +150,8 @@ export default function SkillManager() {
             <Zap className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p>暂无专业技能，点击上方按钮添加</p>
           </div>
+        ) : filteredSkills.length === 0 ? (
+          <div className="py-12 text-center text-gray-500">没有找到匹配的专业技能</div>
         ) : (
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -154,7 +163,7 @@ export default function SkillManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {skills.map(s => (
+              {filteredSkills.map(s => (
                 <tr key={s.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">{s.name}</td>
                   <td className="px-6 py-4">

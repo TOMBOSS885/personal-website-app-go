@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Activity, BookMarked, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers } from 'lucide-react'
+import { Activity, BookMarked, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers, LogIn, LogOut, UserCircle } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
@@ -8,6 +8,8 @@ import LanguageSwitcher from './LanguageSwitcher'
 import { safeExternalHref } from '../utils/safeUrl'
 import { useTheme } from '../context/ThemeContext'
 import ProfileAvatar from './ProfileAvatar'
+import { useUserAuth } from '../contexts/UserAuthContext'
+import LogoutConfirmDialog from './LogoutConfirmDialog'
 
 function NavbarAvatar({ profile }) {
   const sharedClass = 'relative z-10 h-12 w-12 overflow-hidden rounded-full bg-white shadow-lg ring-2 ring-white/80 transition-shadow group-hover:shadow-xl dark:bg-slate-900 dark:ring-slate-800/80'
@@ -29,8 +31,11 @@ export default function Navbar({ profile }) {
   const { language } = useLanguage()
   const { t } = useTranslation()
   const { colorMode, toggleColorMode, surfaceMode, toggleSurfaceMode } = useTheme()
+  const { user, logout } = useUserAuth()
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [logoutBusy, setLogoutBusy] = useState(false)
   const githubHref = safeExternalHref(profile?.github || '')
-  const identityName = profile?.nickname || ''
+  const identityName = user?.email || profile?.nickname || ''
 
   useEffect(() => {
     const handleScroll = () => {
@@ -54,6 +59,21 @@ export default function Navbar({ profile }) {
     { path: '/series', label: '专题系列', icon: Layers },
     { path: '/library', label: '阅读清单', icon: BookMarked },
   ]
+
+  const requestLogout = () => {
+    setIsOpen(false)
+    setLogoutConfirmOpen(true)
+  }
+
+  const confirmLogout = async () => {
+    setLogoutBusy(true)
+    try {
+      await logout()
+    } finally {
+      setLogoutBusy(false)
+      setLogoutConfirmOpen(false)
+    }
+  }
 
   return (
     <>
@@ -91,7 +111,7 @@ export default function Navbar({ profile }) {
               </motion.div>
               <div className="hidden min-w-0 sm:block lg:hidden xl:block">
                 <span 
-                className="block max-w-32 truncate text-xl font-bold text-transparent bg-clip-text lg:max-w-44"
+                className="block max-w-[11rem] truncate whitespace-nowrap text-xl font-bold text-transparent bg-clip-text 2xl:max-w-[15rem]"
                 style={{ backgroundImage: 'var(--theme-gradient-text)' }}
                 title={identityName}
               >
@@ -109,7 +129,7 @@ export default function Navbar({ profile }) {
                   className="relative group"
                 >
                   <motion.div
-                    className={`flex items-center space-x-2 rounded-xl px-3 py-2.5 font-medium transition-all duration-300 xl:px-4 ${
+                    className={`flex items-center space-x-2 whitespace-nowrap rounded-xl px-3 py-2.5 font-medium transition-all duration-300 xl:px-4 ${
                       location.pathname === path
                         ? 'text-indigo-600 dark:text-indigo-200'
                         : 'text-gray-600 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-white'
@@ -156,6 +176,15 @@ export default function Navbar({ profile }) {
               >
                 <Layers className="h-5 w-5" />
               </motion.button>
+
+              {user ? (
+                <div className="hidden items-center gap-2 sm:flex">
+                  <span className="theme-action-surface inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-300/70 bg-emerald-50/95 px-3 text-sm font-semibold text-emerald-700 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-950/70 dark:text-emerald-200" title={`已登录：${user.email}`}>
+                    <UserCircle className="h-4 w-4 shrink-0" /><span>已登录</span><span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-label="在线" />
+                  </span>
+                  <button type="button" onClick={requestLogout} className="theme-action-surface inline-flex h-10 items-center gap-2 rounded-xl border border-white/70 bg-white/90 px-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-red-50 hover:text-red-600 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-red-950/40" title="退出账号"><LogOut className="h-4 w-4" />退出</button>
+                </div>
+              ) : <Link to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} className="theme-action-surface hidden h-10 items-center gap-2 rounded-xl border border-white/70 bg-white/90 px-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-white hover:text-indigo-600 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700 sm:inline-flex" title="账号登录"><LogIn className="h-4 w-4" />登录</Link>}
 
               <motion.button
                 type="button"
@@ -280,6 +309,14 @@ export default function Navbar({ profile }) {
 
                 {/* Navigation Links */}
                 <div className="space-y-2">
+                  {user ? (
+                    <div className="space-y-2 rounded-xl bg-emerald-50 px-5 py-4 dark:bg-emerald-950/40">
+                      <div className="flex items-center gap-3 text-emerald-700 dark:text-emerald-200"><UserCircle className="h-5 w-5" /><span className="truncate font-semibold">{user.email}</span><span className="ml-auto h-2 w-2 rounded-full bg-emerald-500" /></div>
+                      <button type="button" onClick={requestLogout} className="flex w-full items-center gap-3 rounded-lg px-1 py-2 text-sm text-red-600 hover:bg-red-100 dark:text-red-300 dark:hover:bg-red-950/50"><LogOut className="h-4 w-4" />退出账号</button>
+                    </div>
+                  ) : (
+                    <Link to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} onClick={() => setIsOpen(false)} className="flex items-center space-x-4 rounded-xl px-5 py-4 text-gray-700 transition-all duration-300 hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800"><LogIn className="h-5 w-5" /><span className="font-medium">账号登录</span></Link>
+                  )}
                   {mobileNavLinks.map(({ path, label, icon: Icon }, index) => (
                     <motion.div
                       key={path}
@@ -327,6 +364,7 @@ export default function Navbar({ profile }) {
           </>
         )}
       </AnimatePresence>
+      <LogoutConfirmDialog open={logoutConfirmOpen} identity={user?.email} busy={logoutBusy} onCancel={() => setLogoutConfirmOpen(false)} onConfirm={() => void confirmLogout()} />
     </>
   )
 }

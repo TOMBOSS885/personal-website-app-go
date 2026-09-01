@@ -3,21 +3,32 @@ import { BarChart3, Clock3, Eye, MonitorSmartphone, MousePointerClick, Users } f
 import LoadingIndicator from '../../components/LoadingIndicator'
 
 const EMPTY = {
-  summary: { totalViews: 0, periodViews: 0, periodVisitors: 0, todayViews: 0, todayVisitors: 0 },
-  daily: [], topPages: [], referrers: [], devices: [], browsers: [], systems: [], hours: [], recent: [],
+  summary: { totalViews: 0, periodViews: 0, periodVisitors: 0, todayViews: 0, todayVisitors: 0, authenticatedUsers: 0, authenticatedViews: 0 },
+  daily: [], topPages: [], referrers: [], devices: [], browsers: [], systems: [], hours: [], recent: [], users: [],
 }
 
 export default function AnalyticsManager() {
   const [range, setRange] = useState(30)
+  const [userSearch, setUserSearch] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [authenticated, setAuthenticated] = useState('')
   const [data, setData] = useState(EMPTY)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
+    const timer = window.setTimeout(() => setSearchQuery(userSearch.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [userSearch])
+
+  useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
     setError('')
-    fetch(`/api/admin/analytics?range=${range}`, { cache: 'no-store', signal: controller.signal })
+    const params = new URLSearchParams({ range: String(range) })
+    if (searchQuery) params.set('userSearch', searchQuery)
+    if (authenticated) params.set('authenticated', authenticated)
+    fetch(`/api/admin/analytics?${params}`, { cache: 'no-store', signal: controller.signal })
       .then(async response => {
         const body = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(body.message || `加载失败（HTTP ${response.status}）`)
@@ -28,7 +39,7 @@ export default function AnalyticsManager() {
       })
       .finally(() => setLoading(false))
     return () => controller.abort()
-  }, [range])
+  }, [range, searchQuery, authenticated])
 
   const maxDaily = useMemo(() => Math.max(1, ...data.daily.map(item => item.views)), [data.daily])
   const maxHourly = useMemo(() => Math.max(1, ...data.hours.map(item => item.views)), [data.hours])
@@ -37,6 +48,7 @@ export default function AnalyticsManager() {
     { label: `近 ${range} 天访问`, value: data.summary.periodViews, icon: MousePointerClick },
     { label: `近 ${range} 天访客`, value: data.summary.periodVisitors, icon: Users },
     { label: '今日访问 / 访客', value: `${data.summary.todayViews} / ${data.summary.todayVisitors}`, icon: Clock3 },
+    { label: '登录用户 / 访问', value: `${data.summary.authenticatedUsers} / ${data.summary.authenticatedViews}`, icon: Users },
   ]
 
   return (
@@ -46,7 +58,7 @@ export default function AnalyticsManager() {
           <BarChart3 className="h-7 w-7 text-indigo-500" />访问统计
         </h1>
         <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 dark:border-slate-700 dark:bg-slate-900">
-          {[7, 30, 90].map(days => (
+          {[7, 30, 90, 365].map(days => (
             <button key={days} type="button" onClick={() => setRange(days)} className={`h-8 rounded-md px-3 text-sm font-medium ${range === days ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
               {days} 天
             </button>
@@ -55,9 +67,13 @@ export default function AnalyticsManager() {
       </header>
 
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      <section className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <input value={userSearch} onChange={event => setUserSearch(event.target.value)} placeholder="搜索登录邮箱或用户 ID" className="min-w-64 flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200" />
+        <select value={authenticated} onChange={event => setAuthenticated(event.target.value)} className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"><option value="">全部访问</option><option value="1">仅登录用户</option><option value="0">仅游客</option></select>
+      </section>
       {loading ? <div className="flex min-h-64 items-center justify-center text-indigo-600 dark:text-indigo-300"><LoadingIndicator size={32} label="加载访问数据" /></div> : (
         <>
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {summary.map(({ label, value, icon: Icon }) => (
               <div key={label} className="stack-card-hover rounded-lg border border-gray-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div className="flex items-center justify-between gap-3">
@@ -100,11 +116,12 @@ export default function AnalyticsManager() {
             <div className="mt-2 flex justify-between text-xs text-gray-400"><span>00:00</span><span>12:00</span><span>23:00</span></div>
           </section>
 
-          <DataTable title="最近访问" headers={['时间', '页面', '访客', '环境', '来源']} rows={data.recent.map(item => [
-            formatDate(item.visitedAt), <PathLabel key={`${item.visitor}-${item.visitedAt}`} item={item} />, item.visitor,
+          <DataTable title="最近访问" headers={['时间', '页面', '账号', '访客', '环境', '来源']} rows={data.recent.map(item => [
+            formatDate(item.visitedAt), <PathLabel key={`${item.visitor}-${item.visitedAt}`} item={item} />, item.authenticated ? (item.userEmail || `用户 #${item.userId}`) : '游客', item.visitor,
             `${item.device} · ${item.browser} · ${item.os}${item.screenWidth ? ` · ${item.screenWidth}px` : ''}`,
             item.referrer || '直接访问',
           ])} />
+          <DataTable title="登录账号访问" headers={['账号', '用户 ID', '访问次数', '最近访问']} rows={data.users.map(item => [item.email || '-', item.userId, item.views, formatDate(item.lastVisitedAt)])} />
         </>
       )}
     </div>

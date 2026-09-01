@@ -1,1 +1,0 @@
-import{h as e}from"./r202608041930-src-Cb_jb9ZA.js";var t=class{constructor(e){this.init=e,this.records=this.init()}static{e(this,`ImperativeState`)}reset(){this.records=this.init()}};export{t};

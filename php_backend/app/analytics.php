@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-const APP_ANALYTICS_RETENTION_DAYS = 180;
+const APP_ANALYTICS_RETENTION_DAYS = 365;
 const APP_ANALYTICS_MAX_ROWS = 50000;
 const APP_ANALYTICS_RATE_WINDOW_SECONDS = 300;
 const APP_ANALYTICS_RATE_LIMIT = 30;
@@ -42,6 +42,9 @@ function app_analytics_record_visit(): array
     $client = app_analytics_client($userAgent, app_int($body['screenWidth'] ?? 0));
     $title = app_analytics_text((string) ($body['title'] ?? ''), 120);
     $referrerHost = app_analytics_referrer_host((string) ($body['referrerHost'] ?? ''));
+    $userId = !empty($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+    $userEmail = $userId !== null ? (string) ($_SESSION['user_email'] ?? '') : '';
+    $isAuthenticated = $userId !== null ? 1 : 0;
 
     $database = app_db();
     $database->beginTransaction();
@@ -58,9 +61,12 @@ function app_analytics_record_visit(): array
             return ['recorded' => false];
         }
 
-        $statement = $database->prepare('INSERT INTO site_visits (visitor_hash, path, page_title, referrer_host, device_type, browser, operating_system, screen_width, transferred_bytes, visited_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
+        $statement = $database->prepare('INSERT INTO site_visits (visitor_hash, user_id, user_email, is_authenticated, path, page_title, referrer_host, device_type, browser, operating_system, screen_width, transferred_bytes, visited_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())');
         $statement->execute([
             $visitorHash,
+            $userId,
+            $userEmail,
+            $isAuthenticated,
             $path,
             $title,
             $referrerHost,
@@ -143,22 +149,36 @@ function app_analytics_public_monitor(): array
 function app_analytics_report(): array
 {
     $range = app_int($_GET['range'] ?? 30, 30);
-    if (!in_array($range, [7, 30, 90], true)) $range = 30;
-    $cacheKey = 'report-' . $range;
+    if (!in_array($range, [7, 30, 90, 365], true)) $range = 30;
+    $userSearch = trim((string) ($_GET['userSearch'] ?? ''));
+    $authenticated = (string) ($_GET['authenticated'] ?? '');
+    $cacheKey = 'report-' . $range . '-' . md5($userSearch . '|' . $authenticated);
     $cached = app_analytics_cache_get($cacheKey);
     if ($cached !== null) return $cached;
     $since = "DATE_SUB(CURDATE(), INTERVAL " . ($range - 1) . " DAY)";
 
-    $summary = app_db()->query("SELECT
+    $filters = ["visited_at >= $since"];
+    $params = [];
+    if ($userSearch !== '') { $filters[] = '(user_email LIKE ? OR CAST(user_id AS CHAR) = ?)'; $params[] = '%' . $userSearch . '%'; $params[] = $userSearch; }
+    if ($authenticated === '1') $filters[] = 'is_authenticated = 1';
+    if ($authenticated === '0') $filters[] = 'is_authenticated = 0';
+    $where = implode(' AND ', $filters);
+    $summaryStatement = app_db()->prepare("SELECT
         (SELECT total_views FROM site_analytics_totals WHERE id = 1) AS total_views,
         COUNT(*) AS period_views,
         COUNT(DISTINCT visitor_hash) AS period_visitors,
         SUM(CASE WHEN visited_at >= CURDATE() THEN 1 ELSE 0 END) AS today_views,
-        COUNT(DISTINCT CASE WHEN visited_at >= CURDATE() THEN visitor_hash END) AS today_visitors
-        FROM site_visits WHERE visited_at >= $since")->fetch() ?: [];
+        COUNT(DISTINCT CASE WHEN visited_at >= CURDATE() THEN visitor_hash END) AS today_visitors,
+        COUNT(DISTINCT CASE WHEN is_authenticated = 1 THEN user_id END) AS authenticated_users,
+        SUM(CASE WHEN is_authenticated = 1 THEN 1 ELSE 0 END) AS authenticated_views
+        FROM site_visits WHERE $where");
+    $summaryStatement->execute($params);
+    $summary = $summaryStatement->fetch() ?: [];
 
-    $daily = app_db()->query("SELECT DATE(visited_at) AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_hash) AS visitors
-        FROM site_visits WHERE visited_at >= $since GROUP BY DATE(visited_at) ORDER BY day")->fetchAll();
+    $dailyStatement = app_db()->prepare("SELECT DATE(visited_at) AS day, COUNT(*) AS views, COUNT(DISTINCT visitor_hash) AS visitors
+        FROM site_visits WHERE $where GROUP BY DATE(visited_at) ORDER BY day");
+    $dailyStatement->execute($params);
+    $daily = $dailyStatement->fetchAll();
     $dailyByDate = [];
     foreach ($daily as $row) $dailyByDate[(string) $row['day']] = $row;
     $daily = [];
@@ -168,22 +188,36 @@ function app_analytics_report(): array
         $daily[] = ['date' => $day, 'views' => (int) ($row['views'] ?? 0), 'visitors' => (int) ($row['visitors'] ?? 0)];
     }
 
-    $topPages = app_db()->query("SELECT path, MAX(page_title) AS title, COUNT(*) AS views, COUNT(DISTINCT visitor_hash) AS visitors
-        FROM site_visits WHERE visited_at >= $since GROUP BY path ORDER BY views DESC LIMIT 12")->fetchAll();
-    $referrers = app_db()->query("SELECT IF(referrer_host = '', '直接访问', referrer_host) AS name, COUNT(*) AS views
-        FROM site_visits WHERE visited_at >= $since GROUP BY referrer_host ORDER BY views DESC LIMIT 10")->fetchAll();
-    $devices = app_analytics_grouped_report('device_type', $since, 8);
-    $browsers = app_analytics_grouped_report('browser', $since, 8);
-    $systems = app_analytics_grouped_report('operating_system', $since, 8);
-    $hours = app_db()->query("SELECT HOUR(visited_at) AS hour, COUNT(*) AS views FROM site_visits WHERE visited_at >= $since GROUP BY HOUR(visited_at) ORDER BY hour")->fetchAll();
+    $topPagesStatement = app_db()->prepare("SELECT path, MAX(page_title) AS title, COUNT(*) AS views, COUNT(DISTINCT visitor_hash) AS visitors
+        FROM site_visits WHERE $where GROUP BY path ORDER BY views DESC LIMIT 12");
+    $topPagesStatement->execute($params);
+    $topPages = $topPagesStatement->fetchAll();
+    $referrersStatement = app_db()->prepare("SELECT IF(referrer_host = '', '直接访问', referrer_host) AS name, COUNT(*) AS views
+        FROM site_visits WHERE $where GROUP BY referrer_host ORDER BY views DESC LIMIT 10");
+    $referrersStatement->execute($params);
+    $referrers = $referrersStatement->fetchAll();
+    $devices = app_analytics_grouped_report('device_type', $where, $params, 8);
+    $browsers = app_analytics_grouped_report('browser', $where, $params, 8);
+    $systems = app_analytics_grouped_report('operating_system', $where, $params, 8);
+    $hoursStatement = app_db()->prepare("SELECT HOUR(visited_at) AS hour, COUNT(*) AS views FROM site_visits WHERE $where GROUP BY HOUR(visited_at) ORDER BY hour");
+    $hoursStatement->execute($params);
+    $hours = $hoursStatement->fetchAll();
     $hourMap = [];
     foreach ($hours as $row) $hourMap[(int) $row['hour']] = (int) $row['views'];
     $hours = [];
     for ($hour = 0; $hour < 24; $hour++) $hours[] = ['hour' => $hour, 'views' => $hourMap[$hour] ?? 0];
 
-    $recent = app_db()->query("SELECT path, page_title, referrer_host, device_type, browser, operating_system, screen_width, visited_at,
-        SUBSTRING(HEX(visitor_hash), 1, 10) AS visitor
-        FROM site_visits ORDER BY visited_at DESC LIMIT 40")->fetchAll();
+    $recentStatement = app_db()->prepare("SELECT path, page_title, referrer_host, device_type, browser, operating_system, screen_width, visited_at,
+        SUBSTRING(HEX(visitor_hash), 1, 10) AS visitor, user_id, user_email, is_authenticated
+        FROM site_visits WHERE $where ORDER BY visited_at DESC LIMIT 100");
+    $recentStatement->execute($params);
+    $recent = $recentStatement->fetchAll();
+    $usersStatement = app_db()->prepare("SELECT user_id, user_email, COUNT(*) AS views, MAX(visited_at) AS last_visited_at
+        FROM site_visits WHERE $where AND is_authenticated = 1 GROUP BY user_id, user_email ORDER BY last_visited_at DESC LIMIT 100");
+    $usersStatement->execute($params);
+    $users = array_map(static function (array $row): array {
+        return ['userId' => (int) $row['user_id'], 'email' => (string) $row['user_email'], 'views' => (int) $row['views'], 'lastVisitedAt' => app_now_iso($row['last_visited_at'])];
+    }, $usersStatement->fetchAll());
 
     $report = [
         'range' => $range,
@@ -193,6 +227,8 @@ function app_analytics_report(): array
             'periodVisitors' => (int) ($summary['period_visitors'] ?? 0),
             'todayViews' => (int) ($summary['today_views'] ?? 0),
             'todayVisitors' => (int) ($summary['today_visitors'] ?? 0),
+            'authenticatedUsers' => (int) ($summary['authenticated_users'] ?? 0),
+            'authenticatedViews' => (int) ($summary['authenticated_views'] ?? 0),
         ],
         'daily' => $daily,
         'topPages' => array_map(static function (array $row): array {
@@ -203,11 +239,13 @@ function app_analytics_report(): array
         'browsers' => $browsers,
         'systems' => $systems,
         'hours' => $hours,
+        'users' => $users,
         'recent' => array_map(static function (array $row): array {
             return [
                 'path' => $row['path'], 'title' => $row['page_title'], 'referrer' => $row['referrer_host'],
                 'device' => $row['device_type'], 'browser' => $row['browser'], 'os' => $row['operating_system'],
                 'screenWidth' => (int) $row['screen_width'], 'visitor' => $row['visitor'], 'visitedAt' => app_now_iso($row['visited_at']),
+                'userId' => !empty($row['user_id']) ? (int) $row['user_id'] : null, 'userEmail' => (string) ($row['user_email'] ?? ''), 'authenticated' => (bool) ($row['is_authenticated'] ?? false),
             ];
         }, $recent),
     ];
@@ -225,11 +263,13 @@ function app_analytics_dashboard_summary(): array
     ];
 }
 
-function app_analytics_grouped_report(string $column, string $since, int $limit): array
+function app_analytics_grouped_report(string $column, string $where, array $params, int $limit): array
 {
     $allowed = ['device_type', 'browser', 'operating_system'];
     if (!in_array($column, $allowed, true)) return [];
-    $rows = app_db()->query("SELECT $column AS name, COUNT(*) AS views FROM site_visits WHERE visited_at >= $since GROUP BY $column ORDER BY views DESC LIMIT $limit")->fetchAll();
+    $statement = app_db()->prepare("SELECT $column AS name, COUNT(*) AS views FROM site_visits WHERE $where GROUP BY $column ORDER BY views DESC LIMIT $limit");
+    $statement->execute($params);
+    $rows = $statement->fetchAll();
     return array_map(static function (array $row): array {
         return ['name' => (string) $row['name'], 'views' => (int) $row['views']];
     }, $rows);

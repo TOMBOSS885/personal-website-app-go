@@ -3,6 +3,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { ThemeProvider } from './context/ThemeContext'
 import { LanguageProvider } from './contexts/LanguageContext'
 import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext'
+import { UserAuthProvider } from './contexts/UserAuthContext'
 import { installAdminFetchInterceptor } from './api/adminFetch'
 import Navbar from './components/Navbar'
 import CursorEffects from './components/CursorEffects'
@@ -41,7 +42,9 @@ const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsMan
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
 const SocialManager = lazy(() => import('./pages/admin/SocialManager'))
 const AuditLogManager = lazy(() => import('./pages/admin/AuditLogManager'))
+const UserManager = lazy(() => import('./pages/admin/UserManager'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
+const UserLoginPage = lazy(() => import('./pages/UserLoginPage'))
 const Footer = lazy(() => import('./components/Footer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
 const Live2DController = lazy(() => import('./components/Live2DController'))
@@ -106,11 +109,13 @@ function App() {
       <LanguageProvider>
         <Router>
           <AdminAuthProvider>
-            <div className="theme-page-background" aria-hidden="true" />
-            <div className="theme-app-shell min-h-screen flex flex-col">
-              <CursorEffects />
-              <Suspense fallback={<PageLoading />}>
-                <Routes>
+            <UserAuthProvider>
+              <div className="theme-page-background" aria-hidden="true" />
+              <div className="theme-app-shell min-h-screen flex flex-col">
+                <CursorEffects />
+                <Suspense fallback={<PageLoading />}>
+                  <Routes>
+                  <Route path="/login" element={<UserLoginPage />} />
                   <Route path="/:adminEntry/login" element={<LoginPage />} />
                   <Route path="/:adminEntry/*" element={<PrivateRoute><AdminLayout /></PrivateRoute>}>
                     <Route index element={<Dashboard />} />
@@ -126,6 +131,7 @@ function App() {
                     <Route path="account" element={<AccountSettings />} />
                     <Route path="social" element={<SocialManager />} />
                     <Route path="audit-logs" element={<AuditLogManager />} />
+                    <Route path="users" element={<UserManager />} />
                     <Route path="*" element={<Navigate to="." replace />} />
                   </Route>
                   <Route path="/" element={<PublicLayout profile={profile} />}>
@@ -142,9 +148,10 @@ function App() {
                     <Route path="monitor" element={<SiteMonitorPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                   </Route>
-                </Routes>
-              </Suspense>
-            </div>
+                  </Routes>
+                </Suspense>
+              </div>
+            </UserAuthProvider>
           </AdminAuthProvider>
         </Router>
       </LanguageProvider>

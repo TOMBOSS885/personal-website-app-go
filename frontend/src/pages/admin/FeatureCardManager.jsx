@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Edit2, Trash2, X, LayoutGrid, Code, Database, Globe, Rocket, PenTool, Briefcase, Sparkles, Zap, Cpu } from 'lucide-react'
 import LoadingIndicator from '../../components/LoadingIndicator'
+import AdminSmartSearch from '../../components/AdminSmartSearch'
+import { smartSearch } from '../../utils/smartSearch'
 
 const API_BASE = ''
 
@@ -43,6 +45,8 @@ export default function FeatureCardManager() {
   const [showModal, setShowModal] = useState(false)
   const [editingCard, setEditingCard] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [search, setSearch] = useState('')
+  const filteredCards = useMemo(() => smartSearch(cards, search, ['title', 'titleEn', 'description', 'descriptionEn', 'icon', 'gradient']), [cards, search])
 
   useEffect(() => { fetchCards() }, [])
 
@@ -154,6 +158,9 @@ export default function FeatureCardManager() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="border-b border-gray-100 bg-gray-50/80 px-5 py-3">
+          <AdminSmartSearch value={search} onChange={setSearch} placeholder="搜索卡片标题、描述、图标或颜色" resultCount={search.trim() ? filteredCards.length : undefined} />
+        </div>
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <LoadingIndicator size={32} label="加载功能卡片" />
@@ -164,6 +171,8 @@ export default function FeatureCardManager() {
             <LayoutGrid className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p>暂无能力卡片，点击上方按钮添加</p>
           </div>
+        ) : filteredCards.length === 0 ? (
+          <div className="py-12 text-center text-gray-500">没有找到匹配的能力卡片</div>
         ) : (
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -176,7 +185,7 @@ export default function FeatureCardManager() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {cards.map(card => {
+              {filteredCards.map(card => {
                 const Icon = getIcon(card.icon)
                 return (
                   <tr key={card.id} className="hover:bg-gray-50 transition-colors">
