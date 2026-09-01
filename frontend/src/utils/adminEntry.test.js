@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getAdminBasePath, getAdminEntrySuffix, isAdminEntryPath } from './adminEntry'
+import { getAdminBasePath, getAdminEntrySuffix, getAdminLoginPathFromSuffix, isAdminEntryPath } from './adminEntry'
 
 describe('admin entry paths', () => {
   it('keeps the legacy path available while no private suffix is configured', () => {
@@ -19,5 +19,11 @@ describe('admin entry paths', () => {
     expect(getAdminEntrySuffix('/monitor')).toBe('')
     expect(getAdminEntrySuffix('/short')).toBe('')
     expect(getAdminEntrySuffix('/bad/path')).toBe('')
+  })
+
+  it('builds login redirects only from a validated single path segment', () => {
+    expect(getAdminLoginPathFromSuffix('control-k8x4m2q7')).toBe('/control-k8x4m2q7/login')
+    expect(getAdminLoginPathFromSuffix('//evil.example')).toBe('/admin/login')
+    expect(getAdminLoginPathFromSuffix('validname/../../login')).toBe('/admin/login')
   })
 })

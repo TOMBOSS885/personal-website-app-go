@@ -7,10 +7,12 @@
 - 首页导航和首页正文共享同一次 `/api/public/home` 请求。
 - 首页下方文章封面全部懒加载，博客列表只优先加载第一张封面。
 - 新上传的文章图片、头像和主题背景在主机支持 PHP GD 时自动生成响应式尺寸；缺少对应编码器时保留原图，不会导致上传失败。
-- Live2D 仅在桌面首页空闲时自动加载；移动端、省流量、弱设备和内容页改为点击左下角按钮后加载。
+- Live2D 默认不加载，所有设备都必须由访客点击左下角按钮后才开始加载；站内 SPA 切换不会销毁已加载模型。
 - `robots.txt` 和 `sitemap.xml` 由 PHP 动态输出，站点地图会包含公开文章。
 - 页面路由会更新标题、描述、canonical、Open Graph 和 Twitter 元数据。
-- Nginx 配置增加静态页面安全响应头和 CSP Report-Only。
+- Apache 和 Nginx 配置增加 HSTS、MIME 嗅探保护、来源策略、权限策略、点击劫持保护和实际执行的 CSP；CSP 使用 `wasm-unsafe-eval` 兼容 Mermaid 的 WebAssembly 运行时，不开放普通 JavaScript `unsafe-eval`，其余脚本只允许本站，Live2D 图标以受限图片请求加载。
+- 上传目录同时禁止 PHP、脚本、HTML、SVG、XML、CSS 等主动内容；`article-sites` 仍只允许通过带签名的 API 读取。
+- 发布脚本会拒绝隐藏文件、重解析点、上传目录主动内容、疑似凭据，并在 ZIP 内生成 `SHA256SUMS.txt`。
 
 本安全性能部分对应迁移 `006` 至 `009`；本次内容沉淀功能还需要额外导入 `010_content_discovery.sql`，完整顺序请以 `DEPLOY-UPDATE.md` 为准。
 

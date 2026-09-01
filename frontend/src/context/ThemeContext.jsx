@@ -32,6 +32,23 @@ function isDarkSolid(background) {
   return String(background || '').startsWith('#') && getHexLuminance(background) < 0.45
 }
 
+function numberInRange(value, fallback, min, max) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback
+}
+
+function safeThemeColor(value, fallback) {
+  const text = String(value || '').trim()
+  if (/^#[0-9a-f]{3,8}$/i.test(text)) return text
+  if (/^rgba?\(\s*[\d.]+(?:%?)\s*,\s*[\d.]+(?:%?)\s*,\s*[\d.]+(?:%?)(?:\s*,\s*[\d.]+(?:%?)\s*)?\)$/i.test(text)) return text
+  return fallback
+}
+
+function safeThemeToken(value, fallback, pattern) {
+  const text = String(value || '').trim()
+  return pattern.test(text) ? text : fallback
+}
+
 const PRESET_THEMES = {
   'purple-pink': {
     name: '紫粉渐变',
@@ -117,20 +134,44 @@ export function resolvePresetThemeKey(themeKey) {
 
 function normalizeTheme(theme) {
   if (!theme) return theme
+  const primary = safeThemeColor(theme.primary, '#6366f1')
+  const secondary = safeThemeColor(theme.secondary, '#8b5cf6')
+  const accent = safeThemeColor(theme.accent, '#f59e0b')
+  const backgroundStyle = ['gradient', 'solid', 'image'].includes(theme.backgroundStyle)
+    ? theme.backgroundStyle
+    : (theme.backgroundImage ? 'image' : 'gradient')
   return {
     ...theme,
-    backgroundStyle: theme.backgroundStyle || (theme.backgroundImage ? 'image' : 'gradient'),
+    primary,
+    secondary,
+    accent,
+    backgroundStyle,
     backgroundImage: theme.backgroundImage || '',
-    backgroundSize: theme.backgroundSize || 'cover',
-    backgroundPosition: theme.backgroundPosition || 'center',
-    backgroundRepeat: theme.backgroundRepeat || 'no-repeat',
-    background: theme.background || `linear-gradient(135deg, ${theme.primary}, ${theme.secondary})`,
-    cardBg: theme.cardBg || 'rgba(255, 255, 255, 0.1)',
+    backgroundSize: safeThemeToken(theme.backgroundSize, 'cover', /^(?:cover|contain|auto|\d+(?:\.\d+)?(?:px|%|vw|vh))(?:\s+\d+(?:\.\d+)?(?:px|%|vw|vh))?$/i),
+    backgroundPosition: safeThemeToken(theme.backgroundPosition, 'center', /^(?:center|top|right|bottom|left)(?:\s+(?:center|top|right|bottom|left))?$/i),
+    backgroundRepeat: safeThemeToken(theme.backgroundRepeat, 'no-repeat', /^(?:repeat|repeat-x|repeat-y|no-repeat|space|round)(?:\s+(?:repeat|repeat-x|repeat-y|no-repeat|space|round))?$/i),
+    backgroundImageOpacity: numberInRange(theme.backgroundImageOpacity, 100, 0, 100),
+    backgroundBlur: numberInRange(theme.backgroundBlur, 12, 0, 24),
+    cardOpacity: numberInRange(theme.cardOpacity, 78, 20, 100),
+    background: backgroundStyle === 'solid'
+      ? safeThemeColor(theme.background, '#ffffff')
+      : `linear-gradient(135deg, ${primary}, ${secondary})`,
+    cardBg: safeThemeColor(theme.cardBg, 'rgba(255, 255, 255, 0.1)'),
+    textPrimary: safeThemeColor(theme.textPrimary, '#1f2937'),
+    textSecondary: safeThemeColor(theme.textSecondary, '#6b7280'),
   }
 }
 
 function cssUrl(url) {
-  return `url("${String(url).replace(/"/g, '\\"')}")`
+  if (typeof url !== 'string' || !url.trim()) return 'none'
+  const value = url.trim()
+  try {
+    const parsed = new URL(value, typeof window === 'undefined' ? 'http://localhost' : window.location.origin)
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return 'none'
+  } catch {
+    return 'none'
+  }
+  return `url("${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`
 }
 
 function getStoredTheme() {
@@ -141,6 +182,24 @@ function getStoredTheme() {
     return savedTheme ? JSON.parse(savedTheme) : null
   } catch {
     return null
+  }
+}
+
+function getStoredVisualSettings(fallbackTheme) {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    const saved = localStorage.getItem('website-visual-settings')
+    if (saved) return JSON.parse(saved)
+  } catch {
+    // Ignore invalid or unavailable browser storage.
+  }
+
+  if (!fallbackTheme) return {}
+  return {
+    backgroundImageOpacity: fallbackTheme.backgroundImageOpacity,
+    backgroundBlur: fallbackTheme.backgroundBlur,
+    cardOpacity: fallbackTheme.cardOpacity,
   }
 }
 
@@ -183,7 +242,8 @@ export function getThemeBackgroundLayer(theme) {
 
   return {
     image: hasImage ? cssUrl(getResponsiveBackgroundImage(normalized.backgroundImage)) : 'none',
-    opacity: hasImage ? '1' : '0',
+    opacity: hasImage ? String(normalized.backgroundImageOpacity / 100) : '0',
+    blur: hasImage ? `${normalized.backgroundBlur}px` : '0px',
     position: normalized?.backgroundPosition || 'center',
     size: normalized?.backgroundSize || 'cover',
     repeat: normalized?.backgroundRepeat || 'no-repeat',
@@ -203,6 +263,9 @@ function getModeTokens(theme, colorMode) {
   const normalized = normalizeTheme(theme)
   const isDark = colorMode === 'dark'
   const fallbackBackground = getThemeFallbackBackground(normalized)
+  const surfaceOpacity = normalized.backgroundStyle === 'image'
+    ? normalized.cardOpacity / 100
+    : null
 
   if (!isDark) {
     return {
@@ -213,8 +276,8 @@ function getModeTokens(theme, colorMode) {
       textPrimary: normalized.textPrimary || '#1F2937',
       textSecondary: normalized.textSecondary || '#6B7280',
       cardBg: normalized.cardBg || 'rgba(255, 255, 255, 0.1)',
-      surface: 'rgba(255,255,255,0.88)',
-      surfaceSoft: 'rgba(249,250,251,0.82)',
+      surface: surfaceOpacity === null ? 'rgba(255,255,255,0.88)' : `rgba(255,255,255,${surfaceOpacity})`,
+      surfaceSoft: surfaceOpacity === null ? 'rgba(249,250,251,0.82)' : `rgba(249,250,251,${Math.min(1, surfaceOpacity + 0.06)})`,
       border: 'rgba(255,255,255,0.58)',
     }
   }
@@ -233,8 +296,8 @@ function getModeTokens(theme, colorMode) {
     textPrimary: '#F8FAFC',
     textSecondary: '#CBD5E1',
     cardBg: 'rgba(15, 23, 42, 0.74)',
-    surface: 'rgba(15,23,42,0.86)',
-    surfaceSoft: 'rgba(30,41,59,0.76)',
+    surface: surfaceOpacity === null ? 'rgba(15,23,42,0.86)' : `rgba(15,23,42,${surfaceOpacity})`,
+    surfaceSoft: surfaceOpacity === null ? 'rgba(30,41,59,0.76)' : `rgba(30,41,59,${Math.min(1, surfaceOpacity + 0.06)})`,
     border: 'rgba(148,163,184,0.24)',
   }
 }
@@ -242,13 +305,14 @@ function getModeTokens(theme, colorMode) {
 export function ThemeProvider({ children }) {
   const [initialTheme] = useState(getStoredTheme)
   const localThemeRevisionRef = useRef(0)
+  const visualSettingsRef = useRef(getStoredVisualSettings(initialTheme?.custom))
   const [currentTheme, setCurrentTheme] = useState(() => {
     const preset = initialTheme?.preset
     return preset ? resolvePresetThemeKey(preset) : DEFAULT_THEME_KEY
   })
   const [customTheme, setCustomTheme] = useState(() => {
     const custom = initialTheme?.custom
-    return custom ? normalizeTheme(custom) : null
+    return custom ? normalizeTheme({ ...custom, ...visualSettingsRef.current }) : null
   })
   const [colorMode, setColorModeState] = useState(() => {
     if (typeof window === 'undefined') return 'light'
@@ -274,7 +338,7 @@ export function ThemeProvider({ children }) {
             setCustomTheme(null)
             localStorage.setItem('website-theme', JSON.stringify({ preset }))
           } else if (data.custom) {
-            data.custom = normalizeTheme(data.custom)
+            data.custom = normalizeTheme({ ...data.custom, ...visualSettingsRef.current })
             setCustomTheme(data.custom)
             localStorage.setItem('website-theme', JSON.stringify(data))
           }
@@ -314,6 +378,7 @@ export function ThemeProvider({ children }) {
     root.style.setProperty('--theme-page-bg', fallbackBackground)
     root.style.setProperty('--theme-bg-image', backgroundLayer.image)
     root.style.setProperty('--theme-bg-image-opacity', backgroundLayer.opacity)
+    root.style.setProperty('--theme-bg-image-blur', backgroundLayer.blur)
     root.style.setProperty('--theme-bg-position', backgroundLayer.position)
     root.style.setProperty('--theme-bg-size', backgroundLayer.size)
     root.style.setProperty('--theme-bg-repeat', backgroundLayer.repeat)
@@ -322,6 +387,7 @@ export function ThemeProvider({ children }) {
     root.style.setProperty('--theme-surface', modeTokens.surface)
     root.style.setProperty('--theme-surface-soft', modeTokens.surfaceSoft)
     root.style.setProperty('--theme-border', modeTokens.border)
+    root.style.setProperty('--theme-glass-blur', '12px')
     const useLightTransparentText = colorMode === 'dark'
       || theme.backgroundStyle === 'image'
       || theme.backgroundStyle === 'gradient'
@@ -339,6 +405,7 @@ export function ThemeProvider({ children }) {
     root.setAttribute('data-color-mode', colorMode)
     root.classList.toggle('dark', colorMode === 'dark')
     root.classList.toggle('theme-dark', colorMode === 'dark')
+    root.classList.toggle('theme-has-image', theme.backgroundStyle === 'image' && Boolean(theme.backgroundImage))
 
     if (customTheme) {
       root.setAttribute('data-custom-theme', 'true')
@@ -361,8 +428,14 @@ export function ThemeProvider({ children }) {
   const setCustomThemeConfig = (theme) => {
     localThemeRevisionRef.current += 1
     const normalized = normalizeTheme(theme)
+    visualSettingsRef.current = {
+      backgroundImageOpacity: normalized.backgroundImageOpacity,
+      backgroundBlur: normalized.backgroundBlur,
+      cardOpacity: normalized.cardOpacity,
+    }
     setCustomTheme(normalized)
     localStorage.setItem('website-theme', JSON.stringify({ custom: normalized }))
+    localStorage.setItem('website-visual-settings', JSON.stringify(visualSettingsRef.current))
   }
 
   const setColorMode = (mode) => {

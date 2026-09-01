@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye, EyeOff, KeyRound, Link2, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminAuth } from '../../contexts/AdminAuthContext'
-import { getAdminBasePath } from '../../utils/adminEntry'
+import { getAdminBasePath, getAdminLoginPathFromSuffix } from '../../utils/adminEntry'
 import LoadingIndicator from '../../components/LoadingIndicator'
 
 const API_BASE = ''
@@ -57,7 +57,7 @@ export default function AccountSettings() {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.message || '保存后台地址失败')
       setEntryMessage('后台地址已更新，请使用新地址重新登录...')
-      window.setTimeout(() => window.location.replace(`/${data.adminPathSuffix}/login`), 700)
+      window.setTimeout(() => window.location.replace(getAdminLoginPathFromSuffix(data.adminPathSuffix)), 700)
     } catch (requestError) {
       setEntryError(requestError instanceof Error ? requestError.message : '保存后台地址失败')
     } finally {

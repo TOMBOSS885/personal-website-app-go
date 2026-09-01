@@ -6,6 +6,11 @@ require_once __DIR__ . '/live2d.php';
 require_once __DIR__ . '/analytics.php';
 require_once __DIR__ . '/article_sites.php';
 require_once __DIR__ . '/social.php';
+require_once __DIR__ . '/audit.php';
+
+const APP_BACKUP_MAX_ARCHIVE_BYTES = 536870912;
+const APP_BACKUP_MAX_FILES = 20000;
+const APP_BACKUP_MAX_SETTINGS_BYTES = 65536;
 
 function app_config(): array
 {
@@ -190,6 +195,7 @@ function app_security_maybe_cleanup(): void
 
 function app_error(int $status, string $message, string $code = 'REQUEST_FAILED'): void
 {
+    if (function_exists('app_audit_set_context')) app_audit_set_context(['message' => $message]);
     app_json(['message' => $message, 'code' => $code], $status);
 }
 
@@ -202,6 +208,7 @@ function app_body(): array
     if (strlen($raw) > 5 * 1024 * 1024) app_error(413, '璇锋眰鍐呭瓒呰繃 5MB 闄愬埗', 'REQUEST_TOO_LARGE');
     $data = json_decode($raw, true);
     if (!is_array($data)) app_error(400, '璇锋眰 JSON 鏍煎紡閿欒', 'INVALID_JSON');
+    $GLOBALS['app_request_body'] = $data;
     return $data;
 }
 
@@ -348,6 +355,10 @@ function app_admin_required(): void
 
 function app_csrf_required(): void
 {
+    $fetchSite = strtolower(trim((string) ($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '')));
+    if ($fetchSite !== '' && !in_array($fetchSite, ['same-origin', 'none'], true)) {
+        app_error(403, 'Cross-site admin requests are not allowed.', 'CROSS_SITE_REQUEST_BLOCKED');
+    }
     $expected = (string) ($_SESSION['csrf_token'] ?? '');
     $provided = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
     if ($expected === '' || $provided === '' || !hash_equals($expected, $provided)) {
@@ -408,6 +419,7 @@ function app_article_row(array $row, bool $includeContent = true, bool $admin = 
         'id' => (int) $row['id'], 'title' => $row['title'], 'summary' => $row['summary'],
         'coverImage' => $row['cover_image'], 'category' => $row['category'], 'tags' => $row['tags'],
         'seriesName' => (string) ($row['series_name'] ?? ''), 'seriesOrder' => (int) ($row['series_order'] ?? 0),
+        'featured' => (bool) ($row['featured'] ?? false), 'displayOrder' => (int) ($row['display_order'] ?? 0),
         'views' => (int) $row['views'], 'published' => (bool) $row['published'], 'isLocked' => (bool) $row['is_locked'],
         'contentType' => $contentType, 'createdAt' => app_now_iso($row['created_at']), 'updatedAt' => app_now_iso($row['updated_at']),
     ];
@@ -427,6 +439,7 @@ function app_article_row(array $row, bool $includeContent = true, bool $admin = 
 
 function app_articles(bool $admin = false): array
 {
+    app_require_schema_011();
     $page = max(0, app_int($_GET['page'] ?? 0));
     $size = app_clamp(app_int($_GET['size'] ?? 10, 10), 1, 100);
     $where = $admin ? ['1=1'] : ['published = 1'];
@@ -445,12 +458,119 @@ function app_articles(bool $admin = false): array
     $total = (int) $count->fetchColumn();
     // List endpoints never need the MEDIUMTEXT body or password hash. Article
     // content is loaded from the detail endpoint only when it is opened.
-    $columns = 'id,title,summary,cover_image,category,tags,series_name,series_order,views,published,content_type,static_site_key,static_site_name,is_locked,created_at,updated_at';
+    $columns = 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,content_type,static_site_key,static_site_name,is_locked,created_at,updated_at';
     $sql = "SELECT $columns FROM articles WHERE $condition ORDER BY created_at DESC LIMIT $size OFFSET " . ($page * $size);
     $statement = app_db()->prepare($sql);
     $statement->execute($params);
     $rows = array_map(function ($row) use ($admin) { return app_article_row($row, false, $admin); }, $statement->fetchAll());
     return app_page($rows, $total, $size, $page);
+}
+
+function app_discovery_article_columns(): string
+{
+    return 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,content_type,is_locked,created_at,updated_at';
+}
+
+function app_discovery_articles(string $kind, $requestedLimit = null): array
+{
+    app_require_schema_011();
+    $limit = app_clamp($requestedLimit === null ? app_int($_GET['limit'] ?? 6, 6) : app_int($requestedLimit), 1, 20);
+    $where = 'published = 1';
+    $order = 'views DESC, created_at DESC, id DESC';
+    if ($kind === 'featured') {
+        $where .= ' AND featured = 1';
+        $order = 'display_order ASC, created_at DESC, id DESC';
+    }
+    $sql = 'SELECT ' . app_discovery_article_columns() . " FROM articles WHERE $where ORDER BY $order LIMIT $limit";
+    return array_map(static function (array $row): array {
+        return app_article_row($row, false);
+    }, app_db()->query($sql)->fetchAll());
+}
+
+function app_article_archive(int $yearFilter = 0): array
+{
+    app_require_schema_011();
+    if ($yearFilter !== 0 && ($yearFilter < 1970 || $yearFilter > (int) date('Y') + 1)) {
+        app_error(400, 'Year is outside the supported archive range.', 'INVALID_YEAR');
+    }
+    $where = 'published = 1';
+    $params = [];
+    if ($yearFilter > 0) {
+        $where .= ' AND created_at >= ? AND created_at < ?';
+        $params[] = sprintf('%04d-01-01 00:00:00', $yearFilter);
+        $params[] = sprintf('%04d-01-01 00:00:00', $yearFilter + 1);
+    }
+    $sql = 'SELECT ' . app_discovery_article_columns() . " FROM articles WHERE $where ORDER BY created_at DESC, id DESC LIMIT 501";
+    $statement = app_db()->prepare($sql);
+    $statement->execute($params);
+    $rows = $statement->fetchAll();
+    if (count($rows) > 500) {
+        app_error(413, 'Archive contains too many articles. Select a year to narrow the result.', 'ARCHIVE_RESULT_TOO_LARGE');
+    }
+    $years = [];
+    $total = 0;
+    foreach ($rows as $row) {
+        $timestamp = strtotime((string) $row['created_at']);
+        $year = $timestamp === false ? 'unknown' : date('Y', $timestamp);
+        $month = $timestamp === false ? '00' : date('m', $timestamp);
+        if (!isset($years[$year])) {
+            $years[$year] = ['year' => $year, 'count' => 0, 'months' => []];
+        }
+        if (!isset($years[$year]['months'][$month])) {
+            $years[$year]['months'][$month] = ['month' => $month, 'count' => 0, 'articles' => []];
+        }
+        $years[$year]['count']++;
+        $years[$year]['months'][$month]['count']++;
+        $years[$year]['months'][$month]['articles'][] = app_article_row($row, false);
+        $total++;
+    }
+    foreach ($years as &$year) {
+        $year['months'] = array_values($year['months']);
+    }
+    unset($year);
+    return ['totalArticles' => $total, 'years' => array_values($years)];
+}
+
+function app_article_series($articleLimitPerSeries = null): array
+{
+    app_require_schema_011();
+    if ($articleLimitPerSeries !== null) $articleLimitPerSeries = app_clamp(app_int($articleLimitPerSeries), 1, 50);
+    $sql = 'SELECT ' . app_discovery_article_columns() . " FROM articles WHERE published = 1 AND TRIM(series_name) <> '' ORDER BY series_name ASC, series_order ASC, created_at ASC, id ASC LIMIT 501";
+    $series = [];
+    $rows = app_db()->query($sql)->fetchAll();
+    if (count($rows) > 500) {
+        app_error(413, 'Series index contains too many articles.', 'SERIES_RESULT_TOO_LARGE');
+    }
+    foreach ($rows as $row) {
+        $name = trim((string) $row['series_name']);
+        if ($name === '') continue;
+        if (!isset($series[$name])) {
+            $series[$name] = [
+                'name' => $name,
+                'count' => 0,
+                'coverImage' => '',
+                'summary' => '',
+                'latestAt' => null,
+                'articles' => [],
+            ];
+        }
+        $article = app_article_row($row, false);
+        $article['order'] = (int) ($row['series_order'] ?? 0);
+        $series[$name]['count']++;
+        if ($articleLimitPerSeries === null || count($series[$name]['articles']) < $articleLimitPerSeries) {
+            $series[$name]['articles'][] = $article;
+        }
+        if ($series[$name]['coverImage'] === '' && $article['coverImage'] !== '') $series[$name]['coverImage'] = $article['coverImage'];
+        if ($series[$name]['summary'] === '' && $article['summary'] !== '') $series[$name]['summary'] = $article['summary'];
+        if ($series[$name]['latestAt'] === null || strcmp($article['createdAt'], $series[$name]['latestAt']) > 0) {
+            $series[$name]['latestAt'] = $article['createdAt'];
+        }
+    }
+    $result = array_values($series);
+    usort($result, static function (array $left, array $right): int {
+        return strcmp((string) ($right['latestAt'] ?? ''), (string) ($left['latestAt'] ?? '')) ?: strcasecmp($left['name'], $right['name']);
+    });
+    return $result;
 }
 
 function app_article_navigation(int $id): array
@@ -552,7 +672,7 @@ function app_public_feed(string $format = 'rss'): void
 
 function app_admin_backup_manifest(): array
 {
-    $tables = ['admin_account', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals'];
+    $tables = ['admin_account', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs'];
     $counts = [];
     foreach ($tables as $table) {
         try { $counts[$table] = (int) app_db()->query("SELECT COUNT(*) FROM `$table`")->fetchColumn(); } catch (Throwable $error) { $counts[$table] = null; }
@@ -579,12 +699,12 @@ function app_admin_backup_manifest(): array
             error_log('Backup manifest upload scan failed: ' . $error->getMessage());
         }
     }
-    return ['generatedAt' => date(DATE_ATOM), 'schema' => '010', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
+    return ['generatedAt' => date(DATE_ATOM), 'schema' => '012', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
 }
 
 function app_schema_010_ready(): bool
 {
-    $columns = app_db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'articles' AND COLUMN_NAME IN ('series_name', 'series_order')")->fetchColumn();
+    $columns = app_db()->query("SELECT COUNT(DISTINCT COLUMN_NAME) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'articles' AND COLUMN_NAME IN ('series_name', 'series_order')")->fetchColumn();
     if ((int) $columns !== 2) return false;
     $index = app_db()->query("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'articles' AND INDEX_NAME = 'idx_articles_series'")->fetchColumn();
     return (int) $index > 0;
@@ -593,6 +713,41 @@ function app_schema_010_ready(): bool
 function app_require_schema_010(): void
 {
     if (!app_schema_010_ready()) app_error(503, '璇峰厛瀵煎叆 migrations/010_content_discovery.sql', 'MIGRATION_REQUIRED');
+}
+
+function app_schema_011_ready(): bool
+{
+    try {
+        if (!app_schema_010_ready()) return false;
+        $columns = app_db()->query("SELECT COUNT(DISTINCT COLUMN_NAME) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'articles' AND COLUMN_NAME IN ('featured', 'display_order')")->fetchColumn();
+        if ((int) $columns !== 2) return false;
+        $indexes = app_db()->query("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'articles' AND INDEX_NAME IN ('idx_articles_featured_order', 'idx_articles_popular')")->fetchColumn();
+        return (int) $indexes === 2;
+    } catch (Throwable $error) {
+        error_log('Schema 011 check failed: ' . $error->getMessage());
+        return false;
+    }
+}
+
+function app_require_schema_011(): void
+{
+    if (!app_schema_011_ready()) app_error(503, 'Please import migrations/010_content_discovery.sql and migrations/011_article_discovery.sql first.', 'MIGRATION_REQUIRED');
+}
+
+function app_schema_012_ready(): bool
+{
+    try {
+        $table = app_db()->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admin_operation_logs'")->fetchColumn();
+        return (int) $table === 1;
+    } catch (Throwable $error) {
+        error_log('Schema 012 check failed: ' . $error->getMessage());
+        return false;
+    }
+}
+
+function app_require_schema_012(): void
+{
+    if (!app_schema_012_ready()) app_error(503, 'Please import migrations/012_admin_operation_logs.sql first.', 'MIGRATION_REQUIRED');
 }
 
 function app_backup_require_password($value): string
@@ -703,9 +858,67 @@ function app_backup_remove_tree(string $root): void
 function app_backup_safe_relative(string $value): string
 {
     $value = str_replace('\\', '/', $value);
-    if (strpos($value, "\0") !== false) throw new RuntimeException('Invalid backup path');
-    if ($value === '' || str_starts_with($value, '/') || preg_match('#(^|/)\.\.?(/|$)#', $value)) throw new RuntimeException('Backup contains an unsafe path.');
+    if (strpos($value, "\0") !== false || strlen($value) > 1024) throw new RuntimeException('Invalid backup path');
+    if ($value === '' || str_starts_with($value, '/') || str_contains($value, '//')) throw new RuntimeException('Backup contains an unsafe path.');
+    foreach (explode('/', $value) as $part) {
+        if ($part === '' || $part === '.' || $part === '..' || strlen($part) > 255
+            || preg_match('/[\x00-\x1F<>:"|?*]/', $part)) {
+            throw new RuntimeException('Backup contains an unsafe path.');
+        }
+    }
     return $value;
+}
+
+function app_backup_upload_path_is_ignored(string $relative): bool
+{
+    $normalized = str_replace('\\', '/', $relative);
+    return $normalized === '.htaccess'
+        || $normalized === '.user.ini'
+        || str_starts_with($normalized, '.cache/')
+        || str_contains($normalized, '/.cache/');
+}
+
+function app_backup_validate_upload_path(string $relative): string
+{
+    $relative = app_backup_safe_relative($relative);
+    $parts = explode('/', $relative);
+    foreach ($parts as $part) {
+        if (str_starts_with($part, '.')) throw new RuntimeException('Backup contains a hidden upload path.');
+    }
+    if (count($parts) < 2) throw new RuntimeException('Backup contains an unsupported upload path.');
+
+    $folder = strtolower($parts[0]);
+    $extension = strtolower(pathinfo($relative, PATHINFO_EXTENSION));
+    if (in_array($folder, ['articles', 'theme', 'avatars'], true)) {
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) throw new RuntimeException('Backup contains an unsupported image upload.');
+        return $relative;
+    }
+    if ($folder === 'live2d') {
+        if (!in_array($extension, ['json', 'moc', 'moc3', 'mtn', 'exp', 'png', 'jpg', 'jpeg', 'webp'], true)) {
+            throw new RuntimeException('Backup contains an unsupported Live2D upload.');
+        }
+        return $relative;
+    }
+    if ($folder === APP_ARTICLE_SITE_DIR && isset(app_article_site_allowed_extensions()[$extension])) return $relative;
+    throw new RuntimeException('Backup contains an unsupported upload path.');
+}
+
+function app_backup_install_upload_protection(string $uploadRoot): void
+{
+    $rules = <<<'HTACCESS'
+Options -Indexes
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule (^|/)\. - [F,L,NC]
+RewriteRule ^article-sites(?:/|$) - [F,L,NC]
+</IfModule>
+<FilesMatch "\.(?:php[0-9]?|phtml|phar|cgi|pl|py|sh|exe|bat|cmd|html?|svg)$">
+  Require all denied
+</FilesMatch>
+HTACCESS;
+    if (@file_put_contents(rtrim($uploadRoot, '/\\') . '/.htaccess', $rules . "\n", LOCK_EX) === false) {
+        throw new RuntimeException('Unable to install upload directory protection.');
+    }
 }
 
 function app_backup_copy_stream($input, string $target): void
@@ -719,14 +932,130 @@ function app_backup_copy_stream($input, string $target): void
     if ($copied === false) throw new RuntimeException('鎭㈠鏂囦欢鍐欏叆澶辫触');
 }
 
-function app_backup_apply_app_settings(string $path): void
+function app_backup_parse_legacy_settings(string $path): array
 {
-    if (!is_file($path)) return;
-    $settings = include $path;
+    $source = @file_get_contents($path);
+    if (!is_string($source) || strlen($source) > APP_BACKUP_MAX_SETTINGS_BYTES) throw new RuntimeException('Legacy backup settings are invalid.');
+    $tokens = token_get_all($source);
+    $index = 0;
+    $count = count($tokens);
+    $skip = static function () use (&$tokens, &$index, $count): void {
+        while ($index < $count && is_array($tokens[$index]) && $tokens[$index][0] === T_WHITESPACE) $index++;
+    };
+    $parseValue = null;
+    $parseArray = null;
+    $parseValue = static function () use (&$parseValue, &$parseArray, &$tokens, &$index, $count, $skip) {
+        $skip();
+        if ($index >= $count) throw new RuntimeException('Legacy backup settings are truncated.');
+        $token = $tokens[$index++];
+        if (is_array($token)) {
+            [$id, $text] = $token;
+            if ($id === T_ARRAY) {
+                $skip();
+                if ($tokens[$index++] !== '(') throw new RuntimeException('Legacy backup settings contain an invalid array.');
+                return $parseArray(')');
+            }
+            if ($id === T_CONSTANT_ENCAPSED_STRING) {
+                $raw = substr($text, 1, -1);
+                return str_replace(['\\\\', "\\'"], ['\\', "'"], $raw);
+            }
+            if ($id === T_LNUMBER) return (int) $text;
+            if ($id === T_DNUMBER) return (float) $text;
+            if ($id === T_STRING && in_array(strtolower($text), ['true', 'false', 'null'], true)) return strtolower($text) === 'true' ? true : (strtolower($text) === 'false' ? false : null);
+            throw new RuntimeException('Legacy backup settings contain executable code.');
+        }
+        if ($token === '[') return $parseArray(']');
+        throw new RuntimeException('Legacy backup settings contain executable code.');
+    };
+    $parseArray = static function (string $closing) use (&$parseValue, &$tokens, &$index, $count, $skip): array {
+        $result = [];
+        while (true) {
+            $skip();
+            if ($index >= $count) throw new RuntimeException('Legacy backup settings contain an unterminated array.');
+            if ($tokens[$index] === $closing) { $index++; return $result; }
+            $key = count($result);
+            $valueToken = $tokens[$index];
+            if (is_array($valueToken) && in_array($valueToken[0], [T_CONSTANT_ENCAPSED_STRING, T_LNUMBER], true)) {
+                $candidate = $parseValue();
+                $skip();
+                if ($index < $count && $tokens[$index] === '=>') { $index++; $key = $candidate; }
+                else { $value = $candidate; $result[$key] = $value; $skip(); if ($index < $count && $tokens[$index] === ',') { $index++; continue; } if ($index < $count && $tokens[$index] === $closing) { $index++; return $result; } throw new RuntimeException('Legacy backup settings contain an invalid array.'); }
+            }
+            $result[$key] = $parseValue();
+            $skip();
+            if ($index < $count && $tokens[$index] === ',') { $index++; continue; }
+            if ($index < $count && $tokens[$index] === $closing) { $index++; return $result; }
+            throw new RuntimeException('Legacy backup settings contain an invalid array.');
+        }
+    };
+    $skip();
+    if ($index >= $count || !is_array($tokens[$index]) || $tokens[$index][0] !== T_OPEN_TAG) throw new RuntimeException('Legacy backup settings are invalid.');
+    $index++;
+    $skip();
+    if ($index >= $count || !is_array($tokens[$index]) || $tokens[$index][0] !== T_RETURN) throw new RuntimeException('Legacy backup settings are invalid.');
+    $index++;
+    $settings = $parseValue();
+    $skip();
+    if ($index >= $count || $tokens[$index++] !== ';' || !is_array($settings)) throw new RuntimeException('Legacy backup settings are invalid.');
+    $skip();
+    if ($index !== $count) throw new RuntimeException('Legacy backup settings contain trailing code.');
+    return $settings;
+}
+
+function app_backup_validate_app_settings(array $settings): array
+{
+    $validated = [];
+    if (array_key_exists('production', $settings)) $validated['production'] = (bool) $settings['production'];
+    if (array_key_exists('timezone', $settings)) {
+        $timezone = (string) $settings['timezone'];
+        if (!in_array($timezone, timezone_identifiers_list(), true)) throw new RuntimeException('Backup contains an invalid timezone.');
+        $validated['timezone'] = $timezone;
+    }
+    if (array_key_exists('session_name', $settings)) {
+        $sessionName = (string) $settings['session_name'];
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/', $sessionName)) throw new RuntimeException('Backup contains an invalid session name.');
+        $validated['session_name'] = $sessionName;
+    }
+    if (array_key_exists('admin_path_suffix', $settings)) {
+        $suffix = (string) $settings['admin_path_suffix'];
+        if (!app_admin_path_suffix_is_routable($suffix)) throw new RuntimeException('Backup contains an invalid admin path.');
+        $validated['admin_path_suffix'] = $suffix;
+    }
+    foreach (['setup_key', 'analytics_key'] as $key) {
+        if (!array_key_exists($key, $settings)) continue;
+        $secret = (string) $settings[$key];
+        if (strlen($secret) < 32 || strlen($secret) > 512 || str_starts_with($secret, 'CHANGE_THIS_')) {
+            throw new RuntimeException('Backup contains an invalid application secret.');
+        }
+        $validated[$key] = $secret;
+    }
+    if (array_key_exists('site_url', $settings)) {
+        $url = rtrim((string) $settings['site_url'], '/');
+        $parts = parse_url($url);
+        if (!filter_var($url, FILTER_VALIDATE_URL) || !is_array($parts)
+            || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)
+            || empty($parts['host']) || isset($parts['user'], $parts['pass'], $parts['query'], $parts['fragment'])) {
+            throw new RuntimeException('Backup contains an invalid canonical site URL.');
+        }
+        $validated['site_url'] = $url;
+    }
+    if (array_key_exists('article_site_url_ttl_seconds', $settings)) {
+        $validated['article_site_url_ttl_seconds'] = app_clamp((int) $settings['article_site_url_ttl_seconds'], 300, 86400);
+    }
+    return $validated;
+}
+
+function app_backup_apply_app_settings(array|string $settings): void
+{
+    if (is_string($settings)) {
+        $raw = @file_get_contents($settings);
+        $decoded = is_string($raw) ? json_decode($raw, true) : null;
+        $settings = is_array($decoded) ? $decoded : app_backup_parse_legacy_settings($settings);
+    }
+    $settings = app_backup_validate_app_settings($settings);
     if (!is_array($settings)) throw new RuntimeException('澶囦唤涓殑搴旂敤閰嶇疆鏃犳晥');
     $config = app_config();
-    $allowed = ['production', 'timezone', 'session_name', 'admin_path_suffix', 'setup_key', 'analytics_key', 'site_url', 'article_site_url_ttl_seconds'];
-    foreach ($allowed as $key) if (array_key_exists($key, $settings)) $config['app'][$key] = $settings[$key];
+    foreach ($settings as $key => $value) $config['app'][$key] = $value;
     $configPath = dirname(__DIR__) . '/config/config.php';
     if (!is_file($configPath) || !is_writable($configPath)) throw new RuntimeException('config/config.php 涓嶅彲鍐欙紝鏃犳硶鎭㈠搴旂敤閰嶇疆');
     $temporary = $configPath . '.restore-' . bin2hex(random_bytes(4));
@@ -743,7 +1072,9 @@ function app_backup_add_uploads_to_archive(ZipArchive $zip): void
     $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploadRoot, FilesystemIterator::SKIP_DOTS));
     foreach ($iterator as $file) {
         if (!$file->isFile() || $file->isLink()) continue;
-        $relative = app_backup_safe_relative(substr($file->getPathname(), strlen($uploadRoot) + 1));
+        $rawRelative = substr($file->getPathname(), strlen($uploadRoot) + 1);
+        if (app_backup_upload_path_is_ignored($rawRelative)) continue;
+        $relative = app_backup_validate_upload_path($rawRelative);
         if (!$zip->addFile($file->getPathname(), 'uploads/' . $relative)) throw new RuntimeException('鏃犳硶鍐欏叆涓婁紶鏂囦欢: ' . $relative);
     }
 }
@@ -759,15 +1090,18 @@ function app_backup_create_archive(string $zipPath, string $password): array
         $app = app_config()['app'];
         $safeSettings = [];
         foreach (['production', 'timezone', 'session_name', 'admin_path_suffix', 'setup_key', 'analytics_key', 'site_url', 'article_site_url_ttl_seconds'] as $key) if (array_key_exists($key, $app)) $safeSettings[$key] = $app[$key];
-        $settingsPath = $working . '/app-settings.php';
+        $settingsPath = $working . '/app-settings.json';
         if (@file_put_contents($settingsPath, "<?php\n\nreturn " . var_export($safeSettings, true) . ";\n", LOCK_EX) === false) throw new RuntimeException('鏃犳硶鍒涘缓搴旂敤閰嶇疆澶囦唤');
+        $settingsJson = json_encode($safeSettings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        if (@file_put_contents($settingsPath, $settingsJson, LOCK_EX) === false) throw new RuntimeException('Unable to create encrypted app settings.');
         $encryptedSettings = app_backup_encrypt_file($settingsPath, $password);
-        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 1, 'generatedAt' => date(DATE_ATOM), 'schema' => '010', 'database' => $databaseStats, 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'config/app-settings.php.enc' => $encryptedSettings['meta']], 'note' => 'The database and application settings are encrypted; uploads retain their original paths.'], 'manifest' => app_admin_backup_manifest()];
+        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 1, 'generatedAt' => date(DATE_ATOM), 'schema' => '011', 'database' => $databaseStats, 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'config/app-settings.php.enc' => $encryptedSettings['meta']], 'note' => 'The database and application settings are encrypted; uploads retain their original paths.'], 'manifest' => app_admin_backup_manifest()];
+        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 2, 'generatedAt' => date(DATE_ATOM), 'schema' => '011', 'database' => $databaseStats, 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'The database and application settings are encrypted; uploads retain their original paths.'], 'manifest' => app_admin_backup_manifest()];
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('Unable to create the backup archive.');
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         $zip->addFromString('database.sql.enc', $encryptedSql['cipher']);
-        $zip->addFromString('config/app-settings.php.enc', $encryptedSettings['cipher']);
+        $zip->addFromString('config/app-settings.json.enc', $encryptedSettings['cipher']);
         $zip->addFromString('README.txt', "personal-website portable backup\n\nThis archive contains the database and uploads. The database and app settings are encrypted with the password entered during export. Keep the password safe; it cannot be recovered.\n");
         app_backup_add_uploads_to_archive($zip);
         $zip->setArchiveComment('personal-website portable backup; database and app settings are encrypted');
@@ -780,12 +1114,50 @@ function app_backup_create_archive(string $zipPath, string $password): array
     }
 }
 
+function app_backup_validate_sql_statement(string $statement, array $schema): void
+{
+    if (in_array($statement, ["SET NAMES utf8mb4", "SET time_zone = '+08:00'", 'SET FOREIGN_KEY_CHECKS = 0', 'SET FOREIGN_KEY_CHECKS = 1'], true)) return;
+    if (preg_match('/^DELETE FROM `([A-Za-z0-9_]+)`$/D', $statement, $match)) {
+        if (!isset($schema[$match[1]])) throw new RuntimeException('Backup references an unknown database table.');
+        return;
+    }
+    if (!preg_match('/^INSERT INTO `([A-Za-z0-9_]+)` \(/', $statement, $match)) throw new RuntimeException('Backup contains an unsupported SQL statement.');
+    $table = $match[1];
+    if (!isset($schema[$table])) throw new RuntimeException('Backup references an unknown database table.');
+    $marker = ') VALUES (';
+    $markerPosition = strpos($statement, $marker, strlen($match[0]));
+    if ($markerPosition === false || substr($statement, -1) !== ')') throw new RuntimeException('Backup contains an invalid INSERT statement.');
+    $columnsRaw = substr($statement, strlen($match[0]), $markerPosition - strlen($match[0]));
+    $valuesRaw = substr($statement, $markerPosition + strlen($marker), -1);
+    $columns = array_map('trim', explode(',', $columnsRaw));
+    $values = array_map('trim', explode(',', $valuesRaw));
+    if (count($columns) === 0 || count($columns) !== count($values)) throw new RuntimeException('Backup contains mismatched SQL columns and values.');
+    foreach ($columns as $column) {
+        if (!preg_match('/^`([A-Za-z0-9_]+)`$/D', $column, $columnMatch) || !isset($schema[$table][$columnMatch[1]])) {
+            throw new RuntimeException('Backup contains an unknown database column.');
+        }
+    }
+    foreach ($values as $value) {
+        if (!preg_match('/^(?:NULL|\'\'|0x[0-9a-f]*|CONVERT\(0x[0-9a-f]* USING utf8mb4\)|-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)$/iD', $value)) {
+            throw new RuntimeException('Backup contains an unsafe SQL value.');
+        }
+    }
+}
+
 function app_backup_execute_sql(string $path): array
 {
     $handle = @fopen($path, 'rb');
     if (!$handle) throw new RuntimeException('Unable to read the database backup.');
     $database = app_db();
     $statements = 0;
+    $schema = [];
+    foreach ($database->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $tableName) {
+        $table = (string) $tableName;
+        $schema[$table] = [];
+        foreach ($database->query('SHOW COLUMNS FROM ' . app_backup_identifier($table))->fetchAll() as $column) {
+            $schema[$table][(string) $column['Field']] = true;
+        }
+    }
     try {
         $database->beginTransaction();
         while (($line = fgets($handle)) !== false) {
@@ -793,6 +1165,7 @@ function app_backup_execute_sql(string $path): array
             if ($statement === '') continue;
             if (substr($statement, -1) === ';') $statement = substr($statement, 0, -1);
             if ($statement === '') continue;
+            app_backup_validate_sql_statement($statement, $schema);
             $database->exec($statement);
             $statements++;
         }
@@ -809,6 +1182,7 @@ function app_backup_execute_sql(string $path): array
 function app_admin_backup_export(): void
 {
     app_require_schema_010();
+    app_require_schema_011();
     $body = app_body();
     $password = app_backup_require_password($body['password'] ?? '');
     if (!class_exists('ZipArchive')) app_error(503, '涓绘満鏈惎鐢?PHP ZipArchive 鎵╁睍', 'ZIP_EXTENSION_REQUIRED');
@@ -840,8 +1214,8 @@ function app_admin_backup_import(): void
     // size is checked below as well, but this protects PHP memory/disk usage
     // when upload limits on the host are configured too generously.
     $compressedSize = (int) ($file['size'] ?? 0);
-    if ($compressedSize <= 0 || $compressedSize > 2 * 1024 * 1024 * 1024) {
-        app_error(413, 'Backup ZIP exceeds the 2GB limit', 'BACKUP_FILE_TOO_LARGE');
+    if ($compressedSize <= 0 || $compressedSize > APP_BACKUP_MAX_ARCHIVE_BYTES) {
+        app_error(413, 'Backup ZIP exceeds the 512MB limit', 'BACKUP_FILE_TOO_LARGE');
     }
     $working = rtrim(sys_get_temp_dir(), '/\\') . '/personal-restore-' . bin2hex(random_bytes(8));
     if (!mkdir($working, 0700, true)) app_error(500, '鏃犳硶鍒涘缓鎭㈠涓存椂鐩綍', 'RESTORE_TEMP_FAILED');
@@ -854,6 +1228,7 @@ function app_admin_backup_import(): void
         if (is_file($configPath) && !@copy($configPath, $configBefore)) throw new RuntimeException('鏃犳硶鏆傚瓨褰撳墠搴旂敤閰嶇疆');
         if ($zip->open((string) $file['tmp_name'], ZipArchive::CHECKCONS) !== true) throw new RuntimeException('澶囦唤 ZIP 鎹熷潖');
         if ($zip->numFiles > 100000) throw new RuntimeException('澶囦唤鏂囦欢鏁伴噺瓒呰繃闄愬埗');
+        if ($zip->numFiles > APP_BACKUP_MAX_FILES) throw new RuntimeException('Backup contains too many files.');
         $manifest = null;
         $totalBytes = 0;
         $seenEntries = [];
@@ -861,10 +1236,14 @@ function app_admin_backup_import(): void
             $rawName = str_replace('\\', '/', (string) $zip->getNameIndex($index));
             if (str_ends_with($rawName, '/')) continue;
             $name = app_backup_safe_relative($rawName);
+            if (app_backup_upload_path_is_ignored(str_starts_with($name, 'uploads/') ? substr($name, 8) : $name)) continue;
+            if (str_starts_with($name, 'uploads/')) app_backup_validate_upload_path(substr($name, 8));
+            if ($name === 'config/app-settings.json.enc') $name = 'config/app-settings.php.enc';
             if (isset($seenEntries[$name])) throw new RuntimeException('Backup ZIP contains duplicate paths');
             $seenEntries[$name] = true;
             $stat = $zip->statIndex($index);
             $totalBytes += (int) ($stat['size'] ?? 0);
+            if ($totalBytes > APP_BACKUP_MAX_ARCHIVE_BYTES) throw new RuntimeException('Backup expands beyond the 512MB limit.');
             if ($totalBytes > 2 * 1024 * 1024 * 1024) throw new RuntimeException('澶囦唤瑙ｅ帇澶у皬瓒呰繃 2GB 闄愬埗');
             if ($name === 'manifest.json') {
                 $manifest = json_decode((string) $zip->getFromIndex($index), true);
@@ -880,7 +1259,13 @@ function app_admin_backup_import(): void
         }
         $zip->close();
         if (!is_array($manifest) || ($manifest['format'] ?? '') !== 'personal-website-portable-backup') throw new RuntimeException('Unsupported website backup archive.');
+        $backupVersion = (int) ($manifest['version'] ?? 0);
+        if (!in_array($backupVersion, [1, 2], true)) throw new RuntimeException('Unsupported website backup version.');
         $encryption = $manifest['encryption']['files'] ?? [];
+        if (isset($encryption['config/app-settings.json.enc']) && !isset($encryption['config/app-settings.php.enc'])) {
+            $encryption['config/app-settings.php.enc'] = $encryption['config/app-settings.json.enc'];
+        }
+        if ($backupVersion === 2 && !isset($encryption['config/app-settings.json.enc'])) throw new RuntimeException('Backup settings metadata is missing.');
         if (!isset($encryption['database.sql.enc'], $encryption['config/app-settings.php.enc'])) throw new RuntimeException('澶囦唤缂哄皯鍔犲瘑鏁版嵁');
         app_backup_decrypt_file($working . '/database.sql.enc', $password, $encryption['database.sql.enc'], $working . '/database.sql');
         app_backup_decrypt_file($working . '/config/app-settings.php.enc', $password, $encryption['config/app-settings.php.enc'], $working . '/app-settings.php');
@@ -892,12 +1277,15 @@ function app_admin_backup_import(): void
         if (is_dir($working . '/uploads')) {
             $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($working . '/uploads', FilesystemIterator::SKIP_DOTS));
             foreach ($iterator as $entry) {
-                $relative = app_backup_safe_relative(substr($entry->getPathname(), strlen($working . '/uploads') + 1));
+                $rawRelative = substr($entry->getPathname(), strlen($working . '/uploads') + 1);
+                if (app_backup_upload_path_is_ignored($rawRelative)) continue;
+                $relative = $entry->isDir() ? app_backup_safe_relative($rawRelative) : app_backup_validate_upload_path($rawRelative);
                 $target = $newUploads . '/' . str_replace('/', DIRECTORY_SEPARATOR, $relative);
                 if ($entry->isDir()) { if (!is_dir($target) && !mkdir($target, 0755, true) && !is_dir($target)) throw new RuntimeException('鏃犳硶鍒涘缓涓婁紶鐩綍'); }
                 elseif ($entry->isFile() && !$entry->isLink()) { $input = fopen($entry->getPathname(), 'rb'); app_backup_copy_stream($input, $target); fclose($input); @chmod($target, 0644); }
             }
         }
+        app_backup_install_upload_protection($newUploads);
         $oldUploads = $uploadRoot . '.before-restore-' . bin2hex(random_bytes(6));
         if (is_dir($uploadRoot) && !@rename($uploadRoot, $oldUploads)) throw new RuntimeException('鏃犳硶鏆傚瓨鍘?uploads 鐩綍');
         if (is_dir($newUploads) && !@rename($newUploads, $uploadRoot)) { if ($oldUploads !== '' && is_dir($oldUploads)) @rename($oldUploads, $uploadRoot); throw new RuntimeException('鏃犳硶鍒囨崲鏂扮殑 uploads 鐩綍'); }
@@ -917,7 +1305,7 @@ function app_admin_backup_import(): void
         if (is_file($configBefore)) @copy($configBefore, $configPath);
         app_backup_remove_tree($working);
         error_log('Backup import failed: ' . $error->getMessage());
-        app_error(400, $error->getMessage(), 'BACKUP_IMPORT_FAILED');
+        app_error(400, 'Backup import failed. Check the archive format, password, and available storage.', 'BACKUP_IMPORT_FAILED');
     } finally {
         app_backup_remove_tree($working);
     }
@@ -1278,6 +1666,7 @@ function app_handle_login(): void
     $body = app_body();
     $username = trim((string) ($body['username'] ?? ''));
     $password = (string) ($body['password'] ?? '');
+    app_audit_login_attempt($username);
     if (!app_security_peer_rate_limit_allow('admin-login', 60)) app_error(429, '鐧诲綍灏濊瘯杩囦簬棰戠箒锛岃绋嶅悗鍐嶈瘯', 'LOGIN_RATE_LIMITED');
     $clientHash = app_security_client_hash('admin-login');
     $database = app_db();
@@ -1330,6 +1719,11 @@ function app_handle_login(): void
     app_json(['success' => true, 'username' => $admin['username'], 'csrfToken' => $_SESSION['csrf_token']]);
 }
 
+function app_article_unlock_token(array $row): string
+{
+    return hash('sha256', (string) ($row['access_password_hash'] ?? '') . '|' . (!empty($row['is_locked']) ? '1' : '0'));
+}
+
 function app_handle_article_unlock(int $id): void
 {
     $body = app_body();
@@ -1372,7 +1766,8 @@ function app_handle_article_unlock(int $id): void
         $database->prepare('DELETE FROM article_unlock_attempts WHERE article_id = ? AND client_hash = ?')->execute([$id, $clientHash]);
         $database->commit();
         app_security_maybe_cleanup();
-        $_SESSION['article_unlocks'][$id] = true;
+        $_SESSION['article_unlocks'][$id] = app_article_unlock_token($row);
+        header('Cache-Control: no-store');
         if (session_status() === PHP_SESSION_ACTIVE) session_write_close();
         $article = app_article_row($row, true);
         $article['requiresPassword'] = false;
@@ -1386,6 +1781,14 @@ function app_handle_article_unlock(int $id): void
 
 function app_save_article(?int $id): void
 {
+    app_require_schema_011();
+    $before = null;
+    if ($id !== null) {
+        $existing = app_db()->prepare('SELECT * FROM articles WHERE id = ?');
+        $existing->execute([$id]);
+        $before = $existing->fetch() ?: null;
+        if ($before === null) app_error(404, 'Article not found.', 'NOT_FOUND');
+    }
     $body = app_body();
     $title = trim((string) ($body['title'] ?? ''));
     $content = (string) ($body['content'] ?? '');
@@ -1403,49 +1806,60 @@ function app_save_article(?int $id): void
         $title, trim((string) ($body['summary'] ?? '')), $content, trim((string) ($body['coverImage'] ?? '')),
         trim((string) ($body['category'] ?? '')), trim((string) ($body['tags'] ?? '')),
         (function_exists('mb_substr') ? mb_substr(trim((string) ($body['seriesName'] ?? '')), 0, 120) : substr(trim((string) ($body['seriesName'] ?? '')), 0, 120)), app_int($body['seriesOrder'] ?? 0),
+        array_key_exists('featured', $body) ? (app_bool($body['featured']) ? 1 : 0) : null,
+        array_key_exists('displayOrder', $body) ? app_int($body['displayOrder']) : null,
         app_bool($body['published'] ?? false) ? 1 : 0,
         $contentType, $siteKey !== '' ? $siteKey : null, $siteName !== '' ? $siteName : null, $locked ? 1 : 0,
     ];
     $oldSiteKey = '';
     if ($id === null) {
         if ($locked && $hash === null) app_error(400, '鍔犻攣鏂囩珷蹇呴』璁剧疆璁块棶瀵嗙爜', 'PASSWORD_REQUIRED');
-        $statement = app_db()->prepare('INSERT INTO articles (title, summary, content, cover_image, category, tags, series_name, series_order, published, content_type, static_site_key, static_site_name, is_locked, access_password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())');
+        $statement = app_db()->prepare('INSERT INTO articles (title, summary, content, cover_image, category, tags, series_name, series_order, featured, display_order, published, content_type, static_site_key, static_site_name, is_locked, access_password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())');
+        $values[8] = $values[8] ?? 0;
+        $values[9] = $values[9] ?? 0;
         $statement->execute(array_merge($values, [$hash]));
         $id = (int) app_db()->lastInsertId();
         $status = 201;
     } else {
-        $existing = app_db()->prepare('SELECT access_password_hash, static_site_key FROM articles WHERE id = ?');
-        $existing->execute([$id]);
-        $old = $existing->fetch();
-        if (!$old) app_error(404, 'Article not found.', 'NOT_FOUND');
-        $oldSiteKey = (string) ($old['static_site_key'] ?? '');
+        $oldSiteKey = (string) ($before['static_site_key'] ?? '');
         if (!$locked) $hash = null;
-        elseif ($hash === null) $hash = $old['access_password_hash'];
-        $statement = app_db()->prepare('UPDATE articles SET title=?, summary=?, content=?, cover_image=?, category=?, tags=?, series_name=?, series_order=?, published=?, content_type=?, static_site_key=?, static_site_name=?, is_locked=?, access_password_hash=?, updated_at=NOW() WHERE id=?');
+        elseif ($hash === null) $hash = $before['access_password_hash'];
+        $statement = app_db()->prepare('UPDATE articles SET title=?, summary=?, content=?, cover_image=?, category=?, tags=?, series_name=?, series_order=?, featured=COALESCE(?,featured), display_order=COALESCE(?,display_order), published=?, content_type=?, static_site_key=?, static_site_name=?, is_locked=?, access_password_hash=?, updated_at=NOW() WHERE id=?');
         $statement->execute(array_merge($values, [$hash, $id]));
         $status = 200;
     }
     $statement = app_db()->prepare('SELECT * FROM articles WHERE id = ?');
     $statement->execute([$id]);
+    $after = $statement->fetch() ?: null;
     if ($oldSiteKey !== '' && $oldSiteKey !== $siteKey) app_article_site_delete_if_unreferenced($oldSiteKey);
     app_public_cache_clear();
-    app_json(app_article_row($statement->fetch(), true, true), $status);
+    app_audit_set_change('article', $id, $before, $after, $before === null ? 'CREATE article' : 'UPDATE article');
+    app_json(app_article_row($after ?: [], true, true), $status);
 }
 
 function app_delete_article(int $id): void
 {
-    $statement = app_db()->prepare('SELECT static_site_key FROM articles WHERE id = ?');
+    app_require_schema_011();
+    $statement = app_db()->prepare('SELECT * FROM articles WHERE id = ?');
     $statement->execute([$id]);
     $row = $statement->fetch();
     if (!$row) app_error(404, 'Article not found.', 'NOT_FOUND');
     app_db()->prepare('DELETE FROM articles WHERE id = ?')->execute([$id]);
     app_article_site_delete_if_unreferenced((string) ($row['static_site_key'] ?? ''));
     app_public_cache_clear();
+    app_audit_set_change('article', $id, $row, null, 'DELETE article');
     app_json(['success' => true]);
 }
 
 function app_generic_save(string $resource, ?int $id): void
 {
+    $before = null;
+    if ($id !== null && in_array($resource, ['projects', 'skills', 'feature_cards'], true)) {
+        $existing = app_db()->prepare("SELECT * FROM `$resource` WHERE id = ?");
+        $existing->execute([$id]);
+        $before = $existing->fetch() ?: null;
+        if ($before === null) app_error(404, 'Resource not found.', 'NOT_FOUND');
+    }
     $body = app_body();
     $now = date('Y-m-d H:i:s');
     if ($resource === 'projects') {
@@ -1466,8 +1880,28 @@ function app_generic_save(string $resource, ?int $id): void
         else { $sql='UPDATE feature_cards SET title=?,title_en=?,description=?,description_en=?,icon=?,gradient=?,display_order=?,enabled=? WHERE id=?'; $values[]=$id; }
     }
     app_db()->prepare($sql)->execute($values);
+    $savedId = $id ?? (int) app_db()->lastInsertId();
+    $afterStatement = app_db()->prepare("SELECT * FROM `$resource` WHERE id = ?");
+    $afterStatement->execute([$savedId]);
+    $after = $afterStatement->fetch() ?: null;
     app_public_cache_clear();
-    app_json(['success'=>true,'id'=>$id ?? (int) app_db()->lastInsertId()], $id===null?201:200);
+    $label = $resource === 'feature_cards' ? 'feature_card' : rtrim($resource, 's');
+    app_audit_set_change($label, $savedId, $before, $after, $before === null ? 'CREATE ' . $label : 'UPDATE ' . $label);
+    app_json(['success'=>true,'id'=>$savedId], $id===null?201:200);
+}
+
+function app_generic_delete(string $resource, int $id): void
+{
+    if (!in_array($resource, ['projects', 'skills', 'feature_cards'], true)) app_error(400, 'Resource not supported.', 'INVALID_RESOURCE');
+    $statement = app_db()->prepare("SELECT * FROM `$resource` WHERE id = ?");
+    $statement->execute([$id]);
+    $before = $statement->fetch();
+    if (!$before) app_error(404, 'Resource not found.', 'NOT_FOUND');
+    app_db()->prepare("DELETE FROM `$resource` WHERE id = ?")->execute([$id]);
+    app_public_cache_clear();
+    $label = $resource === 'feature_cards' ? 'feature_card' : rtrim($resource, 's');
+    app_audit_set_change($label, $id, $before, null, 'DELETE ' . $label);
+    app_json(['success' => true]);
 }
 
 function app_public_site_url(): string
@@ -1566,9 +2000,15 @@ function app_handle_request(): void
         $route = trim((string) $route, '/');
     }
     $route = preg_replace('#^(?:api/)+#', '', $route);
+    app_audit_request_start($route, $method);
+    app_audit_register_shutdown();
     $isAdminRoute = strpos($route, 'admin/') === 0;
     $isAdminAuthRoute = $route === 'auth/login' || $route === 'auth/logout';
     if ($isAdminRoute || $isAdminAuthRoute) app_admin_entry_required();
+    if ($isAdminRoute || $isAdminAuthRoute) {
+        header('Cache-Control: no-store');
+        header('Pragma: no-cache');
+    }
     $needsSession = strpos($route, 'admin/') === 0
         || strpos($route, 'auth/') === 0
         || preg_match('#^public/articles/\d+(?:/unlock)?$#', $route);
@@ -1588,11 +2028,14 @@ function app_handle_request(): void
             app_db()->query('SELECT transferred_bytes FROM site_visits LIMIT 1');
             app_db()->query('SELECT 1 FROM site_analytics_totals LIMIT 1');
             app_require_schema_010();
-            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '010']);
+            app_require_schema_011();
+            app_require_schema_012();
+            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '012']);
         }
         if ($method === 'POST' && $route === 'auth/login') app_handle_login();
         if ($method === 'POST' && $route === 'auth/logout') {
             if (!empty($_SESSION['admin_id'])) app_csrf_required();
+            app_audit_logout();
             app_destroy_session_state();
             app_json(['success' => true]);
         }
@@ -1606,6 +2049,7 @@ function app_handle_request(): void
             app_json(['coffeeCount'=>$profile['coffeeCount'],'projectCount'=>$projects,'articleCount'=>$articles,'starsCount'=>$profile['starsCount'] ?: $stars]);
         }
         if ($method === 'GET' && $route === 'public/home') {
+            app_require_schema_011();
             $language = strtolower((string) ($_GET['lang'] ?? 'zh')) === 'en' ? 'en' : 'zh';
             $payload = app_public_cache_remember('home-' . $language, 20, function (): array {
                 $articlePage=$_GET['page']??null; $articleSize=$_GET['size']??null; $_GET['page']=0; $_GET['size']=3; $articleResult=app_articles(false); if($articlePage===null)unset($_GET['page']);else $_GET['page']=$articlePage; if($articleSize===null)unset($_GET['size']);else $_GET['size']=$articleSize;
@@ -1614,14 +2058,52 @@ function app_handle_request(): void
             });
             app_json_cached($payload, 30, 120);
         }
-        if ($method === 'GET' && $route === 'public/articles') app_json(app_articles(false));
+        if ($method === 'GET' && $route === 'public/articles/archive') {
+            app_require_schema_011();
+            $rawYear = trim((string) ($_GET['year'] ?? ''));
+            $year = 0;
+            if ($rawYear !== '') {
+                $maximumYear = (int) date('Y') + 1;
+                if (!preg_match('/^\d{4}$/', $rawYear) || (int) $rawYear < 1970 || (int) $rawYear > $maximumYear) {
+                    app_error(400, 'Year must be between 1970 and ' . $maximumYear . '.', 'INVALID_YEAR');
+                }
+                $year = (int) $rawYear;
+            }
+            app_json_cached(app_public_cache_remember('article-archive-' . $year, 60, function () use ($year): array { return app_article_archive($year); }), 60, 300);
+        }
+        if ($method === 'GET' && $route === 'public/articles/series') {
+            app_require_schema_011();
+            app_json_cached(app_public_cache_remember('article-series', 60, function (): array { return app_article_series(); }), 60, 300);
+        }
+        if ($method === 'GET' && $route === 'public/articles/popular') {
+            app_require_schema_011();
+            $limit = app_clamp(app_int($_GET['limit'] ?? 6, 6), 1, 20);
+            app_json_cached(app_public_cache_remember('article-popular-' . $limit, 15, function (): array { return app_discovery_articles('popular'); }), 15, 60);
+        }
+        if ($method === 'GET' && $route === 'public/articles/featured') {
+            app_require_schema_011();
+            $limit = app_clamp(app_int($_GET['limit'] ?? 6, 6), 1, 20);
+            app_json_cached(app_public_cache_remember('article-featured-' . $limit, 60, function (): array { return app_discovery_articles('featured'); }), 60, 300);
+        }
+        if ($method === 'GET' && $route === 'public/discovery') {
+            app_require_schema_011();
+            $limit = app_clamp(app_int($_GET['limit'] ?? 6, 6), 1, 20);
+            app_json_cached(app_public_cache_remember('article-discovery-' . $limit, 15, function () use ($limit): array {
+                return ['featured' => app_discovery_articles('featured', $limit), 'popular' => app_discovery_articles('popular', $limit), 'series' => app_article_series(3)];
+            }), 15, 60);
+        }
+        if ($method === 'GET' && $route === 'public/articles') { app_require_schema_011(); app_json(app_articles(false)); }
         if (in_array($method, ['GET', 'HEAD'], true)
             && preg_match('#^public/article-sites/(\d+)/([a-f0-9-]{32,64})/(\d+)/(\d+)/([a-f0-9]{64})(?:/(.*))?$#i', $route, $match)) {
             app_article_site_serve((int) $match[1], $match[2], (int) $match[3], (int) $match[4], strtolower($match[5]), (string) ($match[6] ?? ''));
         }
         if ($method === 'GET' && preg_match('#^public/articles/(\d+)$#', $route, $match)) {
+            app_require_schema_011();
             $statement=app_db()->prepare('SELECT * FROM articles WHERE id=? AND published=1'); $statement->execute([(int)$match[1]]); $row=$statement->fetch(); if(!$row)app_error(404, 'Article not found.', 'NOT_FOUND');
-            $unlocked=!empty($_SESSION['article_unlocks'][(int)$row['id']]); if (session_status() === PHP_SESSION_ACTIVE) session_write_close(); if($row['is_locked']&&!$unlocked){$article=app_article_row($row,false);$article['requiresPassword']=true;app_json($article);} app_db()->prepare('UPDATE articles SET views=views+1 WHERE id=?')->execute([$row['id']]); $row['views']++;
+            $unlockValue = $_SESSION['article_unlocks'][(int) $row['id']] ?? '';
+            $unlocked = is_string($unlockValue) && hash_equals(app_article_unlock_token($row), $unlockValue);
+            header('Cache-Control: no-store');
+            if (session_status() === PHP_SESSION_ACTIVE) session_write_close(); if($row['is_locked']&&!$unlocked){$article=app_article_row($row,false);$article['requiresPassword']=true;app_json($article);} app_db()->prepare('UPDATE articles SET views=views+1 WHERE id=?')->execute([$row['id']]); $row['views']++;
             $article=app_article_row($row,true);$article['requiresPassword']=false;$article['navigation']=app_article_navigation((int) $row['id']);app_json($article);
         }
         if ($method === 'POST' && preg_match('#^public/articles/(\d+)/unlock$#', $route, $match)) {
@@ -1686,8 +2168,9 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'admin/session') app_json(['authenticated'=>true,'username'=>$_SESSION['admin_username'],'csrfToken'=>app_ensure_csrf()]);
         if ($method === 'GET' && $route === 'admin/dashboard-stats') app_json(array_merge(['articleCount'=>(int)app_db()->query('SELECT COUNT(*) FROM articles')->fetchColumn(),'publishedArticleCount'=>(int)app_db()->query('SELECT COUNT(*) FROM articles WHERE published=1')->fetchColumn(),'projectCount'=>(int)app_db()->query('SELECT COUNT(*) FROM projects')->fetchColumn(),'skillCount'=>(int)app_db()->query('SELECT COUNT(*) FROM skills')->fetchColumn(),'totalViews'=>(int)app_db()->query('SELECT COALESCE(SUM(views),0) FROM articles')->fetchColumn()], app_analytics_dashboard_summary()));
         if ($method === 'GET' && $route === 'admin/analytics') app_json(app_analytics_report());
+        if ($method === 'GET' && $route === 'admin/audit-logs') { app_require_schema_012(); app_json(app_audit_logs()); }
         if ($method === 'GET' && $route === 'admin/backup-manifest') app_json(app_admin_backup_manifest());
-        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '010', 'manifest' => app_admin_backup_manifest()]); }
+        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '012', 'manifest' => app_admin_backup_manifest()]); }
         if ($method === 'POST' && $route === 'admin/backup-export') app_admin_backup_export();
         if ($method === 'POST' && $route === 'admin/backup-import') app_admin_backup_import();
         if ($method === 'GET' && $route === 'admin/friends') app_json(app_admin_friend_links());
@@ -1699,12 +2182,19 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'admin/guest-messages') app_json(app_admin_guest_messages());
         if ($method === 'PUT' && preg_match('#^admin/guest-messages/(\d+)/status$#', $route, $match)) app_json(app_update_guest_message_status((int) $match[1]));
         if ($method === 'DELETE' && preg_match('#^admin/guest-messages/(\d+)$#', $route, $match)) app_json(app_delete_guest_message((int) $match[1]));
-        if ($method === 'GET' && $route === 'admin/articles') app_json(app_articles(true));
-        if ($method === 'POST' && $route === 'admin/articles') app_save_article(null);
+        if ($method === 'GET' && $route === 'admin/articles') { app_require_schema_011(); app_json(app_articles(true)); }
+        if ($method === 'GET' && $route === 'admin/article-series') {
+            app_require_schema_011();
+            $statement = app_db()->query("SELECT series_name AS name, COUNT(*) AS article_count FROM articles WHERE TRIM(series_name) <> '' GROUP BY series_name ORDER BY series_name ASC LIMIT 200");
+            app_json(array_map(static function (array $row): array {
+                return ['name' => (string) $row['name'], 'articleCount' => (int) $row['article_count']];
+            }, $statement->fetchAll()));
+        }
+        if ($method === 'POST' && $route === 'admin/articles') { app_require_schema_011(); app_save_article(null); }
         if (preg_match('#^admin/articles/(\d+)$#',$route,$match)) {
             $id=(int)$match[1];
-            if($method==='GET'){$statement=app_db()->prepare('SELECT * FROM articles WHERE id=?');$statement->execute([$id]);$article=$statement->fetch();if(!$article)app_error(404, 'Article not found.', 'NOT_FOUND');app_json(app_article_row($article,true,true));}
-            if($method==='PUT')app_save_article($id);
+            if($method==='GET'){app_require_schema_011();$statement=app_db()->prepare('SELECT * FROM articles WHERE id=?');$statement->execute([$id]);$article=$statement->fetch();if(!$article)app_error(404, 'Article not found.', 'NOT_FOUND');app_json(app_article_row($article,true,true));}
+            if($method==='PUT'){app_require_schema_011();app_save_article($id);}
             if($method==='DELETE')app_delete_article($id);
         }
         if ($method === 'POST' && $route === 'admin/article-sites') {
@@ -1723,7 +2213,7 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'admin/projects') app_json(app_projects(false));
         if ($method === 'GET' && $route === 'admin/skills') app_json(app_skills());
         if ($method === 'GET' && $route === 'admin/feature-cards') app_json(app_feature_cards(false));
-        foreach(['projects','skills','feature-cards'] as $resource){$dbResource=$resource==='feature-cards'?'feature_cards':$resource;if($method==='POST'&&$route==='admin/'.$resource)app_generic_save($dbResource,null);if(preg_match('#^admin/'.preg_quote($resource,'#').'/(\d+)$#',$route,$match)){if($method==='PUT')app_generic_save($dbResource,(int)$match[1]);if($method==='DELETE'){$delete=app_db()->prepare("DELETE FROM $dbResource WHERE id=?");$delete->execute([(int)$match[1]]);if($delete->rowCount()===0)app_error(404, 'Resource not found.', 'NOT_FOUND');app_public_cache_clear();app_json(['success'=>true]);}}}
+        foreach(['projects','skills','feature-cards'] as $resource){$dbResource=$resource==='feature-cards'?'feature_cards':$resource;if($method==='POST'&&$route==='admin/'.$resource)app_generic_save($dbResource,null);if(preg_match('#^admin/'.preg_quote($resource,'#').'/(\d+)$#',$route,$match)){if($method==='PUT')app_generic_save($dbResource,(int)$match[1]);if($method==='DELETE')app_generic_delete($dbResource,(int)$match[1]);}}
         if ($method === 'GET' && $route === 'admin/profile') app_json(app_profile(false));
         if ($method === 'PUT' && $route === 'admin/profile') { $b=app_body();$s=app_db()->prepare('UPDATE site_profile SET nickname=?,avatar=?,bio=?,bio_en=?,location=?,website=?,github=?,twitter=?,linkedin=?,email_public=?,tags=?,tags_en=?,welcome_text=?,welcome_text_en=?,cta_title=?,cta_title_en=?,cta_description=?,cta_description_en=?,coffee_count=?,stars_count=?,updated_at=NOW() WHERE id=1');$s->execute([trim((string)($b['nickname']??'')),trim((string)($b['avatar']??'')),(string)($b['bio']??''),(string)($b['bioEn']??''),trim((string)($b['location']??'')),trim((string)($b['website']??'')),trim((string)($b['github']??'')),trim((string)($b['twitter']??'')),trim((string)($b['linkedin']??'')),trim((string)($b['emailPublic']??'')),trim((string)($b['tags']??'')),trim((string)($b['tagsEn']??'')),trim((string)($b['welcomeText']??'')),trim((string)($b['welcomeTextEn']??'')),trim((string)($b['ctaTitle']??'')),trim((string)($b['ctaTitleEn']??'')),trim((string)($b['ctaDescription']??'')),trim((string)($b['ctaDescriptionEn']??'')),app_int($b['coffeeCount']??0),app_int($b['starsCount']??0)]);app_public_cache_clear();app_json(app_profile(false)); }
         if ($method === 'POST' && $route === 'admin/profile/avatar') {

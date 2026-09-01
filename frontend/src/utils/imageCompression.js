@@ -1,6 +1,11 @@
 const DEFAULT_MAX_DIMENSION = 1920
 const DEFAULT_MAX_BYTES = 1.5 * 1024 * 1024
 const QUALITY_STEPS = [0.86, 0.78, 0.7, 0.62, 0.54]
+const SUPPORTED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+
+export function isSupportedImageType(type) {
+  return typeof type === 'string' && SUPPORTED_IMAGE_TYPES.has(type.toLowerCase())
+}
 
 export function calculateContainedSize(width, height, maxDimension = DEFAULT_MAX_DIMENSION) {
   const safeWidth = Math.max(1, Number(width) || 1)
@@ -52,7 +57,7 @@ function getExtension(type) {
 }
 
 export async function optimizeImageFile(file, options = {}) {
-  if (!file || typeof file.type !== 'string' || !file.type.startsWith('image/')) {
+  if (!file || !isSupportedImageType(file.type)) {
     throw new Error('请选择图片文件')
   }
 

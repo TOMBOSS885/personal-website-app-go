@@ -83,6 +83,8 @@ export function createWidget(options: WidgetOptions): Widget {
   const useSlide = transitionType !== 'fade';
 
   const container = document.createElement('div');
+  container.className = 'l2d-widget-container';
+  container.dataset['position'] = position;
   Object.assign(container.style, {
     position: 'fixed',
     bottom: '0',
@@ -95,6 +97,7 @@ export function createWidget(options: WidgetOptions): Widget {
   });
 
   const canvas = document.createElement('canvas');
+  canvas.className = 'l2d-widget-canvas';
   canvas.width = width;
   canvas.height = height;
   Object.assign(canvas.style, { width: '100%', height: '100%', pointerEvents: 'auto' });
@@ -236,10 +239,14 @@ export function createWidget(options: WidgetOptions): Widget {
       tips?.destroy();
       menu.destroy();
       statusBar.destroy();
+      // Stop the outgoing canvas from intercepting controls while its exit
+      // transition finishes.
+      canvas.style.pointerEvents = 'none';
+      container.style.pointerEvents = 'none';
       applyStyle(container, useSlide, false);
       await waitExit();
       l2dInstance.destroy();
-      document.body.removeChild(container);
+      container.remove();
     },
   };
 

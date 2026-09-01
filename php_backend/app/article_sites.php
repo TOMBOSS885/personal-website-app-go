@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 const APP_ARTICLE_SITE_DIR = 'article-sites';
-const APP_ARTICLE_SITE_HTML_MAX_BYTES = 2 * 1024 * 1024;
-const APP_ARTICLE_SITE_FILE_MAX_BYTES = 16 * 1024 * 1024;
+const APP_ARTICLE_SITE_COMPAT_JS_PREFIX = 'omblog-compat-';
+const APP_ARTICLE_SITE_RESIZE_JS = 'omblog-resize.js';
 
 function app_article_site_upload(): array
 {
@@ -146,10 +146,6 @@ function app_article_site_extract(ZipArchive $zip, string $prefix, string $stage
             throw new InvalidArgumentException('不支持静态文件类型：.' . ($extension ?: '(无扩展名)'));
         }
         $declaredSize = max(0, (int) ($stat['size'] ?? 0));
-        $fileLimit = in_array($extension, ['html', 'htm'], true)
-            ? APP_ARTICLE_SITE_HTML_MAX_BYTES
-            : APP_ARTICLE_SITE_FILE_MAX_BYTES;
-        if ($declaredSize > $fileLimit) throw new InvalidArgumentException('静态前端单个文件过大：' . $cleaned);
         if (++$count > $maxFiles) throw new InvalidArgumentException('静态前端文件数量超过限制');
         if ($declaredSize > $maxTotal - $total) throw new InvalidArgumentException('静态前端解压总大小超过限制');
 
@@ -172,7 +168,7 @@ function app_article_site_extract(ZipArchive $zip, string $prefix, string $stage
                 if ($chunk === false) throw new InvalidArgumentException('读取 ZIP 内容失败');
                 if ($chunk === '') continue;
                 $length = strlen($chunk);
-                if ($written + $length > $fileLimit || $total + $written + $length > $maxTotal) {
+                if ($total + $written + $length > $maxTotal) {
                     throw new InvalidArgumentException('静态前端解压后超过大小限制');
                 }
                 if (fwrite($destination, $chunk) !== $length) throw new RuntimeException('写入静态前端文件失败');
@@ -228,6 +224,14 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
     $cleaned = app_article_site_clean_path($path);
     if ($cleaned === null) app_error(404, '静态资源不存在', 'NOT_FOUND');
     $root = app_article_site_root() . DIRECTORY_SEPARATOR . $key;
+    if ($cleaned === APP_ARTICLE_SITE_RESIZE_JS) {
+        app_article_site_headers($expires);
+        app_article_site_send_js(app_article_site_resize_bridge_js());
+    }
+    if (preg_match('/^' . preg_quote(APP_ARTICLE_SITE_COMPAT_JS_PREFIX, '/') . '(\d+)\.js$/', $cleaned, $match)) {
+        app_article_site_headers($expires);
+        app_article_site_send_compat_js($root . DIRECTORY_SEPARATOR . 'index.html', (int) $match[1]);
+    }
     $target = app_article_site_target($root, $cleaned);
     if (is_dir($target)) $target .= DIRECTORY_SEPARATOR . 'index.html';
     if (!is_file($target)) {
@@ -245,8 +249,6 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
 
 function app_article_site_send_html(string $target, string $baseUrl): void
 {
-    $size = filesize($target);
-    if ($size === false || $size > APP_ARTICLE_SITE_HTML_MAX_BYTES) app_error(404, '静态页面不可用', 'NOT_FOUND');
     $html = file_get_contents($target);
     if ($html === false) app_error(404, '静态页面不可用', 'NOT_FOUND');
     if (stripos($html, '<base ') === false) {
@@ -254,11 +256,10 @@ function app_article_site_send_html(string $target, string $baseUrl): void
         $head = stripos($html, '<head>');
         $html = $head === false ? $base . $html : substr($html, 0, $head + 6) . $base . substr($html, $head + 6);
     }
-    $resizeBridge = app_article_site_resize_bridge();
+    $html = app_article_site_compat_html($html);
+    $resizeTag = '<script src="' . htmlspecialchars(APP_ARTICLE_SITE_RESIZE_JS, ENT_QUOTES, 'UTF-8') . '" defer></script>';
     $bodyEnd = strripos($html, '</body>');
-    $html = $bodyEnd === false
-        ? $html . $resizeBridge
-        : substr($html, 0, $bodyEnd) . $resizeBridge . substr($html, $bodyEnd);
+    $html = $bodyEnd === false ? $html . $resizeTag : substr($html, 0, $bodyEnd) . $resizeTag . substr($html, $bodyEnd);
     header('Content-Type: text/html; charset=utf-8');
     header("Content-Security-Policy: sandbox allow-scripts allow-forms allow-modals allow-pointer-lock allow-popups allow-downloads allow-presentation; default-src 'self' data: blob: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src 'self' data: blob: https:; connect-src 'self' https: wss:; frame-src 'self' https:; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https:");
     header('Content-Length: ' . strlen($html));
@@ -266,10 +267,149 @@ function app_article_site_send_html(string $target, string $baseUrl): void
     exit;
 }
 
-function app_article_site_resize_bridge(): string
+function app_article_site_compat_html(string $html): string
 {
-    return <<<'HTML'
-<script data-omblog-resize-bridge>
+    return app_article_site_compat_rewrite($html)[0];
+}
+
+function app_article_site_compat_scripts(string $html): array
+{
+    return app_article_site_compat_rewrite($html)[1];
+}
+
+function app_article_site_compat_rewrite(string $html): array
+{
+    $length = strlen($html);
+    $offset = 0;
+    $out = '';
+    $scripts = [];
+    while ($offset < $length) {
+        $scriptStart = stripos($html, '<script', $offset);
+        $linkStart = stripos($html, '<link', $offset);
+        $start = app_article_site_earliest_tag($scriptStart, $linkStart);
+        if ($start === false) {
+            $out .= substr($html, $offset);
+            break;
+        }
+
+        $isScript = $scriptStart === $start;
+        $tagName = $isScript ? 'script' : 'link';
+        $nameLength = strlen($tagName);
+        $afterName = $start + 1 + $nameLength;
+        if ($afterName < $length) {
+            $ch = $html[$afterName];
+            if ($ch !== '>' && $ch !== '/' && $ch !== ' ' && $ch !== "\t" && $ch !== "\n" && $ch !== "\r") {
+                $out .= substr($html, $offset, $afterName - $offset);
+                $offset = $afterName;
+                continue;
+            }
+        }
+
+        $tagEnd = strpos($html, '>', $start);
+        if ($tagEnd === false) {
+            $out .= substr($html, $offset);
+            break;
+        }
+
+        $out .= substr($html, $offset, $start - $offset);
+        $attrs = substr($html, $start + 1 + $nameLength, $tagEnd - ($start + 1 + $nameLength));
+
+        if (!$isScript) {
+            $out .= '<link' . app_article_site_strip_crossorigin($attrs) . '>';
+            $offset = $tagEnd + 1;
+            continue;
+        }
+
+        $close = stripos($html, '</script>', $tagEnd);
+        if ($close === false) {
+            $out .= substr($html, $start);
+            break;
+        }
+        $body = substr($html, $tagEnd + 1, $close - ($tagEnd + 1));
+        $full = substr($html, $start, $close + 9 - $start);
+        [$rewritten, $extracted] = app_article_site_compat_script($attrs, $body, $full, count($scripts));
+        if ($extracted !== null) $scripts[] = $extracted;
+        $out .= $rewritten;
+        $offset = $close + 9;
+    }
+
+    return [$out, $scripts];
+}
+
+function app_article_site_earliest_tag($first, $second)
+{
+    if ($first === false) return $second;
+    if ($second === false) return $first;
+    return $first <= $second ? $first : $second;
+}
+
+function app_article_site_compat_script(string $attrs, string $body, string $full, int $index): array
+{
+    $isModule = (bool) preg_match('/\btype\s*=\s*(?:(["\'])module\1|module(?![\w-]))/i', $attrs);
+    if ($isModule && preg_match('/\bnomodule\b/i', $attrs)) {
+        return [$full, null];
+    }
+    if ($isModule && app_article_site_script_needs_module($body)) {
+        return [$full, null];
+    }
+
+    if ($isModule) {
+        $attrs = preg_replace('/\s*\btype\s*=\s*(?:(["\'])module\1|module(?![\w-]))/i', '', $attrs) ?? $attrs;
+    }
+    $attrs = app_article_site_strip_crossorigin($attrs);
+    $hasSrc = (bool) preg_match('/\bsrc\s*=/i', $attrs);
+    if ($hasSrc) {
+        if ($isModule && !preg_match('/\b(?:defer|async)\b/i', $attrs)) $attrs .= ' defer';
+        $attrs = trim(preg_replace('/\s+/', ' ', $attrs) ?? $attrs);
+        $html = $attrs === '' ? '<script>' . $body . '</script>' : '<script ' . $attrs . '>' . $body . '</script>';
+        return [$html, null];
+    }
+    if (trim($body) === '') return [$full, null];
+
+    $src = APP_ARTICLE_SITE_COMPAT_JS_PREFIX . $index . '.js';
+    return ['<script src="' . htmlspecialchars($src, ENT_QUOTES, 'UTF-8') . '" defer></script>', $body];
+}
+
+function app_article_site_script_needs_module(string $body): bool
+{
+    if (strpos($body, 'import.meta') !== false) return true;
+    if (strpos($body, 'import') !== false
+        && preg_match('/(?:^|[;{}\(\[\s])import\s*(?:\(|[*\w{\'"])/', $body)) {
+        return true;
+    }
+    if (strpos($body, 'export') !== false
+        && preg_match('/(?:^|[;{}\(\[\s])export\s+(?:default|async|function|class|const|let|var|enum|type|\{|\*)/', $body)) {
+        return true;
+    }
+    return false;
+}
+
+function app_article_site_strip_crossorigin(string $attrs): string
+{
+    $attrs = preg_replace('/\s*\bcrossorigin(?:\s*=\s*(["\']?)[^"\'\s>]*\1)?/i', '', $attrs) ?? $attrs;
+    return rtrim($attrs);
+}
+
+function app_article_site_send_compat_js(string $htmlPath, int $index): void
+{
+    $html = @file_get_contents($htmlPath);
+    if ($html === false) app_error(404, '静态页面不可用', 'NOT_FOUND');
+    $scripts = app_article_site_compat_scripts($html);
+    if (!isset($scripts[$index])) app_error(404, '静态资源不存在', 'NOT_FOUND');
+    app_article_site_send_js($scripts[$index]);
+}
+
+function app_article_site_send_js(string $javascript): void
+{
+    header('Content-Type: application/javascript; charset=utf-8');
+    header('Content-Length: ' . strlen($javascript));
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'HEAD') echo $javascript;
+    exit;
+}
+
+function app_article_site_resize_bridge_js(): string
+{
+    return <<<'JS'
 (function () {
   if (window.parent === window || window.__OMBLOG_STATIC_RESIZE__) return;
   window.__OMBLOG_STATIC_RESIZE__ = true;
@@ -325,8 +465,7 @@ function app_article_site_resize_bridge(): string
   window.setTimeout(scheduleMeasure, 250);
   window.setTimeout(scheduleMeasure, 1000);
 })();
-</script>
-HTML;
+JS;
 }
 
 function app_article_site_send_file(string $target, string $extension): void
@@ -378,8 +517,6 @@ function app_article_site_headers(int $expires): void
     header('Cache-Control: private, max-age=' . $remaining);
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: no-referrer');
-    header('Access-Control-Allow-Origin: *');
-    header('Content-Security-Policy: sandbox');
 }
 
 function app_article_site_version(array $article): int

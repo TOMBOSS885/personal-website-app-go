@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import ArticleCard from '../components/ArticleCard'
-import { Search, Filter, Grid3x3, LayoutList, FileText, Sparkles, Tag, X } from 'lucide-react'
+import SeriesCollection from '../components/SeriesCollection'
+import LoadingIndicator from '../components/LoadingIndicator'
+import { Search, Filter, Grid3x3, LayoutList, FileText, Layers3, Tag, X } from 'lucide-react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 
@@ -19,6 +21,9 @@ export default function BlogPage() {
   const [viewMode, setViewMode] = useState('grid')
   const [categories, setCategories] = useState([])
   const [allTags, setAllTags] = useState([])
+  const [series, setSeries] = useState([])
+  const [seriesLoading, setSeriesLoading] = useState(false)
+  const contentView = searchParams.get('view') === 'series' ? 'series' : 'articles'
   const { language } = useLanguage()
   const { t } = useTranslation()
 
@@ -83,6 +88,25 @@ export default function BlogPage() {
 	}).catch(() => setCategories([t('common.all')]))
   }, [language])
 
+  useEffect(() => {
+    if (contentView !== 'series' || series.length > 0) return undefined
+    const controller = new AbortController()
+    setSeriesLoading(true)
+    fetch('/api/public/articles/series', { signal: controller.signal })
+      .then(response => response.ok ? response.json() : [])
+      .then(data => setSeries(Array.isArray(data) ? data : []))
+      .catch(error => { if (error.name !== 'AbortError') setSeries([]) })
+      .finally(() => { if (!controller.signal.aborted) setSeriesLoading(false) })
+    return () => controller.abort()
+  }, [contentView, series.length])
+
+  const selectContentView = nextView => {
+    const nextParams = new URLSearchParams(searchParams)
+    if (nextView === 'series') nextParams.set('view', 'series')
+    else nextParams.delete('view')
+    setSearchParams(nextParams)
+  }
+
   // 搜索和分类过滤（前端过滤，不影响标签筛选因为后端已处理）
   useEffect(() => {
     let result = articles
@@ -122,7 +146,7 @@ export default function BlogPage() {
   }
 
   return (
-    <div className="min-h-screen relative">
+    <div className="min-h-screen relative overflow-x-hidden">
       {/* 背景装饰 */}
       <div className="absolute inset-0 bg-gradient-to-b from-indigo-50/50 via-white to-white pointer-events-none dark:from-slate-950/70 dark:via-slate-950/60 dark:to-slate-950/75" />
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-indigo-200/30 rounded-full blur-3xl dark:bg-indigo-500/10" />
@@ -148,8 +172,13 @@ export default function BlogPage() {
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             {t('blog.subtitle')}
           </p>
+          <div className="mx-auto mt-8 grid w-full max-w-sm grid-cols-2 rounded-xl border border-white/70 bg-white/75 p-1 shadow-sm backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/75" aria-label="博客内容视图">
+            <button type="button" onClick={() => selectContentView('articles')} className={`flex h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition ${contentView === 'articles' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'}`}><FileText className="h-4 w-4" />全部文章</button>
+            <button type="button" onClick={() => selectContentView('series')} className={`flex h-11 items-center justify-center gap-2 rounded-lg text-sm font-semibold transition ${contentView === 'series' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-800'}`}><Layers3 className="h-4 w-4" />专题系列</button>
+          </div>
         </motion.div>
 
+        {contentView === 'articles' ? <>
         {/* 搜索和过滤栏 */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -344,6 +373,12 @@ export default function BlogPage() {
               ))}
             </div>
           </motion.div>
+        )}
+        </> : (
+          <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} aria-label="专题系列">
+            <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100">按专题连续阅读</h2><p className="mt-2 text-sm text-gray-500 dark:text-slate-400">文章按照后台设置的专题顺序排列。</p></div><span className="text-sm font-medium text-indigo-600 dark:text-indigo-300">{series.length} 个专题</span></div>
+            {seriesLoading ? <div className="flex justify-center py-24"><LoadingIndicator size={40} label="加载专题" /></div> : <SeriesCollection series={series} compact />}
+          </motion.section>
         )}
       </div>
     </div>

@@ -14,18 +14,28 @@ export function getSharedHostTransport(method, isAdminRequest) {
   return { method, override: '' }
 }
 
+export function classifyApiRequest(value, origin = typeof window === 'undefined' ? 'http://localhost' : window.location.origin) {
+  try {
+    const url = new URL(typeof value === 'string' ? value : value?.url || '', origin)
+    if (url.origin !== origin) return { isAdminRequest: false, isAdminAuth: false, isAuthMutation: false }
+    const path = url.pathname.replace(/\/+$/, '')
+    const isAdminRequest = path === '/api/admin' || path.startsWith('/api/admin/')
+    const isAdminAuth = path === '/api/auth/login' || path === '/api/auth/logout'
+    return { isAdminRequest, isAdminAuth, isAuthMutation: path === '/api/auth/logout' }
+  } catch {
+    return { isAdminRequest: false, isAdminAuth: false, isAuthMutation: false }
+  }
+}
+
 export function installAdminFetchInterceptor() {
   if (installed || typeof window === 'undefined') return
   installed = true
 
   const originalFetch = window.fetch.bind(window)
   window.fetch = async (input, init = {}) => {
-    const url = typeof input === 'string' ? input : input?.url || ''
     const method = String(init.method || input?.method || 'GET').toUpperCase()
     const headers = new Headers(init.headers || input?.headers || {})
-    const isAdminRequest = url.includes('/api/admin/') || url.endsWith('/api/admin')
-    const isAdminAuth = url.includes('/api/auth/login') || url.includes('/api/auth/logout')
-    const isAuthMutation = url.includes('/api/auth/logout')
+    const { isAdminRequest, isAdminAuth, isAuthMutation } = classifyApiRequest(input)
     const transport = getSharedHostTransport(method, isAdminRequest)
 
     // Shared-host authentication is cookie/session based. Drop legacy JWT headers.

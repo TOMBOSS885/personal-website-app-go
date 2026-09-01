@@ -8,6 +8,8 @@ const localIcons: Record<string, string> = {
 };
 
 async function fetchIcon(iconId: string): Promise<string | null> {
+  if (!/^\w+(?:-\w+)*:\w+(?:-\w+)*$/.test(iconId))
+    return null;
   if (localIcons[iconId])
     return localIcons[iconId];
   if (iconCache.has(iconId))
@@ -17,10 +19,12 @@ async function fetchIcon(iconId: string): Promise<string | null> {
   if (!prefix || !name)
     return null;
   try {
-    const res = await fetch(`https://api.iconify.design/${prefix}/${name}.svg`);
+    const res = await fetch(`https://api.iconify.design/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}.svg`, { referrerPolicy: 'no-referrer' });
     if (!res.ok)
       return null;
     const svg = await res.text();
+    if (svg.length > 128 * 1024 || !/^\s*(?:<\?xml[^>]*>\s*)?<svg\b/i.test(svg))
+      return null;
     iconCache.set(iconId, svg);
     return svg;
   }
@@ -53,9 +57,15 @@ function createMenuButton(item: MenuItem, widget: Widget, primaryColor: string):
 
   btn.addEventListener('mouseenter', () => {
     btn.style.color = 'rgba(255,255,255,1)';
+    const image = btn.querySelector('img');
+    if (image)
+      image.style.opacity = '1';
   });
   btn.addEventListener('mouseleave', () => {
     btn.style.color = 'rgba(255,255,255,0.75)';
+    const image = btn.querySelector('img');
+    if (image)
+      image.style.opacity = '0.75';
   });
 
   btn.addEventListener('click', () => {
@@ -66,20 +76,33 @@ function createMenuButton(item: MenuItem, widget: Widget, primaryColor: string):
     fetchIcon(item.icon).then(svg => {
       if (!svg)
         return;
-      btn.innerHTML = svg;
-      btn.title = item.label;
-      const svgEl = btn.querySelector('svg');
-      if (svgEl) {
-        Object.assign(svgEl.style, {
-          width: '1em',
-          height: '1em',
-          pointerEvents: 'none',
-        });
-      }
+      // SVG is loaded as an image document so remote markup never enters the
+      // widget DOM (and cannot execute event handlers or script elements).
+      const image = document.createElement('img');
+      image.alt = '';
+      image.decoding = 'async';
+      image.setAttribute('aria-hidden', 'true');
+      Object.assign(image.style, {
+        width: '1em',
+        height: '1em',
+        opacity: '0.75',
+        pointerEvents: 'none',
+        transition: 'opacity 0.15s',
+      });
+      image.addEventListener('load', () => btn.replaceChildren(image), { once: true });
+      image.src = toSvgImageSource(svg);
     });
   }
 
   return btn;
+}
+
+function toSvgImageSource(svg: string): string {
+  const standaloneSvg = /<svg\b[^>]*\bxmlns\s*=/i.test(svg)
+    ? svg
+    : svg.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  const visibleSvg = standaloneSvg.replace(/\bcurrentColor\b/g, '#ffffff');
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(visibleSvg)}`;
 }
 
 export interface MenuHandle {

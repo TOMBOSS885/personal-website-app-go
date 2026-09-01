@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Compress-Archive -Path 'blog-chaos-article' -DestinationPath 'blog-chaos-article.zip' -Force\")",
+      "Bash(powershell -Command \"Add-Type -AssemblyName System.IO.Compression.FileSystem; [System.IO.Compression.ZipFile]::OpenRead\\('blog-chaos-article.zip'\\).Entries.FullName\")",
+      "Bash(pwd && ls -la /Users/dev/workspace-8d83e74f 2>/dev/null | head -50)",
+      "Read(//Users/dev/**)",
+      "WebSearch",
+      "Read(//tmp/claude-501/-Users-wwzz-Downloads-proxyclawd/88833871-9d1c-410a-8425-a5a54e5377ef/scratchpad/**)",
+      "Bash(python3 -c ' *)",
+      "WebFetch(domain:leerob.com)",
+      "WebFetch(domain:brittanychiang.com)",
+      "Bash(awk '{printf \"%8.0fKB  %s\\\\n\", $5/1024, $9}')"
+    ]
+  }
+}

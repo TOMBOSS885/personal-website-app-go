@@ -1,0 +1,9 @@
+Options -Indexes
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule (^|/)\. - [F,L,NC]
+RewriteRule ^article-sites(?:/|$) - [F,L,NC]
+</IfModule>
+<FilesMatch "\.(?:php[0-9]?|phtml|phar|cgi|pl|py|sh|exe|bat|cmd|html?|svg)$">
+  Require all denied
+</FilesMatch>

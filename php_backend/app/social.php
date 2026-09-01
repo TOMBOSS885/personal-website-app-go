@@ -58,6 +58,13 @@ function app_admin_friend_links(): array
 
 function app_save_friend_link(?int $id): array
 {
+    $before = null;
+    if ($id !== null) {
+        $existing = app_db()->prepare('SELECT * FROM friend_links WHERE id = ?');
+        $existing->execute([$id]);
+        $before = $existing->fetch() ?: null;
+        if ($before === null) app_error(404, '友链不存在', 'NOT_FOUND');
+    }
     $body = app_body();
     $name = app_social_text($body['name'] ?? '', 80, '站点名称', true);
     $description = app_social_text($body['description'] ?? '', 300, '站点描述');
@@ -84,15 +91,22 @@ function app_save_friend_link(?int $id): array
     app_public_cache_clear();
     $statement = app_db()->prepare('SELECT * FROM friend_links WHERE id = ?');
     $statement->execute([$id]);
-    return app_friend_link_row($statement->fetch());
+    $after = $statement->fetch() ?: null;
+    app_audit_set_change('friend_link', $id, $before, $after, $before === null ? 'CREATE friend_link' : 'UPDATE friend_link');
+    return app_friend_link_row($after ?: []);
 }
 
 function app_delete_friend_link(int $id): array
 {
+    $beforeStatement = app_db()->prepare('SELECT * FROM friend_links WHERE id = ?');
+    $beforeStatement->execute([$id]);
+    $before = $beforeStatement->fetch() ?: null;
+    if ($before === null) app_error(404, '友链不存在', 'NOT_FOUND');
     $statement = app_db()->prepare('DELETE FROM friend_links WHERE id = ?');
     $statement->execute([$id]);
     if ($statement->rowCount() === 0) app_error(404, '友链不存在', 'NOT_FOUND');
     app_public_cache_clear();
+    app_audit_set_change('friend_link', $id, $before, null, 'DELETE friend_link');
     return ['success' => true];
 }
 
@@ -305,6 +319,10 @@ function app_admin_guest_messages(): array
 
 function app_update_guest_message_status(int $id): array
 {
+    $beforeStatement = app_db()->prepare('SELECT * FROM guest_messages WHERE id = ?');
+    $beforeStatement->execute([$id]);
+    $before = $beforeStatement->fetch() ?: null;
+    if ($before === null) app_error(404, '留言不存在', 'NOT_FOUND');
     $body = app_body();
     $status = trim((string) ($body['status'] ?? ''));
     if (!in_array($status, ['visible', 'hidden'], true)) app_error(400, '留言状态无效', 'INVALID_MESSAGE_STATUS');
@@ -316,14 +334,24 @@ function app_update_guest_message_status(int $id): array
         if (!$check->fetchColumn()) app_error(404, '留言不存在', 'NOT_FOUND');
     }
     app_public_cache_clear();
+    $afterStatement = app_db()->prepare('SELECT * FROM guest_messages WHERE id = ?');
+    $afterStatement->execute([$id]);
+    app_audit_set_change('guest_message', $id, $before, $afterStatement->fetch() ?: null, 'UPDATE guest_message');
     return ['id' => $id, 'status' => $status];
 }
 
 function app_delete_guest_message(int $id): array
 {
+    $beforeStatement = app_db()->prepare('SELECT * FROM guest_messages WHERE id = ?');
+    $beforeStatement->execute([$id]);
+    $before = $beforeStatement->fetch() ?: null;
+    if ($before === null) app_error(404, '留言不存在', 'NOT_FOUND');
     $statement = app_db()->prepare("UPDATE guest_messages SET status = 'hidden', deleted_at = NOW(), updated_at = NOW() WHERE id = ? AND deleted_at IS NULL");
     $statement->execute([$id]);
     if ($statement->rowCount() === 0) app_error(404, '留言不存在', 'NOT_FOUND');
     app_public_cache_clear();
+    $afterStatement = app_db()->prepare('SELECT * FROM guest_messages WHERE id = ?');
+    $afterStatement->execute([$id]);
+    app_audit_set_change('guest_message', $id, $before, $afterStatement->fetch() ?: null, 'DELETE guest_message');
     return ['success' => true];
 }

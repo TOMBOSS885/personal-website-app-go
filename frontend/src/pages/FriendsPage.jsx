@@ -275,7 +275,6 @@ export default function FriendsPage() {
                 <GuestbookField icon={Mail} className="mt-2">
                   <input type="email" maxLength={254} autoComplete="email" placeholder="you@example.com" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} className="guestbook-field__control" />
                 </GuestbookField>
-                <span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">仅后台可见</span>
               </label>
             </div>
             <label className="mt-4 block text-sm font-medium text-gray-700 dark:text-slate-200">

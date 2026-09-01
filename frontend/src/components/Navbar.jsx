@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Activity, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers } from 'lucide-react'
+import { Activity, BookMarked, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
@@ -40,13 +40,19 @@ export default function Navbar({ profile }) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const navLinks = [
+  const primaryNavLinks = [
     { path: '/', label: t('nav.home'), icon: Home },
     { path: '/blog', label: t('nav.blog'), icon: FileText },
     { path: '/projects', label: t('nav.projects'), icon: Folder },
     { path: '/friends', label: t('nav.friends'), icon: Users },
     { path: '/monitor', label: t('nav.monitor'), icon: Activity },
     { path: '/search', label: '搜索', icon: Search },
+  ]
+  const mobileNavLinks = primaryNavLinks
+  const exploreLinks = [
+    { path: '/archive', label: '文章归档', icon: FileText },
+    { path: '/series', label: '专题系列', icon: Layers },
+    { path: '/library', label: '阅读清单', icon: BookMarked },
   ]
 
   return (
@@ -96,7 +102,7 @@ export default function Navbar({ profile }) {
 
             {/* Desktop Navigation */}
             <div className="hidden items-center space-x-0.5 lg:flex xl:space-x-1">
-              {navLinks.map(({ path, label, icon: Icon }) => (
+              {primaryNavLinks.map(({ path, label, icon: Icon }) => (
                 <Link
                   key={path}
                   to={path}
@@ -274,7 +280,7 @@ export default function Navbar({ profile }) {
 
                 {/* Navigation Links */}
                 <div className="space-y-2">
-                  {navLinks.map(({ path, label, icon: Icon }, index) => (
+                  {mobileNavLinks.map(({ path, label, icon: Icon }, index) => (
                     <motion.div
                       key={path}
                       initial={{ opacity: 0, x: 20 }}
@@ -295,6 +301,12 @@ export default function Navbar({ profile }) {
                         <span className="font-medium">{label}</span>
                       </Link>
                     </motion.div>
+                  ))}
+                  <div className="px-5 pb-1 pt-5 text-xs font-semibold text-gray-400 dark:text-slate-500">探索内容</div>
+                  {exploreLinks.map(({ path, label, icon: Icon }) => (
+                    <Link key={path} to={path} onClick={() => setIsOpen(false)} className="flex items-center space-x-4 rounded-xl px-5 py-3 text-gray-700 transition hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800">
+                      <Icon className="h-5 w-5" /><span className="font-medium">{label}</span>
+                    </Link>
                   ))}
                 </div>
 

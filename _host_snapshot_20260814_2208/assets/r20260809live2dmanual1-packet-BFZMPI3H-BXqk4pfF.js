@@ -1,0 +1,1 @@
+import"./r20260809live2dmanual1-chunk-FPAJGGOC-BfROQSDK.js";import{l as e}from"./r20260809live2dmanual1-mermaid-parser.core-CNIx2W1s.js";export{e as createPacketServices};

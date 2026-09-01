@@ -1,0 +1,11 @@
+Options -Indexes
+RewriteEngine On
+# Never expose hidden files or active same-origin web content from user uploads.
+RewriteRule (^|/)\. - [F,L,NC]
+<FilesMatch "\.(?:php[0-9]?|phtml|phar|cgi|pl|py|sh|bash|exe|bat|cmd|html?|shtml|xhtml|js|mjs|css|svgz?|xml|xsl)$">
+  Require all denied
+</FilesMatch>
+<IfModule mod_mime.c>
+  RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .phar
+  RemoveType .php .php3 .php4 .php5 .php7 .php8 .phtml .phar
+</IfModule>

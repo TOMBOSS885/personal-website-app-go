@@ -8,10 +8,17 @@ export const KATEX_OPTIONS = Object.freeze({
   maxSize: 50,
 })
 
+export function remarkSingleLineDisplayMath() {
+  return (tree, file) => {
+    promoteSingleLineDisplayMath(tree, String(file.value ?? ''))
+  }
+}
+
 export function normalizeMarkdownMath(markdown = '') {
   const lines = String(markdown).split(/\r?\n/)
   const output = []
   let fence = null
+  let displayMath = null
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]
@@ -29,7 +36,29 @@ export function normalizeMarkdownMath(markdown = '') {
     }
 
     const trimmed = line.trim()
-    if (trimmed === '\\[' || trimmed === '\\]') {
+    if (displayMath === 'bracket') {
+      if (trimmed === '\\]') {
+        output.push(`${leadingWhitespace(line)}$$`)
+        displayMath = null
+      } else {
+        output.push(line)
+      }
+      continue
+    }
+
+    if (displayMath === 'dollar') {
+      const replacement = replaceInlineDelimitersOutsideCode(line, true)
+      output.push(replacement.value)
+      displayMath = replacement.displayMathOpen ? 'dollar' : null
+      continue
+    }
+
+    if (trimmed === '\\[') {
+      output.push(`${leadingWhitespace(line)}$$`)
+      displayMath = 'bracket'
+      continue
+    }
+    if (trimmed === '\\]') {
       output.push(`${leadingWhitespace(line)}$$`)
       continue
     }
@@ -56,7 +85,9 @@ export function normalizeMarkdownMath(markdown = '') {
       continue
     }
 
-    output.push(replaceInlineDelimitersOutsideCode(line))
+    const replacement = replaceInlineDelimitersOutsideCode(line)
+    output.push(replacement.value)
+    displayMath = replacement.displayMathOpen ? 'dollar' : null
   }
 
   return output.join('\n')
@@ -99,31 +130,153 @@ function normalizeLegacyMathBody(lines) {
   return output.join(' ').replace(/\s+/g, ' ').trim()
 }
 
-function replaceInlineDelimitersOutsideCode(line) {
+function replaceInlineDelimitersOutsideCode(line, displayMathOpen = false) {
   let cursor = 0
   let output = ''
 
   while (cursor < line.length) {
-    const match = /`+/.exec(line.slice(cursor))
-    if (!match) return output + replaceInlineDelimiters(line.slice(cursor))
+    if (displayMathOpen) {
+      const closingIndex = findUnescapedDelimiter(line, '$$', cursor)
+      if (closingIndex < 0) {
+        return { value: output + line.slice(cursor), displayMathOpen: true }
+      }
+      output += line.slice(cursor, closingIndex + 2)
+      cursor = closingIndex + 2
+      displayMathOpen = false
+      continue
+    }
 
-    const openingIndex = cursor + match.index
-    const marker = match[0]
+    const codeMatch = /`+/.exec(line.slice(cursor))
+    const codeIndex = codeMatch ? cursor + codeMatch.index : -1
+    const dollarIndex = findUnescapedDollar(line, cursor)
+    const openingIndex = firstIndex(codeIndex, dollarIndex)
+    if (openingIndex < 0) {
+      return { value: output + replaceInlineDelimiters(line.slice(cursor)), displayMathOpen: false }
+    }
+
     output += replaceInlineDelimiters(line.slice(cursor, openingIndex))
-    const closingIndex = line.indexOf(marker, openingIndex + marker.length)
-    if (closingIndex < 0) return output + line.slice(openingIndex)
+
+    if (openingIndex === codeIndex) {
+      const marker = codeMatch[0]
+      const closingIndex = line.indexOf(marker, openingIndex + marker.length)
+      if (closingIndex < 0) {
+        return { value: output + line.slice(openingIndex), displayMathOpen: false }
+      }
+      output += line.slice(openingIndex, closingIndex + marker.length)
+      cursor = closingIndex + marker.length
+      continue
+    }
+
+    const marker = line.startsWith('$$', openingIndex) ? '$$' : '$'
+    const closingIndex = findUnescapedDelimiter(line, marker, openingIndex + marker.length)
+    if (closingIndex < 0) {
+      if (marker === '$$') {
+        return { value: output + line.slice(openingIndex), displayMathOpen: true }
+      }
+      output += '$'
+      cursor = openingIndex + 1
+      continue
+    }
     output += line.slice(openingIndex, closingIndex + marker.length)
     cursor = closingIndex + marker.length
+  }
+
+  return { value: output, displayMathOpen }
+}
+
+function findUnescapedDollar(value, startIndex) {
+  for (let index = startIndex; index < value.length; index += 1) {
+    if (value[index] === '$' && !isEscaped(value, index)) return index
+  }
+  return -1
+}
+
+function findUnescapedDelimiter(value, marker, startIndex) {
+  for (let index = startIndex; index <= value.length - marker.length; index += 1) {
+    if (!value.startsWith(marker, index) || isEscaped(value, index)) continue
+    if (marker === '$' && (value[index - 1] === '$' || value[index + 1] === '$')) continue
+    return index
+  }
+  return -1
+}
+
+function isEscaped(value, index) {
+  let slashCount = 0
+  for (let cursor = index - 1; cursor >= 0 && value[cursor] === '\\'; cursor -= 1) slashCount += 1
+  return slashCount % 2 === 1
+}
+
+function firstIndex(left, right) {
+  if (left < 0) return right
+  if (right < 0) return left
+  return Math.min(left, right)
+}
+
+function promoteSingleLineDisplayMath(node, source) {
+  if (!Array.isArray(node?.children)) return
+
+  for (let index = 0; index < node.children.length; index += 1) {
+    const child = node.children[index]
+    const formula = child?.type === 'paragraph' && child.children?.length === 1
+      ? child.children[0]
+      : null
+    const start = child?.position?.start?.offset
+    const end = child?.position?.end?.offset
+    const original = Number.isInteger(start) && Number.isInteger(end)
+      ? source.slice(start, end).trim()
+      : ''
+
+    if (formula?.type === 'inlineMath' && original.startsWith('$$') && original.endsWith('$$')) {
+      node.children[index] = {
+        type: 'math',
+        meta: null,
+        value: formula.value,
+        data: {
+          hName: 'pre',
+          hChildren: [{
+            type: 'element',
+            tagName: 'code',
+            properties: { className: ['language-math', 'math-display'] },
+            children: [{ type: 'text', value: formula.value }],
+          }],
+        },
+        position: child.position,
+      }
+      continue
+    }
+
+    promoteSingleLineDisplayMath(child, source)
+  }
+}
+
+function replaceInlineDelimiters(value) {
+  let cursor = 0
+  let output = ''
+
+  while (cursor < value.length) {
+    const openingMatch = /\\[[(]/.exec(value.slice(cursor))
+    if (!openingMatch) return output + replaceParenthesizedLegacyMath(value.slice(cursor))
+
+    const openingIndex = cursor + openingMatch.index
+    const openingMarker = openingMatch[0]
+    const closingMarker = openingMarker === '\\[' ? '\\]' : '\\)'
+    const closingIndex = value.indexOf(closingMarker, openingIndex + 2)
+    if (closingIndex < 0) return output + replaceParenthesizedLegacyMath(value.slice(cursor))
+
+    output += replaceParenthesizedLegacyMath(value.slice(cursor, openingIndex))
+    const formula = value.slice(openingIndex + 2, closingIndex)
+    output += openingMarker === '\\[' ? `$$${formula}$$` : `$${formula}$`
+    cursor = closingIndex + 2
   }
 
   return output
 }
 
-function replaceInlineDelimiters(value) {
-  return value
-    .replace(/\\\[([^\n]+?)\\\]/g, (_match, formula) => `$$${formula}$$`)
-    .replace(/\\\(([^\n]+?)\\\)/g, (_match, formula) => `$${formula}$`)
-    .replace(/(^|[^\w!\\\]])\((?=[^()\n]{0,240}\\[A-Za-z]+)([^()\n]{1,240})\)/g, (_match, prefix, formula) => `${prefix}$${formula}$`)
+function replaceParenthesizedLegacyMath(value) {
+  return value.replace(
+    /(^|[^\w!\\\]])\((?=[^()\n]{0,240}\\[A-Za-z]+)([^()\n]{1,240})\)/g,
+    (_match, prefix, formula) => `${prefix}$${formula}$`,
+  )
 }
 
 function leadingWhitespace(value) {

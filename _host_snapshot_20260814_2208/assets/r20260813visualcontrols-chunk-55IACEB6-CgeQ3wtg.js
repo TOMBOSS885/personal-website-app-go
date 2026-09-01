@@ -1,0 +1,1 @@
+import{h as e,p as t}from"./r20260813visualcontrols-src-BSr2Elvx.js";var n=e((e,n)=>{let r;return n===`sandbox`&&(r=t(`#i`+e)),t(n===`sandbox`?r.nodes()[0].contentDocument.body:`body`).select(`[id="${e}"]`)},`getDiagramElement`);export{n as t};

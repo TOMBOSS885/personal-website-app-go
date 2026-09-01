@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"personal-website-go/internal/model"
+	"strings"
 	"testing"
 	"time"
 )
@@ -72,12 +73,79 @@ func TestArticleSiteExtractionLimits(t *testing.T) {
 	}
 }
 
-func TestArticleSiteRejectsOversizedHTML(t *testing.T) {
-	oversized := string(bytes.Repeat([]byte("x"), articleSiteMaxHTMLBytes+1))
-	reader := testZipReader(t, map[string]string{"index.html": oversized})
+func TestArticleSiteAllowsLargeHTMLWithinTotalLimit(t *testing.T) {
+	large := string(bytes.Repeat([]byte("x"), 11<<20))
+	reader := testZipReader(t, map[string]string{"index.html": large})
 	settings := &model.UploadSettings{ArticleSiteTotalMB: 20, ArticleSiteFileCount: 10}
-	if _, _, err := extractArticleSite(reader.File, "", t.TempDir(), settings); err == nil {
-		t.Fatal("expected oversized HTML to be rejected")
+	if _, _, err := extractArticleSite(reader.File, "", t.TempDir(), settings); err != nil {
+		t.Fatalf("expected large HTML to be accepted: %v", err)
+	}
+}
+
+func TestCompatArticleSiteHTMLRewritesInlineModuleScripts(t *testing.T) {
+	html := `<!doctype html><html><head>
+<link rel="stylesheet" crossorigin href="./style.css">
+<script type="module">document.getElementById('app').textContent='ok'</script>
+</head><body><div id="app"></div></body></html>`
+	got := compatArticleSiteHTML(html)
+	if strings.Contains(got, `type="module"`) {
+		t.Fatalf("module type should be stripped: %s", got)
+	}
+	if strings.Contains(got, "crossorigin") {
+		t.Fatalf("crossorigin should be stripped: %s", got)
+	}
+	appIndex := strings.Index(got, `<div id="app"></div>`)
+	scriptIndex := strings.Index(got, `<script>document.getElementById('app').textContent='ok'</script>`)
+	if appIndex < 0 || scriptIndex < 0 || scriptIndex < appIndex {
+		t.Fatalf("inline module script should move after #app: %s", got)
+	}
+}
+
+func TestCompatArticleSiteHTMLRewritesExternalModuleScripts(t *testing.T) {
+	html := `<script type="module" crossorigin src="./assets/js/app.js"></script>`
+	got := compatArticleSiteHTML(html)
+	if got != `<script src="./assets/js/app.js" defer></script>` {
+		t.Fatalf("unexpected rewrite: %s", got)
+	}
+}
+
+func TestCompatArticleSiteHTMLKeepsRealModules(t *testing.T) {
+	html := `<script type="module">import.meta.url; export const x = 1;</script><body></body>`
+	got := compatArticleSiteHTML(html)
+	if !strings.Contains(got, `type="module"`) {
+		t.Fatalf("true ESM should stay a module: %s", got)
+	}
+}
+
+func TestCompatArticleSiteHTMLRewritesCompilerVizSingleFile(t *testing.T) {
+	src := "/home/q/文档/self_learning_3-1/index.html"
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Skip(err.Error())
+	}
+	got := compatArticleSiteHTML(string(data))
+	if strings.Contains(strings.ToLower(got), `type="module"`) {
+		t.Fatal("compiler viz HTML still contains type=module")
+	}
+	appIndex := strings.Index(got, `<div id="app"></div>`)
+	scriptIndex := strings.LastIndex(strings.ToLower(got), "<script")
+	if appIndex < 0 || scriptIndex < appIndex {
+		t.Fatal("compiler viz module script was not moved after #app")
+	}
+	out := filepath.Join(t.TempDir(), "compiler-viz-compat.html")
+	if os.Getenv("COMPAT_HTML_OUT") != "" {
+		out = os.Getenv("COMPAT_HTML_OUT")
+	}
+	if err := os.WriteFile(out, []byte(got), 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCompatArticleSiteHTMLLeavesClassicScripts(t *testing.T) {
+	html := `<head><script>var a=1</script></head><body></body>`
+	got := compatArticleSiteHTML(html)
+	if got != html {
+		t.Fatalf("classic script changed: %s", got)
 	}
 }
 

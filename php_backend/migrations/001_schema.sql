@@ -46,6 +46,10 @@ CREATE TABLE IF NOT EXISTS articles (
     cover_image VARCHAR(500) NOT NULL DEFAULT '',
     category VARCHAR(100) NOT NULL DEFAULT '',
     tags VARCHAR(500) NOT NULL DEFAULT '',
+    series_name VARCHAR(120) NOT NULL DEFAULT '',
+    series_order INT NOT NULL DEFAULT 0,
+    featured TINYINT(1) NOT NULL DEFAULT 0,
+    display_order INT NOT NULL DEFAULT 0,
     views INT NOT NULL DEFAULT 0,
     published TINYINT(1) NOT NULL DEFAULT 0,
     content_type VARCHAR(20) NOT NULL DEFAULT 'markdown',
@@ -56,6 +60,9 @@ CREATE TABLE IF NOT EXISTS articles (
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     INDEX idx_articles_published_created (published, created_at),
+    INDEX idx_articles_series (series_name, series_order, published),
+    INDEX idx_articles_featured_order (published, featured, display_order, created_at),
+    INDEX idx_articles_popular (published, views, created_at, id),
     INDEX idx_articles_category (category),
     INDEX idx_articles_content_type (content_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

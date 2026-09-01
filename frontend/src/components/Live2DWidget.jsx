@@ -9,10 +9,17 @@ import {
 
 const API_BASE = ''
 
-export default function Live2DWidget() {
+export default function Live2DWidget({ compact = false, position = 'bottom-left' }) {
   const widgetRef = useRef(null)
 
   useEffect(() => {
+    document.documentElement.classList.toggle('live2d-compact', compact)
+    return () => document.documentElement.classList.remove('live2d-compact')
+  }, [compact])
+
+  useEffect(() => {
+    document.documentElement.classList.add('live2d-visible')
+    document.documentElement.dataset.live2dPosition = position
     let cancelled = false
     let idleHandle = null
     let startTimer = null
@@ -53,6 +60,8 @@ export default function Live2DWidget() {
           scale: numberOr(model.scale, 1),
           offset: [numberOr(model.offsetX, 0), numberOr(model.offsetY, 0)],
           volume: numberOr(model.volume, 0),
+          // Route-specific compact styling is handled with CSS so navigating
+          // cannot destroy and recreate the WebGL model instance.
           tips: model.tipsEnabled === false
             ? false
             : {
@@ -108,7 +117,10 @@ export default function Live2DWidget() {
 
         widgetRef.current = createWidget({
           model: widgetModels.length === 1 ? widgetModels[0] : widgetModels,
-          position: settings.position || 'bottom-right',
+          // Public controls occupy the right utility rail. Keep the model on
+          // the opposite side; article sizing is applied through CSS so route
+          // changes never recreate this instance.
+          position,
           size: lowEnd || window.innerWidth < 640
             ? Math.min(numberOr(settings.size, 280), 180)
             : numberOr(settings.size, 280),
@@ -151,6 +163,8 @@ export default function Live2DWidget() {
     }
 
     return () => {
+      document.documentElement.classList.remove('live2d-visible')
+      delete document.documentElement.dataset.live2dPosition
       cancelled = true
       removeLoadListener?.()
       if (startTimer) {
@@ -164,7 +178,7 @@ export default function Live2DWidget() {
         widgetRef.current = null
       }
     }
-  }, [])
+  }, [position])
 
   return null
 }

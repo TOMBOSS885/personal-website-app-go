@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Award, BarChart3, Bot, FileText, Folder, LayoutDashboard, LayoutGrid, LogOut, Moon, Palette, ShieldCheck, Sparkles, Sun, UploadCloud, User, Users } from 'lucide-react'
+import { Award, BarChart3, Bot, ClipboardList, FileText, Folder, LayoutDashboard, LayoutGrid, LogOut, Moon, Palette, ShieldCheck, Sparkles, Sun, UploadCloud, User, Users } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAdminAuth } from '../../contexts/AdminAuthContext'
 import { getAdminBasePath } from '../../utils/adminEntry'
@@ -17,6 +17,7 @@ const navItems = adminBasePath => [
   { path: `${adminBasePath}/social`, label: '友链与留言', icon: Users },
   { path: `${adminBasePath}/upload-settings`, label: '上传限制', icon: UploadCloud },
   { path: `${adminBasePath}/account`, label: '账号安全', icon: ShieldCheck },
+  { path: `${adminBasePath}/audit-logs`, label: '操作日志', icon: ClipboardList },
 ]
 
 export default function AdminLayout() {

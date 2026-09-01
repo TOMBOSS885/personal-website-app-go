@@ -1,0 +1,1 @@
+import{at as e,ot as t}from"./r20260813live2dseries1-chunk-I66GZJ75-DbW6gKag.js";var n=(n,r)=>t.lang.round(e.parse(n)[r]);export{n as t};

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Code2, Edit2, FileArchive, FileText, Image, Lock, Plus, Save, Trash2, Upload, UploadCloud, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Code2, Edit2, FileArchive, FileText, Image, Layers3, Lock, Plus, Save, Trash2, Upload, UploadCloud, X } from 'lucide-react'
 import RichTextEditor from '../../components/RichTextEditor'
 import LoadingIndicator from '../../components/LoadingIndicator'
 import { optimizeCoverImage } from '../../utils/imageCompression'
 
 const emptyForm = {
-  title: '', summary: '', content: '', category: '', tags: '', seriesName: '', seriesOrder: 0, coverImage: '',
+  title: '', summary: '', content: '', category: '', tags: '', seriesName: '', seriesOrder: 0, featured: false, displayOrder: 0, coverImage: '',
   published: true, contentType: 'markdown', staticSiteKey: '', staticSiteName: '',
   isLocked: false, accessPassword: '',
 }
@@ -38,6 +38,7 @@ export default function ArticleManager() {
   const [siteUploadError, setSiteUploadError] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [editingArticle, setEditingArticle] = useState(null)
+  const [availableSeries, setAvailableSeries] = useState([])
   const [form, setForm] = useState(emptyForm)
   const fileInputRef = useRef(null)
   const siteFileInputRef = useRef(null)
@@ -68,6 +69,13 @@ export default function ArticleManager() {
   }
 
   useEffect(() => { void fetchArticles(page) }, [page])
+
+  useEffect(() => {
+    fetch('/api/admin/article-series', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : [])
+      .then(data => setAvailableSeries(Array.isArray(data) ? data : []))
+      .catch(() => setAvailableSeries([]))
+  }, [showModal])
 
   useEffect(() => {
     if (!showModal || editingArticle) return undefined
@@ -264,7 +272,7 @@ export default function ArticleManager() {
             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
               {articles.map(article => (
                 <tr key={article.id} className="text-sm text-gray-700 dark:text-slate-300">
-                  <td className="px-5 py-4"><div className="flex items-center gap-2 font-medium text-gray-900 dark:text-slate-100"><span>{article.title}</span>{article.contentType === 'static' && <span className="inline-flex items-center gap-1 rounded-md bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300"><Code2 className="h-3 w-3" />静态前端</span>}</div><div className="mt-1 max-w-xl truncate text-xs text-gray-500">{article.summary}</div></td>
+                  <td className="px-5 py-4"><div className="flex flex-wrap items-center gap-2 font-medium text-gray-900 dark:text-slate-100"><span>{article.title}</span>{article.contentType === 'static' && <span className="inline-flex items-center gap-1 rounded-md bg-cyan-50 px-2 py-0.5 text-xs font-medium text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300"><Code2 className="h-3 w-3" />静态前端</span>}{article.seriesName && <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300"><Layers3 className="h-3 w-3" />{article.seriesName}{article.seriesOrder > 0 ? ` · ${article.seriesOrder}` : ''}</span>}</div><div className="mt-1 max-w-xl truncate text-xs text-gray-500">{article.summary}</div></td>
                   <td className="px-5 py-4">{article.category || '-'}</td>
                   <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs ${article.published ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>{article.published ? '已发布' : '草稿'}</span>{article.isLocked && <Lock className="ml-2 inline h-4 w-4 text-amber-500" />}</td>
                   <td className="px-5 py-4">{article.views || 0}</td>
@@ -295,7 +303,14 @@ export default function ArticleManager() {
               <div className="grid gap-4 md:grid-cols-[1fr_auto]"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">封面 URL<input value={form.coverImage} onChange={event => setForm({ ...form, coverImage: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label><div className="flex items-end"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => uploadCover(event.target.files?.[0])} className="hidden" /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200">{uploading ? <LoadingIndicator size={16} /> : <Upload className="h-4 w-4" />}{uploading ? '压缩并上传中...' : '上传封面'}</button></div></div>
               {form.coverImage && <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-600 dark:bg-slate-950"><Image className="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{form.coverImage}</span></div>}
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">标签（英文逗号分隔）<input value={form.tags} onChange={event => setForm({ ...form, tags: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
-              <div className="grid gap-4 md:grid-cols-[1fr_10rem]"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">文章专题（可选）<input value={form.seriesName} onChange={event => setForm({ ...form, seriesName: event.target.value })} placeholder="例如：PHP 主机迁移" className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">专题顺序<input type="number" min="0" value={form.seriesOrder} onChange={event => setForm({ ...form, seriesOrder: Number(event.target.value) || 0 })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label></div>
+              <section className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-500/20 dark:bg-indigo-500/5">
+                <div className="flex items-start gap-3"><span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"><Layers3 className="h-5 w-5" /></span><div><h3 className="font-semibold text-gray-900 dark:text-slate-100">专题设置</h3><p className="mt-1 text-xs leading-5 text-gray-500 dark:text-slate-400">同名文章会自动组成专题；顺序数字越小，文章越靠前。清空专题名称即可移出专题。</p></div></div>
+                <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_10rem]">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">专题名称<input list="article-series-options" value={form.seriesName} onChange={event => setForm({ ...form, seriesName: event.target.value })} placeholder="选择已有专题或输入新专题名称" maxLength={120} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /><datalist id="article-series-options">{availableSeries.map(series => <option key={series.name} value={series.name}>{series.articleCount} 篇文章</option>)}</datalist></label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">专题内顺序<input type="number" min="0" max="9999" value={form.seriesOrder} onChange={event => setForm({ ...form, seriesOrder: Math.max(0, Number(event.target.value) || 0) })} className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
+                </div>
+                {availableSeries.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{availableSeries.slice(0, 8).map(series => <button key={series.name} type="button" onClick={() => setForm(current => ({ ...current, seriesName: series.name }))} className={`rounded-full border px-3 py-1 text-xs transition ${form.seriesName === series.name ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-indigo-200 bg-white text-indigo-700 hover:border-indigo-400 dark:border-indigo-500/30 dark:bg-slate-900 dark:text-indigo-300'}`}>{series.name} · {series.articleCount}</button>)}</div>}
+              </section>
               <div>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <div className="text-sm font-medium text-gray-700 dark:text-slate-300">正文类型</div>
@@ -334,7 +349,7 @@ export default function ArticleManager() {
                   </div>
                 ) : <RichTextEditor value={form.content} onChange={content => setForm(current => ({ ...current, content }))} height={520} />}
               </div>
-              <div className="grid gap-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-950 sm:grid-cols-2"><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.published} onChange={event => setForm({ ...form, published: event.target.checked })} className="h-4 w-4 rounded" />立即发布</label><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.isLocked} onChange={event => setForm({ ...form, isLocked: event.target.checked })} className="h-4 w-4 rounded" />使用独立访问密码</label>{form.isLocked && <input type="password" value={form.accessPassword} onChange={event => setForm({ ...form, accessPassword: event.target.value })} placeholder={editingArticle?.isLocked ? '留空则保持原密码' : '设置访问密码'} className="rounded-lg border border-gray-300 px-3 py-2 sm:col-span-2 dark:border-slate-700 dark:bg-slate-900" />}</div>
+              <div className="grid gap-4 rounded-lg bg-gray-50 p-4 dark:bg-slate-950 sm:grid-cols-2"><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.published} onChange={event => setForm({ ...form, published: event.target.checked })} className="h-4 w-4 rounded" />立即发布</label><label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.featured} onChange={event => setForm({ ...form, featured: event.target.checked })} className="h-4 w-4 rounded" />设为精选文章</label>{form.featured && <label className="block text-sm text-gray-600 dark:text-slate-300">精选顺序<input type="number" min="0" value={form.displayOrder} onChange={event => setForm({ ...form, displayOrder: Number(event.target.value) || 0 })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-900" /></label>}<label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.isLocked} onChange={event => setForm({ ...form, isLocked: event.target.checked })} className="h-4 w-4 rounded" />使用独立访问密码</label>{form.isLocked && <input type="password" value={form.accessPassword} onChange={event => setForm({ ...form, accessPassword: event.target.value })} placeholder={editingArticle?.isLocked ? '留空则保持原密码' : '设置访问密码'} className="rounded-lg border border-gray-300 px-3 py-2 sm:col-span-2 dark:border-slate-700 dark:bg-slate-900" />}</div>
               <div className="flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-slate-800"><button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 dark:border-slate-700 dark:text-slate-200">取消</button><button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2 font-medium text-white hover:bg-indigo-700 disabled:opacity-50">{saving ? <LoadingIndicator size={16} /> : <Save className="h-4 w-4" />}{saving ? '保存中...' : '保存文章'}</button></div>
             </form>
           </div>

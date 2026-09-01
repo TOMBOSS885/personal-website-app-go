@@ -1,0 +1,1 @@
+{"Version":3,"FileReferences":{"Moc":"xiaoyue.moc3","Textures":["xiaoyue.8192/texture_00.webp"],"Physics":"xiaoyue.physics3.json","DisplayInfo":"xiaoyue.cdi3.json"},"Groups":[{"Target":"Parameter","Name":"LipSync","Ids":[]},{"Target":"Parameter","Name":"EyeBlink","Ids":[]}]}

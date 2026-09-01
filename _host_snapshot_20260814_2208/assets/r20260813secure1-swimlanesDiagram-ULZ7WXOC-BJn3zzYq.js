@@ -1,0 +1,8 @@
+import{n as e}from"./r20260813secure1-chunk-Y2CYZVJY-DsF7k-Jl.js";import"./r20260813secure1-src-QxxyBwbd.js";import"./r20260813secure1-chunk-I66GZJ75-BZQHFQLu.js";import"./r20260813secure1-chunk-NSK5VX7P-LAl0jXkw.js";import"./r20260813secure1-chunk-4I5QYGJK-DyTdslGu.js";import"./r20260813secure1-chunk-WRU74C26-CDF_1q0S.js";import"./r20260813secure1-chunk-7BUUIJ7U-CWzxaoua.js";import"./r20260813secure1-chunk-UBXNYLIW-CDE6Q1w8.js";import"./r20260813secure1-chunk-2GRJ4B5K-Cw1VVyWG.js";import"./r20260813secure1-chunk-XXDRQBXY-DUFmQCJB.js";import"./r20260813secure1-chunk-KBJHAD2P-CRHkpsvl.js";import"./r20260813secure1-chunk-W5SLKNZC-CUehoK60.js";import"./r20260813secure1-chunk-QR6OTTB3-DV7wMzfN.js";import"./r20260813secure1-chunk-7Z6QIM7H-CJBo60Lv.js";import"./r20260813secure1-chunk-J7OUQ5F2-FuxC71oI.js";import"./r20260813secure1-chunk-ZIRB5QZD-BtSWqfHN.js";import{r as t,t as n}from"./r20260813secure1-chunk-JQJVKLGR-BiIQ4RN2.js";var r=n({defaultLayout:`swimlane`,styles:e(e=>`${t(e)}
+  .swimlane.cluster rect {
+    stroke: ${e.clusterBorder} !important;
+  }
+  [data-look="neo"].cluster rect {
+    filter: none;
+  }
+`,`getStyles`)});export{r as diagram};

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, X, FolderGit, Star, ExternalLink } from 'lucide-react'
 import LoadingIndicator from '../../components/LoadingIndicator'
+import { safeExternalHref } from '../../utils/safeUrl'
 
 const API_BASE = ''
 
@@ -189,8 +190,8 @@ export default function ProjectManager() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      {p.githubUrl && (
-                        <a href={p.githubUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600">
+                      {safeExternalHref(p.githubUrl) && (
+                        <a href={safeExternalHref(p.githubUrl)} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600">
                           <ExternalLink className="w-4 h-4" />
                         </a>
                       )}

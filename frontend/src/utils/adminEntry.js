@@ -16,6 +16,11 @@ export function getAdminBasePath(pathname) {
   return suffix ? `/${suffix}` : `/${LEGACY_ENTRY}`
 }
 
+export function getAdminLoginPathFromSuffix(value, fallbackPath = `/${LEGACY_ENTRY}/login`) {
+  const suffix = typeof value === 'string' ? value.trim() : ''
+  return PRIVATE_ENTRY_PATTERN.test(suffix) ? `/${suffix}/login` : fallbackPath
+}
+
 export function isAdminEntryPath(pathname) {
   return getAdminEntrySuffix(pathname) !== ''
 }

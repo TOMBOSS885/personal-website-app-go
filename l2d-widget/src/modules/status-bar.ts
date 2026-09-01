@@ -31,6 +31,8 @@ export function createStatusBar(
   let wakeHandler: (() => void) | null = null;
 
   const bar = document.createElement('div');
+  bar.className = 'l2d-widget-status';
+  bar.dataset['position'] = position;
   Object.assign(bar.style, {
     position: 'fixed',
     [isRight ? 'right' : 'left']: '0',

@@ -1,5 +1,5 @@
 import 'katex/dist/katex.min.css'
-import { cloneElement, isValidElement, useEffect, useId, useRef, useState } from 'react'
+import { cloneElement, isValidElement, memo, useEffect, useId, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
@@ -7,17 +7,17 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { Check, Copy, Link as LinkIcon } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
-import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
+import { KATEX_OPTIONS, normalizeMarkdownMath, remarkSingleLineDisplayMath } from '../utils/markdownMath'
 import { remarkGithubAlerts, remarkSafeHtml } from '../utils/markdownPlugins'
 
-export default function MarkdownArticleRenderer({ content, resolveHeadingId, onRendered }) {
+function MarkdownArticleRenderer({ content, resolveHeadingId, onRendered }) {
   useEffect(() => {
     onRendered?.()
   }, [content, onRendered])
 
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath, remarkSafeHtml, remarkGithubAlerts]}
+      remarkPlugins={[remarkGfm, remarkMath, remarkSingleLineDisplayMath, remarkSafeHtml, remarkGithubAlerts]}
       rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}
       components={{
         a: ({ node, href, children, ...props }) => {
@@ -49,6 +49,11 @@ export default function MarkdownArticleRenderer({ content, resolveHeadingId, onR
     </ReactMarkdown>
   )
 }
+
+// Article reading progress updates on every scroll event. Keep the Markdown
+// tree mounted while that unrelated state changes so expensive Mermaid nodes
+// are not recreated during scrolling.
+export default memo(MarkdownArticleRenderer)
 
 function MarkdownHeading({ level, id, children, ...props }) {
   const HeadingTag = `h${level}`
@@ -100,10 +105,13 @@ function MarkdownCode({ node: _node, markdownBlock = false, className, children,
   )
 }
 
+const mermaidDiagramCache = new Map()
+let mermaidRenderSequence = 0
+
 function MermaidDiagram({ source }) {
-  const diagramRef = useRef(null)
   const instanceId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
-  const [status, setStatus] = useState('loading')
+  const [status, setStatus] = useState(() => getMermaidCache(source, getMermaidThemeKey()) ? 'ready' : 'loading')
+  const [diagramSvg, setDiagramSvg] = useState(() => getMermaidCache(source, getMermaidThemeKey()) || '')
   const [themeVersion, setThemeVersion] = useState(0)
 
   useEffect(() => {
@@ -118,23 +126,42 @@ function MermaidDiagram({ source }) {
     let disposed = false
 
     const renderDiagram = async () => {
-      setStatus('loading')
+      const dark = document.documentElement.classList.contains('theme-dark')
+      const cachedSrc = getMermaidCache(source, dark ? 'dark' : 'light')
+      if (cachedSrc) {
+        setDiagramSvg(cachedSrc)
+        setStatus('ready')
+        return
+      }
+
+      // Keep an already-rendered image visible while a theme variant is
+      // generated. This prevents a transient loading placeholder during
+      // unrelated DOM updates and theme changes.
+      setStatus(current => current === 'ready' ? current : 'loading')
       try {
         // Mermaid is split from the main article bundle and is only fetched for
         // a fenced ```mermaid block. Strict mode prevents diagram text from
         // injecting arbitrary HTML into the blog page.
         const { default: mermaid } = await import('mermaid')
-        const dark = document.documentElement.classList.contains('theme-dark')
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: 'strict',
           theme: dark ? 'dark' : 'default',
           flowchart: { htmlLabels: false, useMaxWidth: true },
         })
-        const result = await mermaid.render(`blog-mermaid-${instanceId}-${themeVersion}`, source)
-        if (disposed || !diagramRef.current) return
-        diagramRef.current.innerHTML = result.svg
-        result.bindFunctions?.(diagramRef.current)
+        const result = await mermaid.render(`blog-mermaid-${instanceId}-${++mermaidRenderSequence}`, source)
+        if (disposed || typeof result.svg !== 'string') return
+        // Mermaid labels containing <br/> use foreignObject markup. Browsers do
+        // not reliably decode those SVGs through data: or blob: image URLs, so
+        // keep Mermaid's strict-mode output inline after an additional pass
+        // that removes executable elements, event handlers and external links.
+        const nextSvg = sanitizeMermaidSvg(result.svg)
+        if (!nextSvg) {
+          if (!disposed) setStatus('error')
+          return
+        }
+        mermaidDiagramCache.set(getMermaidCacheKey(source, dark ? 'dark' : 'light'), nextSvg)
+        setDiagramSvg(nextSvg)
         setStatus('ready')
       } catch {
         if (!disposed) setStatus('error')
@@ -157,9 +184,54 @@ function MermaidDiagram({ source }) {
   return (
     <div className={`markdown-mermaid ${status === 'loading' ? 'is-loading' : ''}`} aria-busy={status === 'loading'}>
       {status === 'loading' && <span className="markdown-mermaid-loading">正在绘制图表...</span>}
-      <div ref={diagramRef} className="markdown-mermaid-canvas" />
+      {diagramSvg && (
+        <div
+          className="markdown-mermaid-canvas"
+          role="img"
+          aria-label="Mermaid diagram"
+          dangerouslySetInnerHTML={{ __html: diagramSvg }}
+        />
+      )}
     </div>
   )
+}
+
+export function sanitizeMermaidSvg(svg) {
+  if (typeof svg !== 'string' || !/^(?:<\?xml[^>]*>\s*)?<svg\b/i.test(svg.trim())) return ''
+  if (typeof DOMParser === 'undefined') return ''
+
+  // Mermaid's foreignObject labels are valid HTML but are not always valid
+  // standalone XML (notably when labels contain <br/>). Parse in an inert HTML
+  // document so those labels survive, then retain only the verified SVG root.
+  const document = new DOMParser().parseFromString(svg, 'text/html')
+  const root = document.body.querySelector('svg')
+  if (!root) return ''
+
+  root.querySelectorAll('script, iframe, object, embed, audio, video, link, meta').forEach(node => node.remove())
+  root.querySelectorAll('*').forEach(node => {
+    Array.from(node.attributes).forEach(attribute => {
+      const name = attribute.name.toLowerCase()
+      const value = attribute.value.trim()
+      if (name.startsWith('on')) node.removeAttribute(attribute.name)
+      if ((name === 'href' || name === 'xlink:href') && value && !value.startsWith('#')) {
+        node.removeAttribute(attribute.name)
+      }
+    })
+  })
+
+  return root.outerHTML
+}
+
+export function getMermaidCacheKey(source, theme = 'light') {
+  return `${theme}:${String(source || '')}`
+}
+
+function getMermaidThemeKey() {
+  return typeof document !== 'undefined' && document.documentElement.classList.contains('theme-dark') ? 'dark' : 'light'
+}
+
+function getMermaidCache(source, theme) {
+  return mermaidDiagramCache.get(getMermaidCacheKey(source, theme)) || ''
 }
 
 function MarkdownImage({ src, alt, title, ...props }) {

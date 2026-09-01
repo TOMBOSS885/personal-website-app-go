@@ -24,9 +24,12 @@ describe('getThemeBackgroundLayer', () => {
       backgroundPosition: 'right bottom',
       backgroundSize: 'contain',
       backgroundRepeat: 'repeat',
+      backgroundImageOpacity: 42,
+      backgroundBlur: 3.5,
     })).toEqual({
       image: 'url("/uploads/background.webp")',
-      opacity: '1',
+      opacity: '0.42',
+      blur: '3.5px',
       position: 'right bottom',
       size: 'contain',
       repeat: 'repeat',
@@ -37,6 +40,42 @@ describe('getThemeBackgroundLayer', () => {
     expect(getThemeBackgroundLayer({ backgroundStyle: 'solid' })).toMatchObject({
       image: 'none',
       opacity: '0',
+      blur: '0px',
     })
+  })
+
+  it('clamps unsafe visual settings while preserving zero blur', () => {
+    expect(getThemeBackgroundLayer({
+      backgroundStyle: 'image',
+      backgroundImage: '/uploads/background.webp',
+      backgroundImageOpacity: 120,
+      backgroundBlur: 0,
+    })).toMatchObject({
+      opacity: '1',
+      blur: '0px',
+    })
+
+    expect(getThemeBackgroundLayer({
+      backgroundStyle: 'image',
+      backgroundImage: '/uploads/background.webp',
+      backgroundImageOpacity: -5,
+      backgroundBlur: 80,
+    })).toMatchObject({
+      opacity: '0',
+      blur: '24px',
+    })
+  })
+
+  it('rejects scriptable background URLs and CSS injection tokens', () => {
+    const layer = getThemeBackgroundLayer({
+      backgroundStyle: 'image',
+      backgroundImage: 'javascript:alert(1)',
+      backgroundPosition: 'center; color:red',
+      backgroundSize: 'cover; background:url(https://evil.example)',
+      backgroundRepeat: 'repeat',
+    })
+    expect(layer.image).toBe('none')
+    expect(layer.position).toBe('center')
+    expect(layer.size).toBe('cover')
   })
 })

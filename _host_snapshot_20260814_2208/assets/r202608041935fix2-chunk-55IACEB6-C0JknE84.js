@@ -1,0 +1,1 @@
+import{h as e,p as t}from"./r202608041935fix2-src-tCUjAlCm.js";var n=e((e,n)=>{let r;return n===`sandbox`&&(r=t(`#i`+e)),t(n===`sandbox`?r.nodes()[0].contentDocument.body:`body`).select(`[id="${e}"]`)},`getDiagramElement`);export{n as t};

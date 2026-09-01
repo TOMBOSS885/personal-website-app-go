@@ -17,6 +17,7 @@ import (
 	"personal-website-go/internal/model"
 	"personal-website-go/internal/repository"
 	"personal-website-go/internal/response"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,11 +30,9 @@ import (
 const articleSiteDirName = "article-sites"
 
 const (
-	articleSiteMaxHTMLBytes = 10 << 20
-	articleSiteMaxFileBytes = 256 << 20
-	articleSiteRedisTTL     = 30 * time.Second
-	articleSiteLocalTTL     = 5 * time.Second
-	articleSiteFallbackTTL  = 30 * time.Second
+	articleSiteRedisTTL    = 30 * time.Second
+	articleSiteLocalTTL    = 5 * time.Second
+	articleSiteFallbackTTL = 30 * time.Second
 )
 
 type articleSiteAccessEntry struct {
@@ -244,7 +243,7 @@ func articleSiteExpiry(now time.Time, ttl time.Duration) time.Time {
 
 func serveArticleSiteHTML(c *gin.Context, target, baseURL string) {
 	info, err := os.Stat(target)
-	if err != nil || info.IsDir() || info.Size() > articleSiteMaxHTMLBytes {
+	if err != nil || info.IsDir() {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
@@ -263,7 +262,151 @@ func serveArticleSiteHTML(c *gin.Context, target, baseURL string) {
 			html = base + html
 		}
 	}
+	html = compatArticleSiteHTML(html)
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+}
+
+var (
+	articleSiteTypeModuleRe  = regexp.MustCompile(`(?i)\s*\btype\s*=\s*(?:"module"|'module'|module)(?:\s|/|$)`)
+	articleSiteCrossoriginRe = regexp.MustCompile(`(?i)\s*\bcrossorigin(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?`)
+	articleSiteSrcRe         = regexp.MustCompile(`(?i)\bsrc\s*=`)
+	articleSiteDeferAsyncRe  = regexp.MustCompile(`(?i)\b(?:defer|async)\b`)
+	articleSiteNomoduleRe    = regexp.MustCompile(`(?i)\bnomodule\b`)
+	articleSiteImportRe      = regexp.MustCompile(`(?:^|[;{}\(\[\s])import\s*(?:\(|[*\w{'"])`)
+	articleSiteExportRe      = regexp.MustCompile(`(?:^|[;{}\(\[\s])export\s+(?:default|async|function|class|const|let|var|enum|type|\{|\*)`)
+	articleSiteSpaceRe       = regexp.MustCompile(`\s+`)
+)
+
+func compatArticleSiteHTML(html string) string {
+	var out, moved strings.Builder
+	lower := strings.ToLower(html)
+	offset := 0
+	for offset < len(html) {
+		scriptStart := indexFrom(lower, "<script", offset)
+		linkStart := indexFrom(lower, "<link", offset)
+		start := earliestIndex(scriptStart, linkStart)
+		if start < 0 {
+			out.WriteString(html[offset:])
+			break
+		}
+
+		isScript := scriptStart == start
+		nameLen := 4
+		if isScript {
+			nameLen = 6
+		}
+		afterName := start + 1 + nameLen
+		if afterName < len(html) {
+			ch := html[afterName]
+			if ch != '>' && ch != '/' && ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
+				out.WriteString(html[offset:afterName])
+				offset = afterName
+				continue
+			}
+		}
+
+		tagEndRel := strings.IndexByte(html[start:], '>')
+		if tagEndRel < 0 {
+			out.WriteString(html[offset:])
+			break
+		}
+		tagEnd := start + tagEndRel
+		out.WriteString(html[offset:start])
+		attrs := html[start+1+nameLen : tagEnd]
+
+		if !isScript {
+			out.WriteString("<link")
+			out.WriteString(stripArticleSiteCrossorigin(attrs))
+			out.WriteByte('>')
+			offset = tagEnd + 1
+			continue
+		}
+
+		closeRel := strings.Index(strings.ToLower(html[tagEnd:]), "</script>")
+		if closeRel < 0 {
+			out.WriteString(html[start:])
+			break
+		}
+		close := tagEnd + closeRel
+		body := html[tagEnd+1 : close]
+		full := html[start : close+len("</script>")]
+		rewritten, move := rewriteArticleSiteScript(attrs, body, full)
+		if move {
+			moved.WriteString(rewritten)
+		} else {
+			out.WriteString(rewritten)
+		}
+		offset = close + len("</script>")
+	}
+
+	result := out.String()
+	extra := moved.String()
+	if extra == "" {
+		return result
+	}
+	if idx := strings.LastIndex(strings.ToLower(result), "</body>"); idx >= 0 {
+		return result[:idx] + extra + result[idx:]
+	}
+	return result + extra
+}
+
+func rewriteArticleSiteScript(attrs, body, full string) (string, bool) {
+	if !articleSiteTypeModuleRe.MatchString(attrs) || articleSiteNomoduleRe.MatchString(attrs) {
+		return full, false
+	}
+	if articleSiteScriptNeedsModule(body) {
+		return full, false
+	}
+	attrs = articleSiteTypeModuleRe.ReplaceAllString(attrs, "")
+	attrs = stripArticleSiteCrossorigin(attrs)
+	hasSrc := articleSiteSrcRe.MatchString(attrs)
+	if hasSrc && !articleSiteDeferAsyncRe.MatchString(attrs) {
+		attrs += " defer"
+	}
+	attrs = strings.TrimSpace(articleSiteSpaceRe.ReplaceAllString(attrs, " "))
+	html := "<script>" + body + "</script>"
+	if attrs != "" {
+		html = "<script " + attrs + ">" + body + "</script>"
+	}
+	return html, !hasSrc
+}
+
+func articleSiteScriptNeedsModule(body string) bool {
+	if strings.Contains(body, "import.meta") {
+		return true
+	}
+	if strings.Contains(body, "import") && articleSiteImportRe.MatchString(body) {
+		return true
+	}
+	if strings.Contains(body, "export") && articleSiteExportRe.MatchString(body) {
+		return true
+	}
+	return false
+}
+
+func stripArticleSiteCrossorigin(attrs string) string {
+	return strings.TrimRight(articleSiteCrossoriginRe.ReplaceAllString(attrs, ""), " \t\r\n")
+}
+
+func indexFrom(haystack, needle string, offset int) int {
+	if offset >= len(haystack) {
+		return -1
+	}
+	rel := strings.Index(haystack[offset:], needle)
+	if rel < 0 {
+		return -1
+	}
+	return offset + rel
+}
+
+func earliestIndex(first, second int) int {
+	if first < 0 {
+		return second
+	}
+	if second < 0 || first <= second {
+		return first
+	}
+	return second
 }
 
 func articleSiteAccessAllowed(requestCtx context.Context, id uint64, siteKey string, version int64) bool {
@@ -400,13 +543,6 @@ func extractArticleSite(files []*zip.File, prefix, stage string, settings *model
 		}
 		if !articleSiteAllowedExts[strings.ToLower(filepath.Ext(cleaned))] {
 			return 0, 0, fmt.Errorf("不支持静态文件类型：%s", filepath.Ext(cleaned))
-		}
-		fileLimit := int64(articleSiteMaxFileBytes)
-		if ext := strings.ToLower(filepath.Ext(cleaned)); ext == ".html" || ext == ".htm" {
-			fileLimit = articleSiteMaxHTMLBytes
-		}
-		if int64(file.UncompressedSize64) > fileLimit {
-			return 0, 0, fmt.Errorf("静态前端单个文件过大：%s", cleaned)
 		}
 		count++
 		if count > maxFiles {

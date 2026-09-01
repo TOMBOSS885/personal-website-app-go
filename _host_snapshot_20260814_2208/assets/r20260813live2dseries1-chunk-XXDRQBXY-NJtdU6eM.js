@@ -1,0 +1,1 @@
+import{n as e}from"./r20260813live2dseries1-chunk-Y2CYZVJY-DsF7k-Jl.js";import{p as t}from"./r20260813live2dseries1-src-DNAbZHl8.js";var n=e((e,n)=>{let r;return n===`sandbox`&&(r=t(`#i`+e)),t(n===`sandbox`?r.nodes()[0].contentDocument.body:`body`).select(`[id="${e}"]`)},`getDiagramElement`);export{n as t};

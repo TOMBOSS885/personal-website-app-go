@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
 import LoadingIndicator from './LoadingIndicator'
-import { KATEX_OPTIONS, normalizeMarkdownMath } from '../utils/markdownMath'
+import { KATEX_OPTIONS, normalizeMarkdownMath, remarkSingleLineDisplayMath } from '../utils/markdownMath'
 import { optimizeArticleImage } from '../utils/imageCompression'
 
 const API_BASE = ''
@@ -231,7 +231,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const deferredValue = useDeferredValue(preview === 'edit' ? ' ' : (value || ' '))
   const normalizedValue = useMemo(() => normalizeMarkdownMath(deferredValue), [deferredValue])
   const previewContent = (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkSingleLineDisplayMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}>
       {normalizedValue}
     </ReactMarkdown>
   )

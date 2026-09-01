@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>脆皮大学生精神状态图鉴：当命运的齿轮开始转动</title>
+<meta name="description" content="一篇融合热梗、抽象到极致的大学生精神状态观察报告" />
+<style>
+/* ============================================
+   基础重置
+   ============================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: "Comic Sans MS", "Microsoft YaHei", "PingFang SC", "楷体", system-ui, sans-serif;
+  color: #1a1a1a;
+  background: #ffeb3b;
+  background-image:
+    radial-gradient(circle at 12% 18%, #ff00aa 0, transparent 18%),
+    radial-gradient(circle at 88% 30%, #00e5ff 0, transparent 22%),
+    radial-gradient(circle at 30% 80%, #76ff03 0, transparent 20%),
+    radial-gradient(circle at 75% 75%, #ff6d00 0, transparent 18%),
+    repeating-linear-gradient(45deg, rgba(0,0,0,.04) 0 8px, transparent 8px 16px);
+  overflow-x: hidden;
+  cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'><text y='26' font-size='26'>🍳</text></svg>") 4 4, auto;
+  min-height: 100vh;
+}
+
+/* ============================================
+   顶部滚动条（多个）
+   ============================================ */
+.marquee {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  font-weight: 900;
+  padding: 10px 0;
+  border-top: 4px solid #000;
+  border-bottom: 4px solid #000;
+  letter-spacing: 2px;
+}
+.marquee span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: marquee 18s linear infinite;
+  font-size: clamp(18px, 2.4vw, 28px);
+}
+.marquee.m1 { background: #ff00aa; color: #fff700; }
+.marquee.m1 span { animation-duration: 14s; }
+.marquee.m2 { background: #000; color: #00ff66; }
+.marquee.m2 span { animation-duration: 22s; animation-direction: reverse; }
+.marquee.m3 { background: #00e5ff; color: #ff0044; }
+.marquee.m3 span { animation-duration: 9s; }
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+/* ============================================
+   头部 Hero
+   ============================================ */
+.hero {
+  position: relative;
+  padding: clamp(40px, 8vw, 100px) 6vw 60px;
+  text-align: center;
+  background:
+    repeating-linear-gradient(0deg, #fff 0 24px, #000 24px 26px),
+    repeating-linear-gradient(90deg, #ff00aa 0 12px, #00e5ff 12px 24px, #76ff03 24px 36px, #ffeb3b 36px 48px);
+  background-blend-mode: lighten;
+  border-bottom: 8px ridge #ff00aa;
+  overflow: hidden;
+}
+.hero h1 {
+  font-size: clamp(34px, 7vw, 88px);
+  margin: 0;
+  font-family: "Impact", "Comic Sans MS", "Microsoft YaHei", sans-serif;
+  color: #fff;
+  text-shadow:
+     3px  3px 0 #ff00aa,
+    -3px  3px 0 #00e5ff,
+     3px -3px 0 #76ff03,
+    -3px -3px 0 #ffeb3b,
+     0 10px 0 #000;
+  transform: rotate(-1.5deg);
+  letter-spacing: 2px;
+  animation: glitch 4s infinite;
+}
+.hero .subtitle {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 8px 18px;
+  background: #000;
+  color: #fff700;
+  font-weight: 800;
+  transform: rotate(2deg);
+  font-size: clamp(14px, 1.6vw, 18px);
+  box-shadow: 6px 6px 0 #ff00aa;
+}
+.hero .meta {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.hero .meta span {
+  background: #fff;
+  border: 3px solid #000;
+  padding: 6px 12px;
+  border-radius: 999px;
+  box-shadow: 4px 4px 0 #000;
+  font-weight: 700;
+}
+.hero .meta span:nth-child(2n) { transform: rotate(-2deg); background: #76ff03; }
+.hero .meta span:nth-child(3n) { transform: rotate(1.5deg); background: #ffeb3b; }
+.hero .meta span:nth-child(4n) { transform: rotate(-1deg); background: #00e5ff; }
+
+@keyframes glitch {
+  0%, 100% { transform: rotate(-1.5deg) translate(0, 0); }
+  20% { transform: rotate(-1.5deg) translate(-2px, 1px); }
+  40% { transform: rotate(-1.5deg) translate(2px, -1px); }
+  60% { transform: rotate(-1.5deg) translate(-1px, -1px); }
+  80% { transform: rotate(-1.5deg) translate(1px, 1px); }
+}
+
+/* 飘动的小表情 */
+.float-emoji {
+  position: absolute;
+  font-size: clamp(28px, 4vw, 56px);
+  pointer-events: none;
+  animation: floaty 6s ease-in-out infinite;
+}
+.float-emoji:nth-child(1) { top: 8%; left: 6%; animation-delay: 0s; }
+.float-emoji:nth-child(2) { top: 14%; right: 8%; animation-delay: 1s; }
+.float-emoji:nth-child(3) { bottom: 12%; left: 10%; animation-delay: 2s; }
+.float-emoji:nth-child(4) { bottom: 18%; right: 12%; animation-delay: 3s; }
+.float-emoji:nth-child(5) { top: 50%; left: 3%; animation-delay: 1.5s; }
+.float-emoji:nth-child(6) { top: 60%; right: 4%; animation-delay: 2.5s; }
+
+@keyframes floaty {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25% { transform: translateY(-20px) rotate(-15deg); }
+  50% { transform: translateY(10px) rotate(10deg); }
+  75% { transform: translateY(-15px) rotate(-8deg); }
+}
+
+/* ============================================
+   内容主体
+   ============================================ */
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 40px 6vw 80px;
+}
+
+.section {
+  position: relative;
+  margin: 50px 0;
+  padding: 28px 24px;
+  background: #fff;
+  border: 4px solid #000;
+  box-shadow: 10px 10px 0 #000;
+  border-radius: 4px;
+}
+.section::before {
+  content: attr(data-sticker);
+  position: absolute;
+  top: -22px;
+  left: -16px;
+  background: #ff00aa;
+  color: #fff;
+  padding: 4px 14px;
+  border: 3px solid #000;
+  font-weight: 900;
+  font-size: 14px;
+  transform: rotate(-5deg);
+  box-shadow: 4px 4px 0 #000;
+  letter-spacing: 1px;
+}
+.section:nth-child(even)::before { background: #00e5ff; transform: rotate(4deg); left: auto; right: -10px; }
+.section:nth-child(3n)::before { background: #76ff03; }
+.section:nth-child(4n)::before { background: #ffeb3b; color: #000; }
+.section:nth-child(5n)::before { background: #ff6d00; }
+
+.section h2 {
+  margin: 0 0 14px;
+  font-family: "Impact", "Microsoft YaHei", sans-serif;
+  font-size: clamp(22px, 3.2vw, 34px);
+  letter-spacing: 1px;
+}
+.section h2 .num {
+  display: inline-block;
+  background: #000;
+  color: #ffeb3b;
+  padding: 2px 12px;
+  margin-right: 10px;
+  transform: rotate(-3deg);
+}
+.section p {
+  font-size: clamp(15px, 1.6vw, 17px);
+  line-height: 1.85;
+  margin: 12px 0;
+  text-indent: 2em;
+}
+.section p strong {
+  background: linear-gradient(transparent 60%, #ffeb3b 60%);
+  font-weight: 800;
+  padding: 0 2px;
+}
+.section em {
+  font-style: normal;
+  background: #000;
+  color: #76ff03;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: "Courier New", monospace;
+}
+.section .quote {
+  margin: 18px 0;
+  padding: 16px 20px;
+  background: #000;
+  color: #fff;
+  border-left: 6px solid #ff00aa;
+  font-style: italic;
+  transform: rotate(-0.5deg);
+  font-size: 15px;
+  position: relative;
+}
+.section .quote::after {
+  content: "— 摘自本脆皮大脑";
+  display: block;
+  text-align: right;
+  margin-top: 8px;
+  color: #ffeb3b;
+  font-size: 12px;
+  font-style: normal;
+}
+
+/* 卡片样式：当日精神状态 */
+.status-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 16px 0;
+}
+.status-card .pill {
+  padding: 10px;
+  background: #fff;
+  border: 3px solid #000;
+  text-align: center;
+  font-weight: 800;
+  font-size: 13px;
+  box-shadow: 4px 4px 0 #000;
+}
+.status-card .pill:nth-child(odd) { background: #ff00aa; color: #fff; transform: rotate(-1deg); }
+.status-card .pill:nth-child(even) { background: #76ff03; transform: rotate(1deg); }
+.status-card .pill:nth-child(3n) { background: #00e5ff; }
+
+/* 排行榜 */
+.rank {
+  counter-reset: rank;
+  margin: 18px 0;
+  padding: 0;
+  list-style: none;
+}
+.rank li {
+  counter-increment: rank;
+  position: relative;
+  padding: 12px 14px 12px 56px;
+  margin: 10px 0;
+  background: #fff;
+  border: 3px solid #000;
+  font-weight: 700;
+  box-shadow: 5px 5px 0 #000;
+}
+.rank li::before {
+  content: counter(rank);
+  position: absolute;
+  left: -3px;
+  top: -3px;
+  width: 42px;
+  height: 42px;
+  background: #000;
+  color: #ffeb3b;
+  display: grid;
+  place-items: center;
+  font-family: "Impact", sans-serif;
+  font-size: 20px;
+  border: 3px solid #000;
+}
+.rank li:nth-child(1)::before { background: #ff00aa; color: #fff; }
+.rank li:nth-child(2)::before { background: #00e5ff; color: #000; }
+.rank li:nth-child(3)::before { background: #76ff03; color: #000; }
+
+/* 对话气泡 */
+.chat {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 14px 0;
+}
+.chat .who {
+  flex: 0 0 44px;
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  background: #000; color: #ffeb3b;
+  border-radius: 50%;
+  font-weight: 900;
+  font-size: 14px;
+  border: 3px solid #000;
+}
+.chat.right { flex-direction: row-reverse; }
+.chat.right .who { background: #ff00aa; color: #fff; }
+.chat .bubble {
+  background: #fff;
+  border: 3px solid #000;
+  padding: 10px 14px;
+  border-radius: 18px;
+  font-size: 14px;
+  position: relative;
+  max-width: 75%;
+  box-shadow: 4px 4px 0 #000;
+}
+.chat .bubble::before {
+  content: "";
+  position: absolute;
+  left: -14px;
+  top: 12px;
+  width: 0; height: 0;
+  border: 7px solid transparent;
+  border-right-color: #000;
+}
+.chat .bubble::after {
+  content: "";
+  position: absolute;
+  left: -10px;
+  top: 14px;
+  width: 0; height: 0;
+  border: 5px solid transparent;
+  border-right-color: #fff;
+}
+.chat.right .bubble::before { left: auto; right: -14px; border-right-color: transparent; border-left-color: #000; }
+.chat.right .bubble::after  { left: auto; right: -10px; border-right-color: transparent; border-left-color: #fff; }
+
+/* 大字标语 */
+.banner {
+  position: relative;
+  margin: 60px -6vw;
+  padding: 28px 6vw;
+  background: #000;
+  color: #fff700;
+  text-align: center;
+  font-family: "Impact", "Microsoft YaHei", sans-serif;
+  font-size: clamp(26px, 4.5vw, 48px);
+  font-weight: 900;
+  letter-spacing: 2px;
+  border-top: 5px solid #ff00aa;
+  border-bottom: 5px solid #00e5ff;
+  transform: rotate(-0.6deg);
+  text-shadow: 3px 3px 0 #ff00aa;
+}
+
+/* 飘浮贴纸（任意位置） */
+.sticker {
+  position: fixed;
+  z-index: 50;
+  pointer-events: auto;
+  font-size: clamp(22px, 3vw, 36px);
+  cursor: grab;
+  user-select: none;
+  filter: drop-shadow(3px 3px 0 #000);
+  transition: transform .15s ease;
+}
+.sticker:active { cursor: grabbing; }
+
+/* 便签条 */
+.sticky {
+  background: #ffeb3b;
+  padding: 14px 16px;
+  margin: 18px auto;
+  max-width: 320px;
+  font-family: "楷体", "Kaiti SC", serif;
+  font-size: 14px;
+  transform: rotate(2deg);
+  box-shadow: 4px 6px 14px rgba(0,0,0,.18);
+  position: relative;
+}
+.sticky::before {
+  content: "";
+  position: absolute;
+  top: -8px; left: 50%;
+  transform: translateX(-50%);
+  width: 60px; height: 18px;
+  background: rgba(0,0,0,.12);
+  border-radius: 4px;
+}
+
+/* 时间轴 */
+.timeline {
+  position: relative;
+  margin: 20px 0 20px 26px;
+  padding-left: 24px;
+  border-left: 4px dashed #000;
+}
+.timeline .item {
+  margin: 14px 0;
+  padding: 10px 14px;
+  background: #fff;
+  border: 3px solid #000;
+  box-shadow: 4px 4px 0 #000;
+  position: relative;
+}
+.timeline .item::before {
+  content: "";
+  position: absolute;
+  left: -34px;
+  top: 14px;
+  width: 18px; height: 18px;
+  background: #ff00aa;
+  border: 3px solid #000;
+  border-radius: 50%;
+}
+.timeline .item time {
+  display: inline-block;
+  font-family: "Courier New", monospace;
+  font-weight: 900;
+  background: #000;
+  color: #76ff03;
+  padding: 2px 8px;
+  margin-right: 8px;
+  font-size: 13px;
+}
+
+/* 进度条：精神状态 */
+.meter {
+  margin: 14px 0;
+}
+.meter .label {
+  display: flex; justify-content: space-between;
+  font-weight: 800; font-size: 14px;
+  margin-bottom: 6px;
+}
+.meter .bar {
+  height: 22px;
+  background: #eee;
+  border: 3px solid #000;
+  position: relative;
+  overflow: hidden;
+}
+.meter .bar > i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(45deg, #ff00aa 0 10px, #fff 10px 20px);
+  animation: meter-stripe 1.5s linear infinite;
+}
+.meter:nth-child(2n) .bar > i { background: repeating-linear-gradient(45deg, #00e5ff 0 10px, #000 10px 20px); }
+.meter:nth-child(3n) .bar > i { background: repeating-linear-gradient(45deg, #76ff03 0 10px, #ffeb3b 10px 20px); }
+.meter:nth-child(4n) .bar > i { background: repeating-linear-gradient(45deg, #ff6d00 0 10px, #000 10px 20px); }
+@keyframes meter-stripe {
+  from { background-position: 0 0; }
+  to   { background-position: 28px 0; }
+}
+
+/* 页脚 */
+footer {
+  position: relative;
+  text-align: center;
+  padding: 40px 6vw 80px;
+  background: #000;
+  color: #ffeb3b;
+  border-top: 8px ridge #ff00aa;
+}
+footer .big {
+  font-size: clamp(20px, 3vw, 32px);
+  font-weight: 900;
+  font-family: "Impact", sans-serif;
+  margin-bottom: 10px;
+}
+footer a {
+  color: #76ff03;
+  text-decoration: underline wavy #ff00aa;
+}
+footer .small {
+  font-size: 12px;
+  opacity: .7;
+  margin-top: 12px;
+}
+
+/* ============================================
+   响应式
+   ============================================ */
+@media (max-width: 600px) {
+  .section { box-shadow: 6px 6px 0 #000; padding: 22px 16px; }
+  .hero { padding: 40px 5vw 40px; }
+  .banner { margin: 40px -5vw; padding: 20px 5vw; }
+  .sticker { display: none; } /* 小屏不显示飘浮贴纸，避免遮挡 */
+  main { padding: 30px 5vw 60px; }
+}
+
+/* 雪花/星星点缀 */
+.sparkle {
+  position: fixed;
+  pointer-events: none;
+  font-size: 14px;
+  color: #ff00aa;
+  z-index: 1;
+  animation: fall linear infinite;
+  opacity: .8;
+}
+@keyframes fall {
+  from { transform: translateY(-10vh) rotate(0); }
+  to   { transform: translateY(110vh) rotate(360deg); }
+}
+
+/* 鼠标点击彩屑 */
+.confetti {
+  position: fixed;
+  pointer-events: none;
+  width: 8px; height: 8px;
+  z-index: 9999;
+  animation: confetti 1s ease-out forwards;
+}
+@keyframes confetti {
+  to {
+    transform: translate(var(--x), var(--y)) rotate(720deg);
+    opacity: 0;
+  }
+}
+
+/* 抖动动画（被点击时） */
+@keyframes shake {
+  0%, 100% { transform: translate(0,0) rotate(0); }
+  20% { transform: translate(-6px, 2px) rotate(-3deg); }
+  40% { transform: translate(6px, -2px) rotate(3deg); }
+  60% { transform: translate(-4px, 4px) rotate(-2deg); }
+  80% { transform: translate(4px, -4px) rotate(2deg); }
+}
+.shake { animation: shake .5s ease; }
+</style>
+</head>
+<body>
+
+<!-- 顶部三层滚动条 -->
+<div class="marquee m1"><span>🔥 脆皮脆皮脆皮脆皮脆皮脆皮脆皮脆皮脆皮脆皮 🔥 &nbsp;&nbsp; ⚡ 主打一个精神失常 ⚡ &nbsp;&nbsp; 📍 命运的齿轮开始转动 📍 &nbsp;&nbsp; 🎯 已读不回是对牛弹琴 🎯 &nbsp;&nbsp; 💥 退退退退退退退退退退 💥</span></div>
+<div class="marquee m2"><span>🧠 当前大学生精神状态：正在重启 &nbsp;&nbsp; 🪫 电量：3% &nbsp;&nbsp; 🫠 班味浓度：爆表 &nbsp;&nbsp; 🍵 今日份咖啡因摄入：已达人体极限 &nbsp;&nbsp; 📉 学习曲线：自由落体 &nbsp;&nbsp; 💸 钱包厚度：和发量一样稀疏</span></div>
+<div class="marquee m3"><span>💬 评论精选："看完这条精神状态图鉴，感觉自己也该挂一个脑科" &nbsp;&nbsp; 🐮 今日牛马：本人 &nbsp;&nbsp; 🥲 emo了 家人们谁懂啊</span></div>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="float-emoji">🥲</div>
+  <div class="float-emoji">🫠</div>
+  <div class="float-emoji">🧠</div>
+  <div class="float-emoji">🪫</div>
+  <div class="float-emoji">💸</div>
+  <div class="float-emoji">📉</div>
+
+  <h1>脆皮大学生<br/>精神状态图鉴</h1>
+  <div class="subtitle">⚡ 当命运的齿轮开始转动，我选择躺平 ⚡</div>
+  <div class="meta">
+    <span>📅 2026.08.01</span>
+    <span>✍️ 一个不愿透露姓名的脆皮</span>
+    <span>👀 阅读时长：≈ 3 分钟精神损耗</span>
+    <span>🏷️ 标签：发疯文学 / 摆烂指南</span>
+    <span>⚠️ 危险等级：SSS</span>
+  </div>
+</header>
+
+<main>
+
+  <article class="section" data-sticker="引言 · 命运的齿轮">
+    <h2><span class="num">00</span>引言：命运的齿轮开始转动</h2>
+    <p>
+      凌晨两点，我盯着天花板，脑子里只剩一句话：<strong>命运的齿轮开始转动</strong>。
+      是的，它开始转了，转的是我的<em>精神状态</em>。
+      作为一个标准的<strong>脆皮大学生</strong>，我每天都在孔乙己的长衫里瑟瑟发抖，
+      在"上不如老、下不如小"的夹缝里求生存。
+    </p>
+    <div class="quote">
+      室友问我："你怎么又 emo 了？" 我说："不，我这是<strong>深度人生思考</strong>。"
+    </div>
+    <p>
+      如果你也曾在六点半的闹钟里怀疑过人生，在高数课上灵魂出窍，在食堂里纠结"吃啥都难吃"，
+      那恭喜你——你也是这篇<strong>图鉴</strong>的主角。
+      接下来，请系好安全带，因为我的精神状态，主打一个<em>狂飙</em>。
+    </p>
+  </article>
+
+  <article class="section" data-sticker="早晨 · 灵魂出窍">
+    <h2><span class="num">01</span>06:30 · 闹钟响起，灵魂拒绝上线</h2>
+    <p>
+      闹钟第一遍：<em>已读不回</em>。<br/>
+      闹钟第二遍：看了一眼，<strong>退退退</strong>。<br/>
+      闹钟第三遍：开始认真思考"请假 vs 旷课"哪个扣分少。
+    </p>
+    <div class="chat">
+      <div class="who">我</div>
+      <div class="bubble">再睡五分钟……就五分钟……</div>
+    </div>
+    <div class="chat right">
+      <div class="who">闹钟</div>
+      <div class="bubble">你昨晚也是这么说的。👁️👁️</div>
+    </div>
+    <div class="chat">
+      <div class="who">我</div>
+      <div class="bubble">主打一个<strong>诚信</strong>。</div>
+    </div>
+    <div class="sticky">📝 今日 to-do：起床、上课、吃饭、睡觉、假装活着。</div>
+    <p>
+      最终挣扎到 7:45，<strong>班味</strong>已经从脸上渗出来。
+      室友问我是不是昨晚没睡好，我微微一笑："不，是灵魂还没加载完。"
+    </p>
+  </article>
+
+  <article class="section" data-sticker="上午 · 高数飞升">
+    <h2><span class="num">02</span>08:00 · 高数课，脑电波直接飞升</h2>
+    <p>
+      老师在上面讲极限，我坐在下面思考<strong>人类存在的意义</strong>。
+      粉笔灰飘下来，像极了我的 GPA，正在缓慢坠落。
+    </p>
+
+    <h3 style="margin-top:18px;font-size:18px;">🧪 本节精神状态指数</h3>
+    <div class="meter">
+      <div class="label"><span>专注度</span><span>12%</span></div>
+      <div class="bar"><i style="width:12%"></i></div>
+    </div>
+    <div class="meter">
+      <div class="label"><span>求生欲</span><span>3%</span></div>
+      <div class="bar"><i style="width:3%"></i></div>
+    </div>
+    <div class="meter">
+      <div class="label"><span>走神浓度</span><span>200%</span></div>
+      <div class="bar"><i style="width:100%"></i></div>
+    </div>
+    <div class="meter">
+      <div class="label"><span>对未来的希望</span><span>???</span></div>
+      <div class="bar"><i style="width:1%"></i></div>
+    </div>
+
+    <div class="quote">
+      "ε-δ 定义没听懂，人生的定义也差不多没听懂。"
+    </div>
+  </article>
+
+  <article class="section" data-sticker="中午 · 食堂生化危机">
+    <h2><span class="num">03</span>12:00 · 食堂：每日一次的生化危机</h2>
+    <p>
+      食堂阿姨的勺子从来不听我指挥，<strong>手抖症</strong>晚期。
+      我打饭的规则是：<em>阿姨给我啥我吃啥，主打一个随缘。</em>
+    </p>
+    <ul class="rank">
+      <li>第一道菜：看起来像红烧肉，吃起来像橡皮。</li>
+      <li>第二道菜：米粒的硬度等级：8 级，专业八级。</li>
+      <li>第三道菜：汤里漂浮着未知生物，正在和我对视。</li>
+      <li>隐藏关卡：每次都希望遇到一个打菜不抖的阿姨。</li>
+    </ul>
+    <p>
+      结账时刷卡，余额 -8.5。<strong>钱包厚度</strong>：和发量同步下降。
+      我安慰自己："没事，吃的是<em>营养</em>，不是<em>金钱</em>。"
+      钱包回复：<strong>"你开心就好。"</strong>
+    </p>
+  </article>
+
+  <!-- 大字标语 -->
+  <div class="banner">「我 上 不 了 岸，但我 也 没 想 沉 啊」</div>
+
+  <article class="section" data-sticker="下午 · 小组作业群魔乱舞">
+    <h2><span class="num">04</span>14:00 · 小组作业：群魔乱舞大舞台</h2>
+    <p>
+      群里四个人，每个人都在等<strong>其他人先动手</strong>。
+      这是当代脆皮大学生最强的<em>被动技能</em>——<strong>已读不回</strong>。
+    </p>
+
+    <div class="chat">
+      <div class="who">组长</div>
+      <div class="bubble">@全体成员 任务分工一下？</div>
+    </div>
+    <div class="chat right">
+      <div class="who">组员A</div>
+      <div class="bubble">可以</div>
+    </div>
+    <div class="chat">
+      <div class="who">组长</div>
+      <div class="bubble">那 A 你来负责第一部分？</div>
+    </div>
+    <div class="chat right">
+      <div class="who">组员A</div>
+      <div class="bubble">再看看呢</div>
+    </div>
+    <div class="chat">
+      <div class="who">组长</div>
+      <div class="bubble">好的👌</div>
+    </div>
+    <div class="chat right">
+      <div class="who">系统提示</div>
+      <div class="bubble">距离 DDL：6 小时 | 已完成：0%</div>
+    </div>
+
+    <p>
+      最终我在 deadline 前 47 分钟一个人肝完了 80%，并在心里默念：
+      <em>"主打一个全是我一个人干的。"</em>
+    </p>
+  </article>
+
+  <article class="section" data-sticker="傍晚 · 夕阳与 emo">
+    <h2><span class="num">05</span>18:00 · 操场夕阳：emo 的高发地带</h2>
+    <p>
+      操场上有人在跑步，有人在散步，有人在放风筝。
+      而我，站在跑道中间，思考"<strong>我上辈子是不是一块生锈的齿轮</strong>"。
+    </p>
+    <div class="sticky">🪐 夕阳很美，但我更想吃炸鸡。</div>
+    <p>
+      远处传来《起风了》。<strong>命运的齿轮</strong>又开始转了，
+      转到了"听着慢歌、鼻子发酸、突然想给妈妈打电话"的状态。
+      抬头看天，低头 emo——这就是<strong>45 度人生</strong>。
+    </p>
+  </article>
+
+  <article class="section" data-sticker="夜晚 · 发疯文学大会">
+    <h2><span class="num">06</span>22:00 · 宿舍发疯文学大会</h2>
+    <p>
+      夜深了，宿舍四个人集体变身<strong>发疯文学带师</strong>，
+      每个人轮流发一段话，然后互相点赞，互相致意。
+    </p>
+
+    <div class="status-card">
+      <div class="pill">👑 发疯冠军</div>
+      <div class="pill">🥲 emo 王者</div>
+      <div class="pill">🥱 摆烂仙人</div>
+      <div class="pill">🤡 小丑竟是我</div>
+      <div class="pill">🐮 资深牛马</div>
+      <div class="pill">🪦 心理砖家</div>
+    </div>
+
+    <p>
+      我们的<strong>电子榨菜</strong>从《甄嬛传》换到《再见爱人》，
+      边看边吃外卖，外卖边吃边凉，人生边活边塌。
+      <em>主打一个：人活着，钱没了，头发也没了。</em>
+    </p>
+
+    <div class="timeline">
+      <div class="item"><time>22:30</time> 室友 A 突然坐起来："我好像真的不喜欢我的专业。"</div>
+      <div class="item"><time>22:35</time> 全员沉默 3 秒钟，然后异口同声："我也是。"</div>
+      <div class="item"><time>22:50</time> 开始互相安慰："没事，大家都一样烂。"</div>
+      <div class="item"><time>23:10</time> 集体打开 B 站，看<strong>挖呀挖</strong>，瞬间治愈。</div>
+      <div class="item"><time>23:59</time> 准备睡觉，明天的<strong>命运的齿轮</strong>还要继续转动。</div>
+      <div class="item"><time>00:01</time> 集体决定：再刷 30 分钟手机。</div>
+    </div>
+  </article>
+
+  <article class="section" data-sticker="结语 · 明天继续努力">
+    <h2><span class="num">07</span>结语：明天继续努力摆烂</h2>
+    <p>
+      这就是<strong>脆皮大学生</strong>普通的一天。
+      没有<em>泼天的富贵</em>，没有<em>命运的奇迹</em>，
+      只有在一次又一次的<strong>摆烂</strong>和<strong>假装努力</strong>之间来回横跳。
+    </p>
+    <p>
+      但我们依然没有放弃——
+      我们只是在用<strong>孔乙己脱不下长衫的倔强</strong>，
+      死磕这个世界，然后被这个世界温柔地<em>放过</em>。
+    </p>
+    <div class="quote">
+      愿每一个<strong>脆皮大学生</strong>，<br/>
+      都能在 emo 和发疯之间，找到属于自己的<strong>45 度</strong>。
+    </div>
+    <p style="text-align:center; font-size:20px; margin-top:24px;">
+      —— 全文完 ——<br/>
+      <span style="font-size:14px; color:#666;">如果看到这里你笑了，那今天的我就没白熬。</span>
+    </p>
+  </article>
+
+</main>
+
+<!-- 页脚 -->
+<footer>
+  <div class="big">脆皮不易，多多包涵 ✊</div>
+  <div class="small">© 一个不愿透露姓名的脆皮 · 本页与项目同源，<em>主打一个抽象</em></div>
+</footer>
+
+<script>
+/* ============ 飘浮雪花/星星 ============ */
+(function () {
+  const emojis = ['✨','💫','⭐','🌟','💥','⚡','🌀','🌈'];
+  const count = 18;
+  for (let i = 0; i < count; i++) {
+    const el = document.createElement('div');
+    el.className = 'sparkle';
+    el.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    el.style.left = Math.random()*100 + 'vw';
+    el.style.fontSize = (10 + Math.random()*18) + 'px';
+    el.style.animationDuration = (8 + Math.random()*10) + 's';
+    el.style.animationDelay = (-Math.random()*15) + 's';
+    document.body.appendChild(el);
+  }
+})();
+
+/* ============ 飘浮贴纸 ============ */
+(function () {
+  const stickers = [
+    { e: '🐮', x: 4,  y: 30 },
+    { e: '🥲', x: 92, y: 22 },
+    { e: '🪫', x: 3,  y: 65 },
+    { e: '💸', x: 94, y: 70 },
+    { e: '📉', x: 50, y: 8  },
+    { e: '🧠', x: 90, y: 45 },
+    { e: '🫠', x: 6,  y: 85 },
+  ];
+  stickers.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'sticker';
+    el.textContent = s.e;
+    el.style.left = s.x + 'vw';
+    el.style.top  = s.y + 'vh';
+    el.style.transform = `rotate(${(Math.random()*20-10)}deg)`;
+    el.title = '点我一下';
+    el.addEventListener('click', e => {
+      el.classList.add('shake');
+      setTimeout(()=> el.classList.remove('shake'), 500);
+      burst(e.clientX, e.clientY);
+    });
+    document.body.appendChild(el);
+  });
+})();
+
+/* ============ 点击彩屑 ============ */
+function burst(x, y) {
+  const colors = ['#ff00aa','#00e5ff','#76ff03','#ffeb3b','#ff6d00','#fff'];
+  for (let i = 0; i < 24; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.style.background = colors[Math.floor(Math.random()*colors.length)];
+    c.style.left = x + 'px';
+    c.style.top  = y + 'px';
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = 60 + Math.random()*100;
+    c.style.setProperty('--x', Math.cos(angle)*dist + 'px');
+    c.style.setProperty('--y', Math.sin(angle)*dist + 'px');
+    document.body.appendChild(c);
+    setTimeout(()=> c.remove(), 1000);
+  }
+}
+
+/* ============ 鼠标点击全屏彩屑 ============ */
+document.addEventListener('click', e => {
+  // 只对 hero、footer、section 触发，避免和 sticker 重复
+  if (e.target.closest('.sticker')) return;
+  burst(e.clientX, e.clientY);
+});
+
+/* ============ 鼠标视差 ============ */
+(function () {
+  const stickers = document.querySelectorAll('.sticker');
+  const floats   = document.querySelectorAll('.float-emoji');
+  document.addEventListener('mousemove', e => {
+    const x = (e.clientX / window.innerWidth - 0.5);
+    const y = (e.clientY / window.innerHeight - 0.5);
+    stickers.forEach((el, i) => {
+      const k = (i % 2 === 0 ? 1 : -1) * 10;
+      el.style.translate = `${x*k}px ${y*k}px`;
+    });
+    floats.forEach((el, i) => {
+      const k = 6;
+      el.style.translate = `${x*k}px ${y*k}px`;
+    });
+  });
+})();
+
+/* ============ 进度条触发动画 ============ */
+(function () {
+  const meters = document.querySelectorAll('.meter .bar > i');
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      if (en.isIntersecting) {
+        en.target.style.transition = 'width 1.5s ease';
+      }
+    });
+  }, { threshold: 0.4 });
+  meters.forEach(m => io.observe(m));
+})();
+</script>
+
+</body>
+</html>

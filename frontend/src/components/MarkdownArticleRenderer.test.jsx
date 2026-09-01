@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import React from 'react'
 import { describe, expect, it } from 'vitest'
-import MarkdownArticleRenderer from './MarkdownArticleRenderer'
+import MarkdownArticleRenderer, { getMermaidCacheKey, sanitizeMermaidSvg } from './MarkdownArticleRenderer'
 
 function render(markdown) {
   return renderToStaticMarkup(
@@ -10,6 +10,14 @@ function render(markdown) {
 }
 
 describe('article markdown presentation', () => {
+  it('rejects Mermaid output when an XML parser is unavailable', () => {
+    expect(sanitizeMermaidSvg('<svg><rect /></svg>')).toBe('')
+    expect(sanitizeMermaidSvg('<div>bad</div>')).toBe('')
+  })
+  it('uses a stable cache key for the same diagram and theme', () => {
+    expect(getMermaidCacheKey('flowchart LR\nA --> B', 'light')).toBe('light:flowchart LR\nA --> B')
+    expect(getMermaidCacheKey('flowchart LR\nA --> B', 'dark')).not.toBe(getMermaidCacheKey('flowchart LR\nA --> B', 'light'))
+  })
   it('renders anchored headings and a single code block wrapper', () => {
     const html = render('## 安全配置\n\n```php\n<?php echo "ok";\n```')
     expect(html).toContain('class="article-heading-anchor"')

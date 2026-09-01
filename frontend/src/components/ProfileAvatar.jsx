@@ -36,7 +36,7 @@ export default function ProfileAvatar({
           sizes="(min-width: 768px) 128px, 96px"
           alt={profile?.nickname || 'avatar'}
           loading={loading}
-          fetchPriority={fetchPriority}
+          fetchpriority={fetchPriority}
           decoding="async"
           className={`h-full w-full rounded-full object-cover ${imageClassName}`}
         />

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { FileText, Folder, MessageCircle, Search, Zap } from 'lucide-react'
 import LoadingIndicator from '../components/LoadingIndicator'
+import { safeInternalPath } from '../utils/safeUrl'
 
 export default function SearchPage() {
   const [params, setParams] = useSearchParams()
@@ -59,7 +60,7 @@ export default function SearchPage() {
   return (
     <div className="min-h-screen px-4 pb-20 pt-28">
       <div className="mx-auto max-w-4xl">
-        <div className="rounded-3xl border border-white/60 bg-white/75 p-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:p-8">
+        <div className="adaptive-surface rounded-3xl border border-white/60 bg-white/75 p-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:p-8">
           <h1 className="flex items-center gap-3 text-3xl font-bold text-gray-900 dark:text-slate-100">
             <Search className="h-8 w-8" style={{ color: 'var(--theme-primary)' }} />
             全站搜索
@@ -93,7 +94,7 @@ export default function SearchPage() {
           </div>
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-3xl border border-white/60 bg-white/75 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60">
+        <div className="adaptive-surface mt-6 overflow-hidden rounded-3xl border border-white/60 bg-white/75 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-gray-500 dark:text-slate-400">
               <LoadingIndicator size={20} className="mr-2" />
@@ -110,7 +111,7 @@ export default function SearchPage() {
                 return (
                   <Link
                     key={`${item.type}-${item.id}`}
-                    to={item.url}
+                    to={safeInternalPath(item.url)}
                     className="group flex gap-4 px-5 py-4 transition hover:bg-white/80 dark:hover:bg-slate-900"
                   >
                     <span className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">

@@ -1,10 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowUpRight, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, ListTree, Lock, MessageCircle, Share2, Tag } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Bookmark, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Clock3, ListTree, Lock, MessageCircle, Share2, Tag } from 'lucide-react'
 import LoadingIndicator from '../components/LoadingIndicator'
 import { guestbookTargetUrl, guestMessageUrl } from '../utils/guestMessageTarget'
 import { usePageMetadata } from '../utils/pageMetadata'
+import { estimateArticleReading, getArticlePosition, isArticleFavorite, recordArticleVisit, saveArticlePosition, toggleArticleFavorite } from '../utils/readingLibrary'
+import { safeStaticSiteSrc } from '../utils/safeUrl'
 
 let markdownRendererPromise
 
@@ -37,9 +39,15 @@ export default function ArticleDetailPage() {
   const [relatedMessages, setRelatedMessages] = useState([])
   const [staticSiteHeight, setStaticSiteHeight] = useState(null)
   const [markdownRenderVersion, setMarkdownRenderVersion] = useState(0)
+  const [readingProgress, setReadingProgress] = useState(0)
+  const [favorite, setFavorite] = useState(false)
+  const [resumeProgress, setResumeProgress] = useState(0)
   const staticSiteFrameRef = useRef(null)
+  const readingProgressRef = useRef(0)
   const isStaticArticle = article?.contentType === 'static'
+  const staticSiteSrc = useMemo(() => safeStaticSiteSrc(article?.staticSiteUrl), [article?.staticSiteUrl])
   const tocItems = useMemo(() => buildToc(isStaticArticle ? '' : article?.content || ''), [article?.content, isStaticArticle])
+  const readingStats = useMemo(() => estimateArticleReading(isStaticArticle ? '' : article?.content || ''), [article?.content, isStaticArticle])
   const headingIdsByLine = useMemo(() => new Map(
     parseToc(article?.content || '').map(item => [item.sourceLine, item.id]),
   ), [article?.content])
@@ -51,6 +59,44 @@ export default function ArticleDetailPage() {
     siteName: 'tombossking',
   } : null, [article])
   usePageMetadata(articleMetadata)
+
+  useEffect(() => {
+    if (!article?.id || article.requiresPassword) return undefined
+    setFavorite(isArticleFavorite(article.id))
+    setResumeProgress(getArticlePosition(article.id))
+    recordArticleVisit(article)
+
+    let frame = 0
+    const updateProgress = () => {
+      frame = 0
+      const articleElement = document.querySelector('.article-content')
+      if (!articleElement) return
+      const rect = articleElement.getBoundingClientRect()
+      const start = window.scrollY + rect.top - Math.min(window.innerHeight * 0.2, 160)
+      const distance = Math.max(articleElement.offsetHeight - window.innerHeight * 0.65, 1)
+      const progress = Math.max(0, Math.min(1, (window.scrollY - start) / distance))
+      readingProgressRef.current = progress
+      setReadingProgress(progress)
+    }
+    const handleScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateProgress)
+    }
+    updateProgress()
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('resize', handleScroll)
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('resize', handleScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+      saveArticlePosition(article.id, readingProgressRef.current)
+    }
+  }, [article?.id, article?.requiresPassword, markdownRenderVersion])
+
+  useEffect(() => {
+    if (!article?.id || article.requiresPassword) return undefined
+    const timer = window.setTimeout(() => saveArticlePosition(article.id, readingProgress), 800)
+    return () => window.clearTimeout(timer)
+  }, [article?.id, article?.requiresPassword, readingProgress])
 
   const handleMarkdownRendered = useCallback(() => {
     setMarkdownRenderVersion(current => current + 1)
@@ -95,7 +141,7 @@ export default function ArticleDetailPage() {
 
   useEffect(() => {
     setStaticSiteHeight(null)
-    if (!isStaticArticle || !article?.staticSiteUrl) return undefined
+    if (!isStaticArticle || !staticSiteSrc) return undefined
 
     const handleStaticSiteSize = (event) => {
       if (event.source !== staticSiteFrameRef.current?.contentWindow) return
@@ -108,7 +154,7 @@ export default function ArticleDetailPage() {
 
     window.addEventListener('message', handleStaticSiteSize)
     return () => window.removeEventListener('message', handleStaticSiteSize)
-  }, [article?.staticSiteUrl, isStaticArticle])
+  }, [isStaticArticle, staticSiteSrc])
 
   const handleShare = async () => {
     const shareUrl = window.location.href
@@ -135,6 +181,18 @@ export default function ArticleDetailPage() {
     }
   }
 
+  const handleFavorite = () => {
+    setFavorite(toggleArticleFavorite(article))
+  }
+
+  const resumeReading = () => {
+    const articleElement = document.querySelector('.article-content')
+    if (!articleElement || resumeProgress <= 0) return
+    const target = window.scrollY + articleElement.getBoundingClientRect().top + articleElement.offsetHeight * resumeProgress - window.innerHeight * 0.2
+    window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' })
+    setResumeProgress(0)
+  }
+
   const handleUnlock = async (event) => {
     event.preventDefault()
     if (!password.trim() || unlocking) return
@@ -159,6 +217,11 @@ export default function ArticleDetailPage() {
       setUnlocking(false)
     }
   }
+
+  const resolveHeadingId = useCallback((node, children) => {
+    const sourceLine = node?.position?.start?.line
+    return (sourceLine ? headingIdsByLine.get(sourceLine) : undefined) || headingIdFromChildren(children)
+  }, [headingIdsByLine])
 
   if (loading) {
     return (
@@ -244,15 +307,11 @@ export default function ArticleDetailPage() {
     )
   }
 
-  const resolveHeadingId = (node, children) => {
-    const sourceLine = node?.position?.start?.line
-    return (sourceLine ? headingIdsByLine.get(sourceLine) : undefined) || headingIdFromChildren(children)
-  }
-
   return (
     <div className="min-h-screen bg-transparent">
+      {!isStaticArticle && <div className="reading-progress" aria-hidden="true"><span style={{ transform: `scaleX(${readingProgress})` }} /></div>}
       <div className="mx-auto max-w-[92rem] px-4 pb-8 pt-28 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem] lg:gap-6">
-        <div className="rounded-3xl border border-white/50 bg-white/60 px-5 py-6 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/50 md:px-8 lg:col-start-2">
+        <div className="adaptive-surface rounded-3xl border border-white/50 bg-white/60 px-5 py-6 shadow-lg shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/50 md:px-8 lg:col-start-2">
           <Link to="/blog" className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-100">
             <ArrowLeft className="h-4 w-4" />
             返回
@@ -271,10 +330,18 @@ export default function ArticleDetailPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-4 border-b border-gray-100 pb-6 text-sm text-gray-400 dark:border-slate-800 dark:text-slate-500">
-            <span>{new Date(article.createdAt).toLocaleDateString('zh-CN')}</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-gray-100 pb-6 text-sm text-gray-500 dark:border-slate-800 dark:text-slate-400">
+            <span>发布于 {new Date(article.createdAt).toLocaleDateString('zh-CN')}</span>
+            {isMeaningfulUpdate(article.createdAt, article.updatedAt) && <span>更新于 {new Date(article.updatedAt).toLocaleDateString('zh-CN')}</span>}
             <span>·</span>
             <span>{article.views || 0} 阅读</span>
+            {!isStaticArticle && <><span>·</span><span className="inline-flex items-center gap-1.5"><Clock3 className="h-4 w-4" />约 {readingStats.minutes} 分钟 · {readingStats.wordCount.toLocaleString('zh-CN')} 字</span></>}
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button type="button" onClick={handleFavorite} className={`theme-action-surface inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition ${favorite ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200' : 'border-gray-200 bg-white/70 text-gray-700 hover:border-indigo-300 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200'}`} aria-pressed={favorite}>
+              <Bookmark className={`h-4 w-4 ${favorite ? 'fill-current' : ''}`} />{favorite ? '已收藏' : '稍后读'}
+            </button>
+            {resumeProgress > 0.05 && <button type="button" onClick={resumeReading} className="text-sm font-medium text-indigo-700 hover:underline dark:text-indigo-300">继续上次阅读（{Math.round(resumeProgress * 100)}%）</button>}
           </div>
         </div>
       </div>
@@ -288,13 +355,13 @@ export default function ArticleDetailPage() {
         <div className={isStaticArticle ? '' : 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,56rem)_18rem]'}>
           <div className={isStaticArticle
             ? 'mx-auto max-w-[80rem] overflow-hidden bg-transparent'
-            : 'rounded-3xl border border-white/60 bg-white/75 px-5 py-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:px-8 md:py-8 lg:col-start-2'}>
+            : 'adaptive-surface rounded-3xl border border-white/60 bg-white/75 px-5 py-6 shadow-xl shadow-indigo-500/5 backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/60 md:px-8 md:py-8 lg:col-start-2'}>
             {isStaticArticle ? (
-              article.staticSiteUrl ? (
+              staticSiteSrc ? (
                 <iframe
                   ref={staticSiteFrameRef}
                   title={article.title}
-                  src={article.staticSiteUrl}
+                  src={staticSiteSrc}
                   sandbox="allow-scripts allow-forms allow-modals allow-pointer-lock allow-popups allow-downloads allow-presentation"
                   allow="autoplay; fullscreen; picture-in-picture"
                   referrerPolicy="no-referrer"
@@ -399,6 +466,12 @@ function formatGuestMessageDate(value) {
   } catch {
     return value
   }
+}
+
+function isMeaningfulUpdate(createdAt, updatedAt) {
+  const created = new Date(createdAt).getTime()
+  const updated = new Date(updatedAt).getTime()
+  return Number.isFinite(created) && Number.isFinite(updated) && updated - created > 24 * 60 * 60 * 1000
 }
 
 function ArticleContentPreview({ content }) {

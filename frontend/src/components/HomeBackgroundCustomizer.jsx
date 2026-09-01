@@ -14,26 +14,9 @@ const STYLE_OPTIONS = [
   { value: 'image', label: '图片' },
 ]
 
-const IMAGE_LAYOUT_OPTIONS = [
-  { value: 'cover', repeat: 'no-repeat', label: '填充' },
-  { value: 'contain', repeat: 'no-repeat', label: '完整' },
-  { value: '100% 100%', repeat: 'no-repeat', label: '拉伸' },
-  { value: 'auto', repeat: 'no-repeat', label: '原始' },
-  { value: 'auto', repeat: 'repeat', label: '平铺' },
-]
-
-const IMAGE_POSITION_OPTIONS = [
-  { value: 'center', label: '居中' },
-  { value: 'top', label: '顶部' },
-  { value: 'bottom', label: '底部' },
-  { value: 'left', label: '左侧' },
-  { value: 'right', label: '右侧' },
-]
-
 export default function HomeBackgroundCustomizer() {
-	const location = useLocation()
-  const isArticleDetail = /^\/blog\/[^/]+\/?$/.test(location.pathname)
-  const { setCustomTheme, getActiveTheme } = useTheme()
+  const location = useLocation()
+  const { setCustomTheme, getActiveTheme, surfaceMode, setSurfaceMode } = useTheme()
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const [backgroundImages, setBackgroundImages] = useState([])
@@ -76,6 +59,11 @@ export default function HomeBackgroundCustomizer() {
     }
   }, [open, activeTheme.backgroundStyle])
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('background-customizer-open', open)
+    return () => document.documentElement.classList.remove('background-customizer-open')
+  }, [open])
+
 	if (location.pathname === '/login' || location.pathname === '/account') return null
 
   const updateTheme = (patch) => {
@@ -107,15 +95,15 @@ export default function HomeBackgroundCustomizer() {
 
     updateTheme({
       backgroundStyle: 'image',
-      backgroundSize: activeTheme.backgroundSize || 'cover',
-      backgroundPosition: activeTheme.backgroundPosition || 'center',
-      backgroundRepeat: activeTheme.backgroundRepeat || 'no-repeat',
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
     })
     fetchBackgroundImages()
   }
 
   return (
-    <div className={`fixed bottom-24 right-4 z-[60] sm:right-6 ${isArticleDetail ? 'lg:left-6 lg:right-auto' : ''}`}>
+    <div className="floating-tool floating-tool--background">
       <motion.button
         type="button"
         onClick={() => setOpen(value => !value)}
@@ -141,17 +129,17 @@ export default function HomeBackgroundCustomizer() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-            className={`absolute bottom-14 right-0 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl ${isArticleDetail ? 'lg:left-0 lg:right-auto' : ''}`}
+            className="absolute bottom-14 right-0 max-h-[calc(100dvh-7.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-2xl border border-white/70 bg-white/95 shadow-2xl shadow-indigo-500/15 backdrop-blur-xl dark:border-slate-700/80 dark:bg-slate-950/95 dark:shadow-black/30"
           >
-            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-slate-800">
+              <div className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-100">
                 <Palette className="h-4 w-4" style={{ color: 'var(--theme-primary)' }} />
                 背景样式
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
                 title="关闭"
               >
                 <X className="h-4 w-4" />
@@ -191,58 +179,51 @@ export default function HomeBackgroundCustomizer() {
 
               {activeTheme.backgroundStyle === 'image' && (
                 <div className="space-y-3">
-                  <div className="space-y-2">
-                    <div className="text-sm font-semibold text-gray-800">布局</div>
-                    <div className="grid grid-cols-5 gap-2">
-                      {IMAGE_LAYOUT_OPTIONS.map(option => {
-                        const selected = activeTheme.backgroundSize === option.value
-                          && activeTheme.backgroundRepeat === option.repeat
-                        return (
-                          <button
-                            key={`${option.value}-${option.repeat}`}
-                            type="button"
-                            onClick={() => updateTheme({
-                              backgroundStyle: 'image',
-                              backgroundSize: option.value,
-                              backgroundRepeat: option.repeat,
-                            })}
-                            className={`rounded-lg border px-2 py-2 text-xs font-medium transition-all ${
-                              selected
-                                ? 'border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100'
-                                : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-200 hover:text-gray-900'
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        )
-                      })}
+                  <div className="space-y-3 rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-slate-800 dark:bg-slate-900/80">
+                    <div className="text-sm font-semibold text-gray-800 dark:text-slate-100">透明与毛玻璃</div>
+                    <div className="grid grid-cols-2 gap-1 rounded-lg bg-gray-200/70 p-1 dark:bg-slate-800" role="group" aria-label="卡片显示模式">
+                      {[
+                        { value: 'glass', label: '毛玻璃' },
+                        { value: 'transparent', label: '全透明' },
+                      ].map(option => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setSurfaceMode(option.value)}
+                          aria-pressed={surfaceMode === option.value}
+                          className={`rounded-md px-3 py-1.5 text-xs font-semibold transition ${surfaceMode === option.value
+                            ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-700 dark:text-white'
+                            : 'text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-100'}`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="text-sm font-semibold text-gray-800">位置</div>
-                    <div className="grid grid-cols-5 gap-2">
-                      {IMAGE_POSITION_OPTIONS.map(option => {
-                        const selected = activeTheme.backgroundPosition === option.value
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => updateTheme({
-                              backgroundStyle: 'image',
-                              backgroundPosition: option.value,
-                            })}
-                            className={`rounded-lg border px-2 py-2 text-xs font-medium transition-all ${
-                              selected
-                                ? 'border-indigo-400 bg-indigo-50 text-indigo-700 ring-2 ring-indigo-100'
-                                : 'border-gray-200 bg-white text-gray-600 hover:border-indigo-200 hover:text-gray-900'
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        )
-                      })}
-                    </div>
+                    <RangeSetting
+                      label="壁纸透明度"
+                      value={activeTheme.backgroundImageOpacity}
+                      min={0}
+                      max={100}
+                      suffix="%"
+                      onChange={value => updateTheme({ backgroundImageOpacity: value })}
+                    />
+                    <RangeSetting
+                      label="背景模糊度"
+                      value={activeTheme.backgroundBlur}
+                      min={0}
+                      max={24}
+                      suffix="px"
+                      onChange={value => updateTheme({ backgroundBlur: value })}
+                    />
+                    <RangeSetting
+                      label="卡片透明度"
+                      value={activeTheme.cardOpacity}
+                      min={20}
+                      max={100}
+                      suffix="%"
+                      disabled={surfaceMode === 'transparent'}
+                      onChange={value => updateTheme({ cardOpacity: value })}
+                    />
                   </div>
 
                   <div className="flex items-center justify-between">
@@ -281,9 +262,9 @@ export default function HomeBackgroundCustomizer() {
                             onClick={() => updateTheme({
                               backgroundStyle: 'image',
                               backgroundImage: image.url,
-                              backgroundSize: activeTheme.backgroundSize || 'cover',
-                              backgroundPosition: activeTheme.backgroundPosition || 'center',
-                              backgroundRepeat: activeTheme.backgroundRepeat || 'no-repeat',
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center',
+                              backgroundRepeat: 'no-repeat',
                             })}
                             className={`group relative overflow-hidden rounded-xl border bg-gray-50 text-left transition-all ${
                               selected ? 'border-indigo-400 ring-2 ring-indigo-200' : 'border-gray-100 hover:border-indigo-200'
@@ -315,5 +296,30 @@ export default function HomeBackgroundCustomizer() {
         )}
       </AnimatePresence>
     </div>
+  )
+}
+
+function RangeSetting({ label, value, min, max, suffix, disabled = false, onChange }) {
+  const normalizedValue = Number.isFinite(Number(value)) ? Number(value) : min
+  return (
+    <label className={`block transition-opacity ${disabled ? 'opacity-45' : ''}`}>
+      <span className="mb-1.5 flex items-center justify-between gap-3 text-xs font-medium text-gray-600 dark:text-slate-300">
+        <span>{label}</span>
+        <output className="min-w-12 rounded-md bg-white px-2 py-0.5 text-right tabular-nums text-gray-800 shadow-sm dark:bg-slate-800 dark:text-slate-100">
+          {normalizedValue}{suffix}
+        </output>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step="1"
+        value={normalizedValue}
+        disabled={disabled}
+        onChange={event => onChange(Number(event.target.value))}
+        className="theme-range w-full cursor-pointer"
+        aria-label={label}
+      />
+    </label>
   )
 }

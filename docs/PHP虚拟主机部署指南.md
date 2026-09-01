@@ -241,7 +241,7 @@ https://你的域名/api/health
 如果首页能开但刷新 `/blog` 或 `/admin/login` 出现 404，说明伪静态未生效：
 
 - Apache：确认网站根目录的 `.htaccess` 已上传，主机允许 `mod_rewrite`。
-- Nginx 面板：`.htaccess` 不会生效。在“设置伪静态”中粘贴以下完整规则并保存：
+- Nginx 面板：`.htaccess` 不会生效。请把补丁中的 `server-config/nginx-rewrite.conf` 全文粘贴到“设置伪静态”并保存，不要使用旧版简化片段。该文件同时保护 `server-config/`、点文件、环境/备份/数据库文件，并禁止上传目录中的脚本、HTML、SVG、XML 和 CSS。
 
 ```nginx
 location ^~ /app/ {
@@ -282,6 +282,8 @@ location / {
     try_files $uri $uri/ /index.html;
 }
 ```
+
+上面的简化片段仅保留作历史参考，不能作为当前部署配置；实际部署必须使用补丁内完整的 `server-config/nginx-rewrite.conf`，否则会缺少安全响应头和敏感文件/主动上传内容保护。
 
 在以上 `location` 规则前加入以下压缩设置，可把 Live2D 的 `.moc3` 传输体积减少约一半：
 

@@ -1,0 +1,1 @@
+import{i as e}from"./r20260809live2dmanual1-graphlib-CvYHSRjy.js";var t=4;function n(n){return e(n,t)}export{n as t};

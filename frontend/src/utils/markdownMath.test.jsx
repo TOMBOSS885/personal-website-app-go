@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkMath from 'remark-math'
 import { describe, expect, it } from 'vitest'
-import { KATEX_OPTIONS, normalizeMarkdownMath } from './markdownMath'
+import { KATEX_OPTIONS, normalizeMarkdownMath, remarkSingleLineDisplayMath } from './markdownMath'
 
 describe('web markdown math compatibility', () => {
   it('normalizes standard TeX delimiters without changing code', () => {
@@ -53,7 +53,7 @@ S/N(dB)
     expect(normalizeMarkdownMath('[\nordinary note\n]')).toBe('[\nordinary note\n]')
 
     const html = renderToStaticMarkup(
-      <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}>
+      <ReactMarkdown remarkPlugins={[remarkMath, remarkSingleLineDisplayMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}>
         {normalizeMarkdownMath('[\nn=\\log_2V\n]')}
       </ReactMarkdown>,
     )
@@ -73,5 +73,62 @@ S/N(dB)
     expect(normalized).toContain(String.raw`$a\in\Sigma$`)
     expect(normalized).toContain('ordinary (a) text')
     expect(normalized).toContain('`(a\\in\\Sigma)`')
+  })
+
+  it('does not reinterpret parentheses inside existing dollar-delimited math', () => {
+    const input = [
+      String.raw`   $$T_{IB}=20\times 1/(12\text{ MHz})=5/3\ \mu s$$`,
+      '',
+      '因此：',
+      '',
+      String.raw`   $$MIPS_B=1/(5/3\ \mu s)=0.6\text{ MIPS}$$`,
+      '',
+      String.raw`Inline $f(x)=\text{value}$ and legacy (a\in\Sigma).`,
+    ].join('\n')
+    const normalized = normalizeMarkdownMath(input)
+
+    expect(normalized).toBe(input.replace(String.raw`legacy (a\in\Sigma)`, String.raw`legacy $a\in\Sigma$`))
+
+    const html = renderToStaticMarkup(
+      <ReactMarkdown remarkPlugins={[remarkMath, remarkSingleLineDisplayMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}>
+        {normalized}
+      </ReactMarkdown>,
+    )
+    expect(html.match(/katex-display/g)).toHaveLength(2)
+    expect(html).not.toContain('katex-error')
+  })
+
+  it('protects the contents of multiline display math delimiters', () => {
+    const dollarMath = String.raw`$$
+f(x)=1/(2\text{ ms})
+$$`
+    const bracketMath = String.raw`\[
+g(x)=1/(3\text{ ms})
+\]`
+
+    expect(normalizeMarkdownMath(dollarMath)).toBe(dollarMath)
+    expect(normalizeMarkdownMath(bracketMath)).toBe(String.raw`$$
+g(x)=1/(3\text{ ms})
+$$`)
+  })
+
+  it('does not cascade legacy parentheses conversion inside standard TeX delimiters', () => {
+    const input = [
+      String.raw`\[CPI=\frac{\sum_{i=1}^{n}(CPI_i\times I_i)}{I_N}\]`,
+      String.raw`\[T_{IB}=20\times 1/(12\text{ MHz})=5/3\ \mu s\]`,
+      String.raw`\[MIPS_B=1/(5/3\ \mu s)=0.6\text{ MIPS}\]`,
+    ].join('\n\n')
+    const normalized = normalizeMarkdownMath(input)
+
+    expect(normalized.match(/\$/g)).toHaveLength(12)
+    expect(normalized).toContain(String.raw`$$T_{IB}=20\times 1/(12\text{ MHz})=5/3\ \mu s$$`)
+
+    const html = renderToStaticMarkup(
+      <ReactMarkdown remarkPlugins={[remarkMath, remarkSingleLineDisplayMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS]]}>
+        {normalized}
+      </ReactMarkdown>,
+    )
+    expect(html.match(/katex-display/g)).toHaveLength(3)
+    expect(html).not.toContain('katex-error')
   })
 })

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="一名普通大学生的雷霆生存报告：早八、DDL、AI、食堂与精神状态的抽象合订本。" />
+    <title>本学期人还在，魂已参加云上答辩</title>
+    <link rel="stylesheet" href="./assets/styles.css" />
+  </head>
+  <body>
+    <canvas id="storm-canvas" aria-hidden="true"></canvas>
+
+    <header class="hero" id="top">
+      <div class="ticker" aria-label="校园雷暴预警">
+        <div class="ticker__track">
+          <span>校园雷暴红色预警</span><span>早八正在逼近</span><span>DDL 已获得定位权限</span><span>食堂阿姨手没有抖</span><span>校园网正在思考人生</span><span>校园雷暴红色预警</span><span>早八正在逼近</span><span>DDL 已获得定位权限</span><span>食堂阿姨手没有抖</span><span>校园网正在思考人生</span>
+        </div>
+      </div>
+
+      <div class="hero__stage">
+        <div class="hero__copy">
+          <p class="kicker"><span>大学生存档 / 2026</span><strong>雷霆版</strong></p>
+          <h1>本学期人还在，<br /><em>魂已参加云上答辩</em></h1>
+          <p class="lead">一名普通大学生的生存审计：把早八交给命运，把小组作业交给群聊，把最后一格电量留给“爱你老己”。</p>
+          <div class="hero__actions">
+            <a class="button button--dark" href="#incident">进入事故现场 <span aria-hidden="true">↓</span></a>
+            <button class="button button--acid" id="panic-button" type="button">启动雷霆模式</button>
+          </div>
+        </div>
+
+        <figure class="poster" aria-label="大学生雷暴生存海报">
+          <img class="poster__image" src="./assets/campus-storm.png" alt="宿舍书桌、闪电和巨大闹钟组成的抽象校园海报" width="1200" height="900" />
+          <figcaption class="poster__caption"><span>含机量 99%</span><span>余额 ¥6.66</span><span>睡眠 404</span></figcaption>
+        </figure>
+      </div>
+
+      <div class="hero__foot">
+        <span>STATUS: 外耗中</span>
+        <span>NETWORK: 看缘分</span>
+        <span>GPA: 薛定谔</span>
+      </div>
+    </header>
+
+    <main>
+      <section class="incident" id="incident" aria-labelledby="incident-title">
+        <div class="section-head">
+          <p class="section-index">01 / CAMPUS INCIDENT</p>
+          <h2 id="incident-title">今日校园故障播报</h2>
+          <p>天气晴，精神局部有雷暴；课表稳定，大学生随机掉线。</p>
+        </div>
+
+        <div class="signal-grid">
+          <article class="signal signal--red"><span class="signal__label">早八到达</span><strong>07:59</strong><p>人已签到，灵魂仍在宿舍加载。</p></article>
+          <article class="signal signal--cyan"><span class="signal__label">校园网延迟</span><strong>999<span>ms</span></strong><p>不是断网，是它需要独处。</p></article>
+          <article class="signal signal--yellow"><span class="signal__label">本月余额</span><strong>6.66<span>元</span></strong><p>经济上酸黄瓜，精神上满汉全席。</p></article>
+          <article class="signal signal--ink"><span class="signal__label">作业含机量</span><strong>99<span>%</span></strong><p>人类负责选题，龙虾负责先动手。</p></article>
+        </div>
+      </section>
+
+      <section class="schedule" aria-labelledby="schedule-title">
+        <div class="section-head section-head--inverse">
+          <p class="section-index">02 / A DAY IN MY LIFE</p>
+          <h2 id="schedule-title">从从容容地选课，<br />连滚带爬地结课</h2>
+        </div>
+
+        <ol class="timeline">
+          <li><time>07:58</time><div><h3>早八闪现</h3><p>用两分钟完成起床、洗脸、接受命运。校园跑邪修正式上线：共享单车骑出高铁推背感。</p></div><span>HP −40</span></li>
+          <li><time>11:50</time><div><h3>食堂排位</h3><p>窗口前研究三分钟，最后还是“阿姨，跟前面一样”。这不是选择困难，是稳定发挥。</p></div><span>余额 −12</span></li>
+          <li><time>15:20</time><div><h3>小组作业量子态</h3><p>群里六个人，已读五个人，做事一个人。文件名从“最终版”进化到“真最终版7”。</p></div><span>血压 +20</span></li>
+          <li><time>23:59</time><div><h3>DDL 雷霆审判</h3><p>白天外耗世界，夜晚内耗格式。提交按钮亮起的那一刻，论文与我都获得了活人感。</p></div><span>功德 +1</span></li>
+        </ol>
+      </section>
+
+      <section class="decoder" aria-labelledby="decoder-title">
+        <div class="section-head">
+          <p class="section-index">03 / MEME DECODER</p>
+          <h2 id="decoder-title">2026 大学生黑话翻译器</h2>
+          <p>热梗不是答案，是我们给离谱生活装上的临时字幕。</p>
+        </div>
+
+        <div class="decoder__layout">
+          <div class="meme-list" role="list">
+            <button class="meme is-active" type="button" data-meme="ai" aria-pressed="true"><span>01</span><strong>含机量爆表</strong><small>AI 浓度检测</small></button>
+            <button class="meme" type="button" data-meme="hack" aria-pressed="false"><span>02</span><strong>校园邪修</strong><small>非标准生存术</small></button>
+            <button class="meme" type="button" data-meme="out" aria-pressed="false"><span>03</span><strong>今天不内耗</strong><small>改为外耗世界</small></button>
+            <button class="meme" type="button" data-meme="pickle" aria-pressed="false"><span>04</span><strong>酸黄瓜人格</strong><small>普通、清醒、嘎嘣脆</small></button>
+            <button class="meme" type="button" data-meme="self" aria-pressed="false"><span>05</span><strong>爱你老己</strong><small>先把自己捞回来</small></button>
+          </div>
+
+          <article class="translation" aria-live="polite">
+            <p class="translation__tag" id="meme-tag">检测结果 / 99%</p>
+            <h3 id="meme-title">含机量爆表</h3>
+            <p id="meme-copy">老师问：为什么你的参考文献语气像董事会纪要？我说这是数字化学习成果。其实只是我和电子室友进行了一场长达四小时的甲方拉扯。</p>
+            <blockquote id="meme-quote">“我不是不会写，我只是在监督人工智能完成素质教育。”</blockquote>
+          </article>
+        </div>
+      </section>
+
+      <section class="generator" aria-labelledby="generator-title">
+        <div class="generator__intro">
+          <p class="section-index">04 / MENTAL STATUS</p>
+          <h2 id="generator-title">大学生精神状态合成器</h2>
+          <p>今天的情绪没有坏，只是进入了开发者模式。</p>
+        </div>
+
+        <form class="generator__form" id="status-form">
+          <label>当前场景<select id="scene-select"><option>早八教室</option><option>宿舍上铺</option><option>食堂窗口</option><option>图书馆角落</option><option>答辩现场</option></select></label>
+          <label>剩余电量<select id="power-select"><option>1%</option><option>6.66%</option><option>50% 但虚标</option><option>充电器在室友那</option></select></label>
+          <label>生存流派<select id="style-select"><option>校园邪修</option><option>从容派</option><option>酸黄瓜派</option><option>爱你老己派</option></select></label>
+          <button class="button button--acid" type="submit">抽取今日判词</button>
+        </form>
+
+        <div class="verdict" id="verdict" aria-live="polite">
+          <span class="verdict__stamp">今日宜</span>
+          <p id="verdict-text">在早八教室以 1% 电量修炼校园邪修：能交就行，能过就是版本答案。</p>
+          <button class="icon-button" id="copy-button" type="button" title="复制今日判词" aria-label="复制今日判词">⧉</button>
+        </div>
+      </section>
+
+      <section class="ending" aria-labelledby="ending-title">
+        <p class="section-index">FINAL / STILL ALIVE</p>
+        <h2 id="ending-title">大学四年不是旷野，<br />是<strong>大型开放世界 Bug 测试</strong></h2>
+        <p>我们一边说“如何呢，又能怎”，一边在提交截止前把世界重新拼好。普通没有关系，偶尔酸黄瓜也没有关系。雷霆会过去，早八也会下课。</p>
+        <a class="button button--light" href="#top">返回雷暴中心 <span aria-hidden="true">↑</span></a>
+        <div class="ending__seal">LIVE<br />STUDENT<br />REACTION</div>
+      </section>
+    </main>
+
+    <footer class="footer"><span>一名大学生的非正式生存报告</span><span id="local-time">LOCAL TIME --:--</span></footer>
+
+    <script src="./assets/app.js"></script>
+  </body>
+</html>

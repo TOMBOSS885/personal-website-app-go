@@ -1,6 +1,6 @@
 import { Github, Twitter, Linkedin, Mail, Heart, Coffee, ExternalLink } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useTranslation } from '../i18n/translations'
 import { safeExternalHref } from '../utils/safeUrl'
 import ProfileAvatar from './ProfileAvatar'
@@ -8,8 +8,6 @@ import ProfileAvatar from './ProfileAvatar'
 export default function Footer({ profile }) {
   const currentYear = new Date().getFullYear()
   const { t } = useTranslation()
-  const location = useLocation()
-  const isArticleDetail = /^\/blog\/[^/]+\/?$/.test(location.pathname)
   const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : '')
 
   const footerLinks = [
@@ -18,6 +16,9 @@ export default function Footer({ profile }) {
       links: [
         { label: t('nav.home'), path: '/' },
         { label: t('nav.blog'), path: '/blog' },
+        { label: '归档', path: '/archive' },
+        { label: '专题', path: '/series' },
+        { label: '阅读清单', path: '/library' },
         { label: t('nav.projects'), path: '/projects' },
         { label: t('nav.monitor'), path: '/monitor' },
       ]
@@ -28,6 +29,7 @@ export default function Footer({ profile }) {
         { label: 'GitHub', href: safeExternalHref(profile?.github || ''), external: true },
         { label: 'LinkedIn', href: safeExternalHref(profile?.linkedin || ''), external: true },
         { label: 'Email', href: emailHref, external: true },
+        { label: 'RSS 订阅', href: '/feed.xml', external: true },
       ].filter(link => link.href)
     }
   ]
@@ -190,11 +192,14 @@ export default function Footer({ profile }) {
 
       {/* Scroll to top button */}
       <motion.button
+        type="button"
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        className={`fixed bottom-8 right-8 z-50 rounded-full p-3 text-white transition-shadow hover:shadow-xl ${isArticleDetail ? 'lg:left-8 lg:right-auto' : ''}`}
+        className="floating-tool floating-tool--back-to-top rounded-full p-3 text-white transition-shadow hover:shadow-xl"
         style={{ background: 'var(--theme-gradient)', boxShadow: 'var(--theme-shadow)' }}
+        aria-label="返回顶部"
+        title="返回顶部"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />

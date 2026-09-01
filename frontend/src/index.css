@@ -2,10 +2,29 @@
 @tailwind components;
 @tailwind utilities;
 
+.reading-progress {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 70;
+  height: 3px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.reading-progress > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  background: var(--theme-gradient);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--theme-primary) 45%, transparent);
+  transition: transform 100ms linear;
+}
+
 .live2d-launcher {
   position: fixed;
-  left: 1.5rem;
-  bottom: 1.5rem;
+  left: calc(1.5rem + env(safe-area-inset-left, 0px));
+  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
   z-index: 45;
   display: inline-flex;
   width: 2.75rem;
@@ -18,6 +37,55 @@
   background: var(--theme-gradient);
   box-shadow: var(--theme-shadow);
   transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.floating-tool {
+  position: fixed;
+  right: calc(1.5rem + env(safe-area-inset-right, 0px));
+  z-index: 60;
+}
+
+.floating-tool--back-to-top {
+  bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  z-index: 55;
+}
+
+.floating-tool--background {
+  bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+.live2d-launcher--article {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+/* The Live2D canvas has a library-owned z-index and occupies the lower-left
+   viewport edge. The public utility rail stays on the right so neither rail
+   can cover the other, even while the model is transitioning or showing its
+   sleep menu. */
+html.live2d-visible .floating-tool {
+  right: calc(1.5rem + env(safe-area-inset-right, 0px));
+}
+
+/* The model owns a very high stacking layer. While the full-width background
+   panel is open, hide both Live2D surfaces so the panel remains readable and
+   every setting stays clickable. */
+html.background-customizer-open .l2d-widget-container,
+html.background-customizer-open .l2d-widget-status {
+  opacity: 0 !important;
+  visibility: hidden;
+  pointer-events: none !important;
+}
+
+.l2d-widget-container,
+.l2d-widget-status {
+  margin-left: env(safe-area-inset-left, 0px);
+  margin-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html.live2d-compact .l2d-widget-container {
+  max-width: min(200px, 24vw);
+  max-height: min(200px, 32dvh);
 }
 
 .live2d-launcher:hover,
@@ -33,8 +101,31 @@
 
 @media (max-width: 640px) {
   .live2d-launcher {
-    left: 1rem;
-    bottom: 1rem;
+    left: calc(1rem + env(safe-area-inset-left, 0px));
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .floating-tool {
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+  }
+
+  .floating-tool--back-to-top {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .floating-tool--background {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+
+  html.live2d-visible .floating-tool {
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+  }
+
+  html.live2d-compact .l2d-widget-container {
+    max-width: min(112px, 29vw);
+    max-height: min(112px, 24dvh);
+    overflow: hidden;
   }
 }
 
@@ -795,6 +886,9 @@ html.surfaces-transparent .friends-page .guest-message-card--focused {
 .article-content .markdown-mermaid-canvas {
   display: inline-block;
   min-width: 100%;
+  width: auto;
+  max-width: none;
+  height: auto;
 }
 
 .article-content .markdown-mermaid svg {
@@ -1167,6 +1261,9 @@ body {
   background-size: var(--theme-bg-size, cover);
   background-repeat: var(--theme-bg-repeat, no-repeat);
   opacity: var(--theme-bg-image-opacity, 0);
+  filter: blur(var(--theme-bg-image-blur, 0px));
+  transform: scale(1.06);
+  transition: opacity 180ms ease, filter 180ms ease;
 }
 
 .theme-page-background::before {
@@ -1182,6 +1279,30 @@ body {
   position: relative;
   z-index: 1;
   color: var(--theme-text-primary, #1f2937);
+}
+
+/* Image backgrounds use one consistent surface recipe. Light mode mixes a
+   white glass layer; dark mode uses a slate layer. Transparent mode below
+   intentionally wins and removes both the fill and blur. */
+html.theme-has-image:not(.surfaces-transparent) .public-shell :is(
+  .adaptive-surface,
+  .card,
+  .card-glass,
+  .glass,
+  .theme-nav-surface
+) {
+  background-color: var(--theme-surface) !important;
+  backdrop-filter: blur(var(--theme-glass-blur, 0px)) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(var(--theme-glass-blur, 0px)) saturate(1.15) !important;
+}
+
+.theme-range {
+  height: 1.25rem;
+  accent-color: var(--theme-primary);
+}
+
+.theme-range:disabled {
+  cursor: not-allowed;
 }
 
 .cursor-effects-canvas {

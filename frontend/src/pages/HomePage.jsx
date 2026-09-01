@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { ArrowRight, Code, PenTool, Briefcase, Sparkles, Github, Linkedin, Mail, ChevronDown, Star, Zap, Coffee, Rocket, Cpu, Database, Globe } from 'lucide-react'
+import { Archive, ArrowRight, BookMarked, Code, PenTool, Briefcase, Sparkles, Github, Linkedin, Mail, ChevronDown, Star, Zap, Coffee, Rocket, Cpu, Database, Globe, Layers3, TrendingUp } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ParticleBackground from '../components/ParticleBackground'
 import TypewriterText from '../components/TypewriterText'
@@ -19,6 +19,7 @@ export default function HomePage() {
   const [featureCards, setFeatureCards] = useState([])
   const [profile, setProfile] = useState(null)
   const [stats, setStats] = useState(null)
+  const [discovery, setDiscovery] = useState({ featured: [], popular: [], series: [] })
   const { language } = useLanguage()
   const { t } = useTranslation()
   
@@ -56,6 +57,15 @@ export default function HomePage() {
       cancelled = true
     }
   }, [language])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch('/api/public/discovery?limit=3', { signal: controller.signal })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => { if (data) setDiscovery(data) })
+      .catch(error => { if (error.name !== 'AbortError') setDiscovery({ featured: [], popular: [], series: [] }) })
+    return () => controller.abort()
+  }, [])
 
   const skillCategories = skills.reduce((acc, skill) => {
     if (!acc[skill.category]) acc[skill.category] = []
@@ -496,6 +506,31 @@ export default function HomePage() {
       )}
 
       {/* 最新文章 */}
+      <section className="relative px-4 py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-10 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div><span className="text-sm font-semibold text-indigo-600 dark:text-indigo-300">探索内容</span><h2 className="mt-2 text-3xl font-bold text-gray-900 dark:text-slate-100">从这里继续阅读</h2></div>
+            <p className="max-w-xl text-sm leading-6 text-gray-500 dark:text-slate-400">按时间回看文章、连续阅读专题，或回到你收藏和最近读过的内容。</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              { to: '/archive', icon: Archive, title: '文章归档', text: '沿着年月时间线回看全部文章', tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' },
+              { to: '/series', icon: Layers3, title: '专题系列', text: `${discovery.series?.length || 0} 个专题，按顺序连续阅读`, tone: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-300' },
+              { to: '/library', icon: BookMarked, title: '阅读清单', text: '收藏、稍后读和最近阅读都在这里', tone: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-300' },
+            ].map(item => <Link key={item.to} to={item.to} className="adaptive-surface group flex items-start gap-4 rounded-2xl border border-white/60 bg-white/70 p-5 shadow-sm backdrop-blur-md transition hover:-translate-y-1 hover:border-indigo-300 hover:shadow-lg dark:border-slate-700/50 dark:bg-slate-950/60 dark:hover:border-indigo-400"><span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${item.tone}`}><item.icon className="h-5 w-5" /></span><span><span className="flex items-center gap-2 font-semibold text-gray-900 dark:text-slate-100">{item.title}<ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" /></span><span className="mt-1 block text-sm leading-6 text-gray-500 dark:text-slate-400">{item.text}</span></span></Link>)}
+          </div>
+        </div>
+      </section>
+
+      {(discovery.featured?.length > 0 || discovery.popular?.length > 0) && (
+        <section className="relative px-4 py-20">
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-10 flex items-center gap-3"><TrendingUp className="h-6 w-6 text-rose-500" /><div><p className="text-sm font-semibold text-rose-600 dark:text-rose-300">值得一读</p><h2 className="text-3xl font-bold text-gray-900 dark:text-slate-100">精选与热门</h2></div></div>
+            <div className="grid gap-8 md:grid-cols-3">{(discovery.featured?.length ? discovery.featured : discovery.popular).slice(0, 3).map((article, index) => <ArticleCard key={article.id} article={article} index={index} />)}</div>
+          </div>
+        </section>
+      )}
+
       {articles.length > 0 && (
         <section className="relative py-24 px-4">
           <div className="max-w-6xl mx-auto">

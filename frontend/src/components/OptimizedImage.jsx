@@ -35,7 +35,7 @@ export default function OptimizedImage({
         alt={alt || ''}
         loading={loading}
         decoding="async"
-        fetchPriority={fetchPriority}
+        fetchpriority={fetchPriority}
         sizes={sizes}
         className={`${className} ${loaded ? 'optimized-image-loaded' : 'optimized-image-loading'}`}
         onLoad={(event) => {

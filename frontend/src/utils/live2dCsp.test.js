@@ -31,10 +31,16 @@ describe('Live2D content security policy', () => {
     expect(inlineRuntime).toBeTruthy()
 
     const hash = createHash('sha256').update(inlineRuntime, 'utf8').digest('base64')
-    const nginxConfig = readFileSync(resolve(process.cwd(), '../docker/nginx.conf'), 'utf8')
+    const policies = [
+      readFileSync(resolve(process.cwd(), '../docker/nginx.conf'), 'utf8'),
+      readFileSync(resolve(process.cwd(), '../deploy/shared-host/.htaccess'), 'utf8'),
+      readFileSync(resolve(process.cwd(), '../deploy/shared-host/nginx-rewrite.conf'), 'utf8'),
+    ]
 
-    expect(nginxConfig).toContain(`script-src 'self' 'sha256-${hash}'`)
-    expect(nginxConfig).not.toContain("script-src 'self' 'unsafe-inline'")
-    expect(nginxConfig).not.toContain("script-src 'self' 'unsafe-eval'")
+    for (const policy of policies) {
+      expect(policy).toContain(`script-src 'self' 'sha256-${hash}'`)
+      expect(policy).not.toContain("script-src 'self' 'unsafe-inline'")
+      expect(policy).not.toContain("script-src 'self' 'unsafe-eval'")
+    }
   })
 })

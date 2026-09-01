@@ -1,0 +1,1 @@
+import{h as e}from"./r202608041935fix2-src-tCUjAlCm.js";var t=e(({flowchart:e})=>{let t=e?.subGraphTitleMargin?.top??0,n=e?.subGraphTitleMargin?.bottom??0;return{subGraphTitleTopMargin:t,subGraphTitleBottomMargin:n,subGraphTitleTotalMargin:t+n}},`getSubGraphTitleMargins`);export{t};

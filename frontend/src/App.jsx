@@ -21,6 +21,9 @@ const BlogPage = lazy(() => import('./pages/BlogPage'))
 const ArticleDetailPage = lazy(() => import('./pages/ArticleDetailPage'))
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'))
 const SearchPage = lazy(() => import('./pages/SearchPage'))
+const ArchivePage = lazy(() => import('./pages/ArchivePage'))
+const SeriesPage = lazy(() => import('./pages/SeriesPage'))
+const ReadingLibraryPage = lazy(() => import('./pages/ReadingLibraryPage'))
 const FriendsPage = lazy(() => import('./pages/FriendsPage'))
 const SiteMonitorPage = lazy(() => import('./pages/SiteMonitorPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
@@ -37,6 +40,7 @@ const AnalyticsManager = lazy(() => import('./pages/admin/AnalyticsManager'))
 const UploadSettingsManager = lazy(() => import('./pages/admin/UploadSettingsManager'))
 const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
 const SocialManager = lazy(() => import('./pages/admin/SocialManager'))
+const AuditLogManager = lazy(() => import('./pages/admin/AuditLogManager'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const Footer = lazy(() => import('./components/Footer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
@@ -121,6 +125,7 @@ function App() {
                     <Route path="upload-settings" element={<UploadSettingsManager />} />
                     <Route path="account" element={<AccountSettings />} />
                     <Route path="social" element={<SocialManager />} />
+                    <Route path="audit-logs" element={<AuditLogManager />} />
                     <Route path="*" element={<Navigate to="." replace />} />
                   </Route>
                   <Route path="/" element={<PublicLayout profile={profile} />}>
@@ -129,6 +134,9 @@ function App() {
                     <Route path="blog/:id" element={<ArticleDetailPage />} />
                     <Route path="projects" element={<ProjectsPage />} />
                     <Route path="search" element={<SearchPage />} />
+                    <Route path="archive" element={<ArchivePage />} />
+                    <Route path="series" element={<SeriesPage />} />
+                    <Route path="library" element={<ReadingLibraryPage />} />
                     <Route path="friends" element={<FriendsPage />} />
                     <Route path="guestbook" element={<FriendsPage />} />
                     <Route path="monitor" element={<SiteMonitorPage />} />
