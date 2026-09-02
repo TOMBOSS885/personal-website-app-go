@@ -23,6 +23,7 @@ describe('navbar signed-in account menu', () => {
     expect(source).toContain('aria-haspopup="menu"')
     expect(source).toContain('aria-expanded={accountMenuOpen}')
     expect(source).toContain('role="menuitem" onClick={requestLogout}')
+    expect(source).toContain('to="/account" role="menuitem"')
     expect(source).toContain('setLogoutConfirmOpen(true)')
     expect(source).toContain('<LogoutConfirmDialog')
     expect(source).not.toContain('title="退出账号"')

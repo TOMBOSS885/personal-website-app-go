@@ -8,6 +8,7 @@ require_once __DIR__ . '/article_sites.php';
 require_once __DIR__ . '/social.php';
 require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/user_auth.php';
+require_once __DIR__ . '/oauth.php';
 require_once __DIR__ . '/user_admin.php';
 
 const APP_BACKUP_MAX_ARCHIVE_BYTES = 536870912;
@@ -424,6 +425,7 @@ function app_article_row(array $row, bool $includeContent = true, bool $admin = 
         'featured' => (bool) ($row['featured'] ?? false), 'displayOrder' => (int) ($row['display_order'] ?? 0),
         'views' => (int) $row['views'], 'published' => (bool) $row['published'], 'isLocked' => (bool) $row['is_locked'],
         'loginRequired' => (bool) ($row['login_required'] ?? false),
+        'requiresThirdPartyBinding' => (bool) ($row['requires_oauth_identity'] ?? false),
         'contentType' => $contentType, 'createdAt' => app_now_iso($row['created_at']), 'updatedAt' => app_now_iso($row['updated_at']),
     ];
     if ($includeContent) {
@@ -443,7 +445,7 @@ function app_article_row(array $row, bool $includeContent = true, bool $admin = 
 function app_articles(bool $admin = false): array
 {
     app_require_schema_011();
-    app_require_schema_013();
+    app_require_schema_015();
     $page = max(0, app_int($_GET['page'] ?? 0));
     $size = app_clamp(app_int($_GET['size'] ?? 10, 10), 1, 100);
     $where = $admin ? ['1=1'] : ['published = 1'];
@@ -455,14 +457,18 @@ function app_articles(bool $admin = false): array
         else { $where[] = 'tags LIKE ?'; $params[] = '%' . $value . '%'; }
     }
     $q = trim((string) ($_GET['q'] ?? ''));
-    if ($q !== '') { $where[] = '(title LIKE ? OR summary LIKE ? OR content LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; $params[] = "%$q%"; }
+    if ($q !== '') {
+        $contentCondition = $admin ? 'content LIKE ?' : '(login_required = 0 AND requires_oauth_identity = 0 AND content LIKE ?)';
+        $where[] = "(title LIKE ? OR summary LIKE ? OR $contentCondition)";
+        $params[] = "%$q%"; $params[] = "%$q%"; $params[] = "%$q%";
+    }
     $condition = implode(' AND ', $where);
     $count = app_db()->prepare("SELECT COUNT(*) FROM articles WHERE $condition");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
     // List endpoints never need the MEDIUMTEXT body or password hash. Article
     // content is loaded from the detail endpoint only when it is opened.
-    $columns = 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,login_required,content_type,static_site_key,static_site_name,is_locked,created_at,updated_at';
+    $columns = 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,login_required,requires_oauth_identity,content_type,static_site_key,static_site_name,is_locked,created_at,updated_at';
     $sql = "SELECT $columns FROM articles WHERE $condition ORDER BY created_at DESC LIMIT $size OFFSET " . ($page * $size);
     $statement = app_db()->prepare($sql);
     $statement->execute($params);
@@ -472,13 +478,13 @@ function app_articles(bool $admin = false): array
 
 function app_discovery_article_columns(): string
 {
-    return 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,login_required,content_type,is_locked,created_at,updated_at';
+    return 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,login_required,requires_oauth_identity,content_type,is_locked,created_at,updated_at';
 }
 
 function app_discovery_articles(string $kind, $requestedLimit = null): array
 {
     app_require_schema_011();
-    app_require_schema_013();
+    app_require_schema_015();
     $limit = app_clamp($requestedLimit === null ? app_int($_GET['limit'] ?? 6, 6) : app_int($requestedLimit), 1, 20);
     $where = 'published = 1';
     $order = 'views DESC, created_at DESC, id DESC';
@@ -495,7 +501,7 @@ function app_discovery_articles(string $kind, $requestedLimit = null): array
 function app_article_archive(int $yearFilter = 0): array
 {
     app_require_schema_011();
-    app_require_schema_013();
+    app_require_schema_015();
     if ($yearFilter !== 0 && ($yearFilter < 1970 || $yearFilter > (int) date('Y') + 1)) {
         app_error(400, 'Year is outside the supported archive range.', 'INVALID_YEAR');
     }
@@ -540,7 +546,7 @@ function app_article_archive(int $yearFilter = 0): array
 function app_article_series($articleLimitPerSeries = null): array
 {
     app_require_schema_011();
-    app_require_schema_013();
+    app_require_schema_015();
     if ($articleLimitPerSeries !== null) $articleLimitPerSeries = app_clamp(app_int($articleLimitPerSeries), 1, 50);
     $sql = 'SELECT ' . app_discovery_article_columns() . " FROM articles WHERE published = 1 AND TRIM(series_name) <> '' ORDER BY series_name ASC, series_order ASC, created_at ASC, id ASC LIMIT 501";
     $series = [];
@@ -652,10 +658,11 @@ function app_article_navigation(int $id): array
 
 function app_public_feed(string $format = 'rss'): void
 {
+    app_require_schema_015();
     $siteUrl = app_public_site_url();
     $profile = app_profile(true);
     $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_XML1, 'UTF-8');
-    $rows = app_db()->query('SELECT id, title, summary, content, login_required, category, tags, cover_image, created_at, updated_at FROM articles WHERE published = 1 ORDER BY created_at DESC LIMIT 30')->fetchAll();
+    $rows = app_db()->query('SELECT id, title, summary, content, login_required, requires_oauth_identity, category, tags, cover_image, created_at, updated_at FROM articles WHERE published = 1 ORDER BY created_at DESC LIMIT 30')->fetchAll();
     $items = '';
     foreach ($rows as $row) {
         $link = $siteUrl . '/blog/' . (int) $row['id'];
@@ -663,7 +670,7 @@ function app_public_feed(string $format = 'rss'): void
         // Never expose正文 through RSS/Atom for login-gated articles. The
         // detail endpoint performs the actual session check, while feeds are
         // public and may be fetched by crawlers or cached clients.
-        if (!empty($row['login_required'])) {
+        if (!empty($row['login_required']) || !empty($row['requires_oauth_identity'])) {
             if ($description === '') $description = '登录后查看文章正文。';
         } elseif ($description === '') {
             $description = trim(preg_replace('/\s+/', ' ', strip_tags((string) $row['content'])));
@@ -688,7 +695,7 @@ function app_public_feed(string $format = 'rss'): void
 
 function app_admin_backup_manifest(): array
 {
-    $tables = ['admin_account', 'user_accounts', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs'];
+    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs'];
     $counts = [];
     foreach ($tables as $table) {
         try { $counts[$table] = (int) app_db()->query("SELECT COUNT(*) FROM `$table`")->fetchColumn(); } catch (Throwable $error) { $counts[$table] = null; }
@@ -715,7 +722,7 @@ function app_admin_backup_manifest(): array
             error_log('Backup manifest upload scan failed: ' . $error->getMessage());
         }
     }
-    return ['generatedAt' => date(DATE_ATOM), 'schema' => '014', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
+    return ['generatedAt' => date(DATE_ATOM), 'schema' => '015', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
 }
 
 function app_schema_010_ready(): bool
@@ -802,6 +809,27 @@ function app_require_schema_014(): void
     if (!app_schema_014_ready()) app_error(503, 'Please import migrations/014_user_admin_management.sql first.', 'MIGRATION_REQUIRED');
 }
 
+function app_schema_015_ready(): bool
+{
+    try {
+        if (!app_schema_014_ready()) return false;
+        $tables = (int) app_db()->query("SELECT COUNT(DISTINCT TABLE_NAME) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('oauth_identities','oauth_transactions')")->fetchColumn();
+        $articleColumn = (int) app_db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'articles' AND COLUMN_NAME = 'requires_oauth_identity'")->fetchColumn();
+        $identityIndexes = (int) app_db()->query("SELECT COUNT(DISTINCT INDEX_NAME) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'oauth_identities' AND NON_UNIQUE = 0 AND INDEX_NAME IN ('uq_oauth_provider_subject','uq_oauth_provider_union','uq_oauth_user_provider')")->fetchColumn();
+        $transactionIndex = (int) app_db()->query("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'oauth_transactions' AND NON_UNIQUE = 0 AND INDEX_NAME = 'uq_oauth_transaction_state'")->fetchColumn();
+        $binaryColumns = (int) app_db()->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'oauth_identities' AND COLUMN_NAME IN ('provider','provider_scope','provider_subject','provider_union_id') AND COLLATION_NAME = 'ascii_bin'")->fetchColumn();
+        return $tables === 2 && $articleColumn === 1 && $identityIndexes === 3 && $transactionIndex === 1 && $binaryColumns === 4;
+    } catch (Throwable $error) {
+        error_log('Schema 015 check failed: ' . $error->getMessage());
+        return false;
+    }
+}
+
+function app_require_schema_015(): void
+{
+    if (!app_schema_015_ready()) app_error(503, 'Please import migrations/015_oauth_identities.sql first.', 'MIGRATION_REQUIRED');
+}
+
 function app_backup_require_password($value): string
 {
     $password = (string) $value;
@@ -831,7 +859,10 @@ function app_backup_dump_database(string $path): array
     $handle = @fopen($path, 'wb');
     if (!$handle) throw new RuntimeException('Unable to create the database backup file.');
     $database = app_db();
-    $tables = $database->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+    $tables = array_values(array_filter(
+        $database->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN),
+        static function ($table): bool { return (string) $table !== 'oauth_transactions'; }
+    ));
     $rowCount = 0;
     try {
         fwrite($handle, "SET NAMES utf8mb4;\nSET time_zone = '+08:00';\nSET FOREIGN_KEY_CHECKS = 0;\n");
@@ -1148,7 +1179,7 @@ function app_backup_create_archive(string $zipPath, string $password): array
         if (@file_put_contents($settingsPath, $settingsJson, LOCK_EX) === false) throw new RuntimeException('Unable to create encrypted app settings.');
         $encryptedSettings = app_backup_encrypt_file($settingsPath, $password);
         $manifest = ['format' => 'personal-website-portable-backup', 'version' => 1, 'generatedAt' => date(DATE_ATOM), 'schema' => '011', 'database' => $databaseStats, 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'config/app-settings.php.enc' => $encryptedSettings['meta']], 'note' => 'The database and application settings are encrypted; uploads retain their original paths.'], 'manifest' => app_admin_backup_manifest()];
-        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 2, 'generatedAt' => date(DATE_ATOM), 'schema' => '011', 'database' => $databaseStats, 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'The database and application settings are encrypted; uploads retain their original paths.'], 'manifest' => app_admin_backup_manifest()];
+        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 2, 'generatedAt' => date(DATE_ATOM), 'schema' => '015', 'database' => $databaseStats, 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'The database and application settings are encrypted; uploads retain their original paths.'], 'manifest' => app_admin_backup_manifest()];
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('Unable to create the backup archive.');
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
@@ -1780,7 +1811,7 @@ function app_handle_login(): void
     // Keep administrator and public-account identities mutually exclusive in
     // the shared session cookie. This prevents analytics/session confusion
     // when an admin signs in after browsing as a public user.
-    unset($_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_session_version'], $_SESSION['user_created_at'], $_SESSION['user_last_seen_at']);
+    unset($_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_session_version'], $_SESSION['user_created_at'], $_SESSION['user_last_seen_at'], $_SESSION['user_csrf_token'], $_SESSION['oauth_states']);
     $_SESSION['admin_id'] = (int) $admin['id'];
     $_SESSION['admin_username'] = $admin['username'];
     $_SESSION['admin_session_version'] = (int) $admin['session_version'];
@@ -1797,11 +1828,11 @@ function app_article_unlock_token(array $row): string
 
 function app_handle_article_unlock(int $id): void
 {
+    app_require_schema_015();
     // Re-validate whichever authenticated identity is present. Do not trust
     // a stale admin_id/user_id field in a replayed session cookie.
     $authenticatedSession = false;
     if (!empty($_SESSION['user_id'])) {
-        app_require_schema_014();
         app_user_required();
         $authenticatedSession = true;
     } elseif (!empty($_SESSION['admin_id'])) {
@@ -1822,9 +1853,14 @@ function app_handle_article_unlock(int $id): void
             $database->rollBack();
             app_error(404, 'Article not found.', 'NOT_FOUND');
         }
-        if (!empty($row['login_required']) && !$authenticatedSession) {
+        if ((!empty($row['login_required']) || !empty($row['requires_oauth_identity'])) && !$authenticatedSession) {
             $database->rollBack();
             app_error(401, '请先登录后再解锁文章。', 'USER_UNAUTHENTICATED');
+        }
+        if (!empty($row['requires_oauth_identity']) && empty($_SESSION['admin_id'])
+            && (empty($_SESSION['user_id']) || !app_oauth_user_has_identity((int) $_SESSION['user_id']))) {
+            $database->rollBack();
+            app_error(403, '该文章需要账号至少绑定一个第三方登录方式。', 'OAUTH_IDENTITY_REQUIRED');
         }
 
         $database->prepare('INSERT IGNORE INTO article_unlock_attempts (article_id, client_hash, failed_attempts, locked_until, updated_at) VALUES (?, ?, 0, NULL, NOW())')->execute([$id, $clientHash]);
@@ -1868,6 +1904,7 @@ function app_handle_article_unlock(int $id): void
 function app_save_article(?int $id): void
 {
     app_require_schema_011();
+    app_require_schema_015();
     $before = null;
     if ($id !== null) {
         $existing = app_db()->prepare('SELECT * FROM articles WHERE id = ?');
@@ -1886,7 +1923,8 @@ function app_save_article(?int $id): void
     if ($contentType === 'static' && !app_article_site_exists($siteKey)) app_error(400, '璇峰厛涓婁紶鍖呭惈 index.html 鐨勯潤鎬佸墠绔?ZIP', 'ARTICLE_SITE_REQUIRED');
     if ($contentType === 'static') $content = '';
     $locked = app_bool($body['isLocked'] ?? false);
-    $loginRequired = app_bool($body['loginRequired'] ?? false);
+    $requiresOAuthIdentity = app_bool($body['requiresThirdPartyBinding'] ?? false);
+    $loginRequired = app_bool($body['loginRequired'] ?? false) || $requiresOAuthIdentity;
     $password = (string) ($body['accessPassword'] ?? '');
     $hash = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
     $values = [
@@ -1896,12 +1934,12 @@ function app_save_article(?int $id): void
         array_key_exists('featured', $body) ? (app_bool($body['featured']) ? 1 : 0) : null,
         array_key_exists('displayOrder', $body) ? app_int($body['displayOrder']) : null,
         app_bool($body['published'] ?? false) ? 1 : 0,
-        $contentType, $siteKey !== '' ? $siteKey : null, $siteName !== '' ? $siteName : null, $locked ? 1 : 0, $loginRequired ? 1 : 0,
+        $contentType, $siteKey !== '' ? $siteKey : null, $siteName !== '' ? $siteName : null, $locked ? 1 : 0, $loginRequired ? 1 : 0, $requiresOAuthIdentity ? 1 : 0,
     ];
     $oldSiteKey = '';
     if ($id === null) {
         if ($locked && $hash === null) app_error(400, '鍔犻攣鏂囩珷蹇呴』璁剧疆璁块棶瀵嗙爜', 'PASSWORD_REQUIRED');
-        $statement = app_db()->prepare('INSERT INTO articles (title, summary, content, cover_image, category, tags, series_name, series_order, featured, display_order, published, content_type, static_site_key, static_site_name, is_locked, login_required, access_password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())');
+        $statement = app_db()->prepare('INSERT INTO articles (title, summary, content, cover_image, category, tags, series_name, series_order, featured, display_order, published, content_type, static_site_key, static_site_name, is_locked, login_required, requires_oauth_identity, access_password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())');
         $values[8] = $values[8] ?? 0;
         $values[9] = $values[9] ?? 0;
         $statement->execute(array_merge($values, [$hash]));
@@ -1911,7 +1949,7 @@ function app_save_article(?int $id): void
         $oldSiteKey = (string) ($before['static_site_key'] ?? '');
         if (!$locked) $hash = null;
         elseif ($hash === null) $hash = $before['access_password_hash'];
-        $statement = app_db()->prepare('UPDATE articles SET title=?, summary=?, content=?, cover_image=?, category=?, tags=?, series_name=?, series_order=?, featured=COALESCE(?,featured), display_order=COALESCE(?,display_order), published=?, content_type=?, static_site_key=?, static_site_name=?, is_locked=?, login_required=?, access_password_hash=?, updated_at=NOW() WHERE id=?');
+        $statement = app_db()->prepare('UPDATE articles SET title=?, summary=?, content=?, cover_image=?, category=?, tags=?, series_name=?, series_order=?, featured=COALESCE(?,featured), display_order=COALESCE(?,display_order), published=?, content_type=?, static_site_key=?, static_site_name=?, is_locked=?, login_required=?, requires_oauth_identity=?, access_password_hash=?, updated_at=NOW() WHERE id=?');
         $statement->execute(array_merge($values, [$hash, $id]));
         $status = 200;
     }
@@ -1941,16 +1979,16 @@ function app_delete_article(int $id): void
 /** Apply a single bulk action to up to 100 articles, auditing every item. */
 function app_bulk_articles_v2(): void
 {
-    app_require_schema_013();
+    app_require_schema_015();
     $body = app_body();
     $ids = $body['ids'] ?? $body['articleIds'] ?? [];
     if (!is_array($ids)) app_error(400, 'ids must be an array.', 'INVALID_ARTICLE_IDS');
     $ids = array_values(array_unique(array_filter(array_map(static fn($value): int => (int) $value, $ids), static fn(int $value): bool => $value > 0)));
     if (count($ids) < 1 || count($ids) > 100) app_error(400, '请选择 1 至 100 篇文章。', 'INVALID_ARTICLE_IDS');
     $action = strtolower(trim((string) ($body['action'] ?? '')));
-    $aliases = ['login_required' => 'login-required', 'set-login-required' => 'login-required', 'set-public' => 'public', 'set-published' => 'publish', 'set-unpublished' => 'unpublish'];
+    $aliases = ['login_required' => 'login-required', 'set-login-required' => 'login-required', 'set-public' => 'public', 'set-published' => 'publish', 'set-unpublished' => 'unpublish', 'requires_third_party_binding' => 'third-party-required'];
     $action = $aliases[$action] ?? $action;
-    if (!in_array($action, ['login-required', 'public', 'publish', 'unpublish', 'delete'], true)) app_error(400, 'Unsupported bulk article action.', 'INVALID_ARTICLE_ACTION');
+    if (!in_array($action, ['login-required', 'third-party-required', 'public', 'publish', 'unpublish', 'delete'], true)) app_error(400, 'Unsupported bulk article action.', 'INVALID_ARTICLE_ACTION');
     if ($action === 'delete' && !app_bool($body['confirm'] ?? false)) app_error(400, '请确认批量删除，此操作不可撤销。', 'DELETE_CONFIRMATION_REQUIRED');
     $database = app_db();
     $database->beginTransaction();
@@ -1966,9 +2004,14 @@ function app_bulk_articles_v2(): void
                 app_article_site_delete_if_unreferenced((string) ($before['static_site_key'] ?? ''));
                 $audits[] = [$id, $before, null, 'DELETE article'];
             } else {
-                $column = in_array($action, ['login-required', 'public'], true) ? 'login_required' : 'published';
-                $value = in_array($action, ['login-required', 'publish'], true) ? 1 : 0;
-                $database->prepare("UPDATE articles SET $column = ?, updated_at = NOW() WHERE id = ?")->execute([$value, $id]);
+                if ($action === 'third-party-required') {
+                    $database->prepare('UPDATE articles SET login_required = 1, requires_oauth_identity = 1, updated_at = NOW() WHERE id = ?')->execute([$id]);
+                } else {
+                    $column = in_array($action, ['login-required', 'public'], true) ? 'login_required' : 'published';
+                    $value = in_array($action, ['login-required', 'publish'], true) ? 1 : 0;
+                    if ($action === 'public') $database->prepare('UPDATE articles SET login_required = 0, requires_oauth_identity = 0, updated_at = NOW() WHERE id = ?')->execute([$id]);
+                    else $database->prepare("UPDATE articles SET $column = ?, updated_at = NOW() WHERE id = ?")->execute([$value, $id]);
+                }
                 $afterStatement = $database->prepare('SELECT * FROM articles WHERE id = ?');
                 $afterStatement->execute([$id]);
                 $after = $afterStatement->fetch() ?: null;
@@ -2143,9 +2186,14 @@ function app_handle_request(): void
     app_audit_register_shutdown();
     $isAdminRoute = strpos($route, 'admin/') === 0;
     $isAdminAuthRoute = $route === 'auth/login' || $route === 'auth/logout';
-    $isUserAuthRoute = in_array($route, ['auth/user-register', 'auth/user-login', 'auth/user-logout', 'auth/user-session'], true);
+    $isUserAuthRoute = in_array($route, ['auth/user-register', 'auth/user-login', 'auth/user-logout', 'auth/user-session'], true)
+        || strpos($route, 'auth/oauth/') === 0;
     if ($isAdminRoute || $isAdminAuthRoute) app_admin_entry_required();
     if ($isAdminRoute || $isAdminAuthRoute) {
+        header('Cache-Control: no-store');
+        header('Pragma: no-cache');
+    }
+    if ($isUserAuthRoute) {
         header('Cache-Control: no-store');
         header('Pragma: no-cache');
     }
@@ -2173,7 +2221,8 @@ function app_handle_request(): void
             app_require_schema_012();
             app_require_schema_013();
             app_require_schema_014();
-            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '014']);
+            app_require_schema_015();
+            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '015']);
         }
         if ($method === 'POST' && $route === 'auth/login') app_handle_login();
         if ($method === 'POST' && $route === 'auth/logout') {
@@ -2186,6 +2235,12 @@ function app_handle_request(): void
         if ($method === 'POST' && $route === 'auth/user-login') { app_require_schema_014(); app_user_login(); }
         if ($method === 'POST' && $route === 'auth/user-logout') { app_require_schema_014(); app_user_logout(); }
         if ($method === 'GET' && $route === 'auth/user-session') { app_require_schema_014(); app_json(app_user_session_payload()); }
+        if ($method === 'GET' && $route === 'auth/oauth/providers') app_json(app_oauth_providers_payload());
+        if ($method === 'GET' && $route === 'auth/oauth/identities') app_json(app_oauth_identities_payload());
+        if ($method === 'GET' && preg_match('#^auth/oauth/(github|qq|wechat)/start$#', $route, $match)) app_oauth_start($match[1]);
+        if ($method === 'POST' && preg_match('#^auth/oauth/(github|qq|wechat)/bind-start$#', $route, $match)) app_oauth_bind_start($match[1]);
+        if ($method === 'POST' && preg_match('#^auth/oauth/(github|qq|wechat)/unbind$#', $route, $match)) app_oauth_unbind($match[1]);
+        if ($method === 'GET' && preg_match('#^auth/oauth/(github|qq|wechat)/callback$#', $route, $match)) app_oauth_callback($match[1]);
 
         if ($method === 'GET' && $route === 'public/profile') {
             $language = strtolower((string) ($_GET['lang'] ?? 'zh')) === 'en' ? 'en' : 'zh';
@@ -2245,22 +2300,29 @@ function app_handle_request(): void
             app_article_site_serve((int) $match[1], $match[2], (int) $match[3], (int) $match[4], strtolower($match[5]), (string) ($match[6] ?? ''));
         }
         if ($method === 'GET' && preg_match('#^public/articles/(\d+)$#', $route, $match)) {
-            app_require_schema_014();
+            app_require_schema_015();
             $statement=app_db()->prepare('SELECT * FROM articles WHERE id=? AND published=1'); $statement->execute([(int)$match[1]]); $row=$statement->fetch(); if(!$row)app_error(404, 'Article not found.', 'NOT_FOUND');
             // Presence of a user session is not enough for gated content: a
             // locked/revoked account must lose access even if its old cookie
             // remains valid. Public articles stay readable as a guest when a
             // stale optional user session is present.
-            if (!empty($row['login_required'])) {
+            if (!empty($row['login_required']) || !empty($row['requires_oauth_identity'])) {
                 if (!empty($_SESSION['user_id'])) app_user_required();
                 elseif (!empty($_SESSION['admin_id'])) app_admin_required();
             }
             $isAuthenticated = !empty($_SESSION['user_id']) || !empty($_SESSION['admin_id']);
-            if (!empty($row['login_required']) && !$isAuthenticated) {
+            if ((!empty($row['login_required']) || !empty($row['requires_oauth_identity'])) && !$isAuthenticated) {
                 header('Cache-Control: no-store');
                 $article = app_article_row($row, false);
                 $article['requiresLogin'] = true;
                 $article['loginRequired'] = true;
+                app_json($article);
+            }
+            if (!empty($row['requires_oauth_identity']) && empty($_SESSION['admin_id'])
+                && !app_oauth_user_has_identity((int) $_SESSION['user_id'])) {
+                header('Cache-Control: no-store');
+                $article = app_article_row($row, false);
+                $article['requiresThirdPartyBinding'] = true;
                 app_json($article);
             }
             $unlockValue = $_SESSION['article_unlocks'][(int) $row['id']] ?? '';
@@ -2293,6 +2355,7 @@ function app_handle_request(): void
         if ($method === 'GET' && preg_match('#^public/guest-messages/(\d+)$#', $route, $match)) app_json(app_public_guest_message((int) $match[1]));
         if ($method === 'POST' && $route === 'public/guest-messages') app_json(app_create_guest_message(), 201);
         if ($method === 'GET' && $route === 'public/search') {
+            app_require_schema_015();
             $q = trim((string) ($_GET['q'] ?? ''));
             if (function_exists('mb_substr')) $q = mb_substr($q, 0, 80);
             else $q = substr($q, 0, 80);
@@ -2302,7 +2365,7 @@ function app_handle_request(): void
             $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
             $results = [];
             if (in_array($type, ['all', 'article'], true)) {
-                $statement = app_db()->prepare('SELECT id, title, summary FROM articles WHERE published = 1 AND (title LIKE ? OR summary LIKE ? OR category LIKE ? OR tags LIKE ? OR (login_required = 0 AND content LIKE ?)) ORDER BY created_at DESC, id DESC LIMIT 20');
+                $statement = app_db()->prepare('SELECT id, title, summary FROM articles WHERE published = 1 AND (title LIKE ? OR summary LIKE ? OR category LIKE ? OR tags LIKE ? OR (login_required = 0 AND requires_oauth_identity = 0 AND content LIKE ?)) ORDER BY created_at DESC, id DESC LIMIT 20');
                 $statement->execute([$like, $like, $like, $like, $like]);
                 foreach ($statement->fetchAll() as $row) $results[] = ['type' => 'article', 'id' => (int) $row['id'], 'title' => $row['title'], 'description' => $row['summary'], 'url' => '/blog/' . $row['id']];
             }
@@ -2337,7 +2400,7 @@ function app_handle_request(): void
         if ($method === 'DELETE' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_delete((int) $match[1]);
         if ($method === 'GET' && $route === 'admin/audit-logs') { app_require_schema_012(); app_json(app_audit_logs()); }
         if ($method === 'GET' && $route === 'admin/backup-manifest') app_json(app_admin_backup_manifest());
-        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '014', 'manifest' => app_admin_backup_manifest()]); }
+        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '015', 'manifest' => app_admin_backup_manifest()]); }
         if ($method === 'POST' && $route === 'admin/backup-export') app_admin_backup_export();
         if ($method === 'POST' && $route === 'admin/backup-import') app_admin_backup_import();
         if ($method === 'GET' && $route === 'admin/friends') app_json(app_admin_friend_links());
@@ -2349,7 +2412,7 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'admin/guest-messages') app_json(app_admin_guest_messages());
         if ($method === 'PUT' && preg_match('#^admin/guest-messages/(\d+)/status$#', $route, $match)) app_json(app_update_guest_message_status((int) $match[1]));
         if ($method === 'DELETE' && preg_match('#^admin/guest-messages/(\d+)$#', $route, $match)) app_json(app_delete_guest_message((int) $match[1]));
-        if ($method === 'GET' && $route === 'admin/articles') { app_require_schema_013(); app_json(app_articles(true)); }
+        if ($method === 'GET' && $route === 'admin/articles') { app_require_schema_015(); app_json(app_articles(true)); }
         if ($method === 'GET' && $route === 'admin/article-series') {
             app_require_schema_011();
             $statement = app_db()->query("SELECT series_name AS name, COUNT(*) AS article_count FROM articles WHERE TRIM(series_name) <> '' GROUP BY series_name ORDER BY series_name ASC LIMIT 200");
@@ -2357,12 +2420,12 @@ function app_handle_request(): void
                 return ['name' => (string) $row['name'], 'articleCount' => (int) $row['article_count']];
             }, $statement->fetchAll()));
         }
-        if ($method === 'POST' && $route === 'admin/articles') { app_require_schema_013(); app_save_article(null); }
+        if ($method === 'POST' && $route === 'admin/articles') { app_require_schema_015(); app_save_article(null); }
         if ($method === 'POST' && in_array($route, ['admin/articles/bulk', 'admin/articles/batch'], true)) app_bulk_articles_v2();
         if (preg_match('#^admin/articles/(\d+)$#',$route,$match)) {
             $id=(int)$match[1];
-            if($method==='GET'){app_require_schema_013();$statement=app_db()->prepare('SELECT * FROM articles WHERE id=?');$statement->execute([$id]);$article=$statement->fetch();if(!$article)app_error(404, 'Article not found.', 'NOT_FOUND');app_json(app_article_row($article,true,true));}
-            if($method==='PUT'){app_require_schema_013();app_save_article($id);}
+            if($method==='GET'){app_require_schema_015();$statement=app_db()->prepare('SELECT * FROM articles WHERE id=?');$statement->execute([$id]);$article=$statement->fetch();if(!$article)app_error(404, 'Article not found.', 'NOT_FOUND');app_json(app_article_row($article,true,true));}
+            if($method==='PUT'){app_require_schema_015();app_save_article($id);}
             if($method==='DELETE')app_delete_article($id);
         }
         if ($method === 'POST' && $route === 'admin/article-sites') {

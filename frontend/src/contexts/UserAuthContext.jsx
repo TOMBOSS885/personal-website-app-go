@@ -16,6 +16,15 @@ async function requestUserAuth(path, body = {}) {
   return data
 }
 
+function normalizeSessionUser(data, fallbackEmail = '') {
+  return {
+    id: Number(data.userId) || null,
+    email: data.email || fallbackEmail,
+    csrfToken: data.csrfToken || '',
+    hasOAuthIdentity: Boolean(data.hasOAuthIdentity),
+  }
+}
+
 export function UserAuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -26,7 +35,7 @@ export function UserAuthProvider({ children }) {
       const response = await fetch('/api/auth/user-session', { cache: 'no-store', credentials: 'same-origin' })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || !data.authenticated) throw new Error('not authenticated')
-      setUser({ email: data.email || '' })
+      setUser(normalizeSessionUser(data))
       return true
     } catch { clearUser(); return false } finally { setLoading(false) }
   }, [clearUser])
@@ -38,11 +47,11 @@ export function UserAuthProvider({ children }) {
   }, [checkSession, clearUser])
   const login = useCallback(async (email, password) => {
     const data = await requestUserAuth('/api/auth/user-login', { email, password })
-    setUser({ email: data.email || email }); return data
+    setUser(normalizeSessionUser(data, email)); return data
   }, [])
   const register = useCallback(async (email, password) => {
     const data = await requestUserAuth('/api/auth/user-register', { email, password })
-    setUser({ email: data.email || email }); return data
+    setUser(normalizeSessionUser(data, email)); return data
   }, [])
   const logout = useCallback(async () => {
     try { await requestUserAuth('/api/auth/user-logout') } finally { clearUser() }
@@ -56,4 +65,3 @@ export function useUserAuth() {
   if (!value) throw new Error('useUserAuth must be used inside UserAuthProvider')
   return value
 }
-

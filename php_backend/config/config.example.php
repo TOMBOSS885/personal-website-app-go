@@ -25,4 +25,26 @@ return [
         'upload_dir' => dirname(__DIR__) . '/uploads',
         'upload_url' => '/uploads',
     ],
+    // Secrets stay on the server. Keep providers disabled until the callback
+    // URL and matching application credentials have been configured.
+    'oauth' => [
+        'github' => [
+            'enabled' => false,
+            'client_id' => '',
+            'client_secret' => '',
+            'callback_url' => 'https://omblog.tombossking.xyz/api/auth/oauth/github/callback',
+        ],
+        'qq' => [
+            'enabled' => false,
+            'client_id' => '',
+            'client_secret' => '',
+            'callback_url' => 'https://omblog.tombossking.xyz/api/auth/oauth/qq/callback',
+        ],
+        'wechat' => [
+            'enabled' => false,
+            'client_id' => '',
+            'client_secret' => '',
+            'callback_url' => 'https://omblog.tombossking.xyz/api/auth/oauth/wechat/callback',
+        ],
+    ],
 ];

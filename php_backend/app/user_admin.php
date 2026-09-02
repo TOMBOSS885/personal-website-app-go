@@ -4,12 +4,36 @@ declare(strict_types=1);
 
 /** Administrator-only management for public user accounts. */
 
+function app_user_admin_identity_row(array $row): array
+{
+    return [
+        'id' => (int) ($row['id'] ?? 0),
+        'provider' => (string) ($row['provider'] ?? ''),
+        'providerSubject' => (string) ($row['provider_subject'] ?? ''),
+        'providerUnionId' => !empty($row['provider_union_id']) ? (string) $row['provider_union_id'] : null,
+        'displayName' => (string) ($row['display_name'] ?? ''),
+        'avatarUrl' => (string) ($row['avatar_url'] ?? ''),
+        'boundAt' => !empty($row['bound_at']) ? app_now_iso($row['bound_at']) : null,
+        'lastLoginAt' => !empty($row['last_login_at']) ? app_now_iso($row['last_login_at']) : null,
+        'updatedAt' => !empty($row['updated_at']) ? app_now_iso($row['updated_at']) : null,
+    ];
+}
+
 function app_user_admin_row(array $row): array
 {
     $lockedUntil = !empty($row['locked_until']) ? (string) $row['locked_until'] : null;
     $disabledAt = !empty($row['disabled_at']) ? (string) $row['disabled_at'] : null;
     $locked = $lockedUntil !== null && strtotime($lockedUntil) > time();
     $disabled = $disabledAt !== null;
+    $identityRows = is_array($row['oauth_identities'] ?? null) ? $row['oauth_identities'] : [];
+    $oauthIdentities = array_map('app_user_admin_identity_row', $identityRows);
+    $oauthProviders = array_values(array_unique(array_filter(array_map(
+        static function (array $identity): string { return (string) ($identity['provider'] ?? ''); },
+        $oauthIdentities
+    ))));
+    if (!$oauthProviders && !empty($row['oauth_providers'])) {
+        $oauthProviders = array_values(array_filter(explode(',', (string) $row['oauth_providers'])));
+    }
     return [
         'id' => (int) $row['id'],
         'email' => (string) $row['email'],
@@ -22,6 +46,9 @@ function app_user_admin_row(array $row): array
         'createdAt' => app_now_iso($row['created_at'] ?? null),
         'updatedAt' => app_now_iso($row['updated_at'] ?? null),
         'visitCount' => (int) ($row['visit_count'] ?? 0),
+        'oauthProviders' => $oauthProviders,
+        'oauthIdentities' => $oauthIdentities,
+        'oauthIdentityCount' => count($oauthIdentities),
     ];
 }
 
@@ -29,6 +56,7 @@ function app_admin_users(): array
 {
     app_require_schema_013();
     app_require_schema_014();
+    app_require_schema_015();
     $page = max(0, app_int($_GET['page'] ?? 0));
     $size = app_clamp(app_int($_GET['size'] ?? 20, 20), 1, 100);
     $search = trim((string) ($_GET['q'] ?? $_GET['search'] ?? ''));
@@ -39,26 +67,45 @@ function app_admin_users(): array
     $where = ['1=1'];
     $params = [];
     if ($search !== '') {
-        $where[] = '(email LIKE ? OR CAST(id AS CHAR) = ?)';
-        $params[] = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search) . '%';
+        $escapedSearch = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search) . '%';
+        $where[] = '(u.email LIKE ? OR CAST(u.id AS CHAR) = ? OR EXISTS (SELECT 1 FROM oauth_identities os WHERE os.user_id = u.id AND (os.provider LIKE ? OR os.display_name LIKE ? OR os.provider_subject LIKE ? OR os.provider_union_id LIKE ?)))';
+        $params[] = $escapedSearch;
         $params[] = $search;
+        $params[] = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], strtolower($search)) . '%';
+        $params[] = $escapedSearch;
+        $params[] = $escapedSearch;
+        $params[] = $escapedSearch;
     }
-    if ($status === 'disabled') $where[] = 'disabled_at IS NOT NULL';
-    elseif ($status === 'locked') $where[] = 'disabled_at IS NULL AND locked_until IS NOT NULL AND locked_until > NOW()';
-    elseif ($status === 'active') $where[] = 'disabled_at IS NULL AND (locked_until IS NULL OR locked_until <= NOW())';
+    if ($status === 'disabled') $where[] = 'u.disabled_at IS NOT NULL';
+    elseif ($status === 'locked') $where[] = 'u.disabled_at IS NULL AND u.locked_until IS NOT NULL AND u.locked_until > NOW()';
+    elseif ($status === 'active') $where[] = 'u.disabled_at IS NULL AND (u.locked_until IS NULL OR u.locked_until <= NOW())';
     $condition = implode(' AND ', $where);
     $database = app_db();
-    $count = $database->prepare("SELECT COUNT(*) FROM user_accounts WHERE $condition");
+    $count = $database->prepare("SELECT COUNT(*) FROM user_accounts u WHERE $condition");
     $count->execute($params);
     $total = (int) $count->fetchColumn();
     $sql = "SELECT u.*, (SELECT COUNT(*) FROM site_visits v WHERE v.user_id = u.id) AS visit_count
         FROM user_accounts u WHERE $condition ORDER BY u.created_at DESC, u.id DESC LIMIT $size OFFSET " . ($page * $size);
-    // The count condition uses unqualified columns; qualify them for the list query.
-    $listCondition = preg_replace('/\\b(disabled_at|locked_until|email|id)\\b/', 'u.$1', $condition) ?: $condition;
-    $sql = "SELECT u.*, (SELECT COUNT(*) FROM site_visits v WHERE v.user_id = u.id) AS visit_count FROM user_accounts u WHERE $listCondition ORDER BY u.created_at DESC, u.id DESC LIMIT $size OFFSET " . ($page * $size);
     $statement = $database->prepare($sql);
     $statement->execute($params);
-    $rows = array_map('app_user_admin_row', $statement->fetchAll());
+    $userRows = $statement->fetchAll();
+    $identitiesByUser = [];
+    if ($userRows) {
+        $userIds = array_map(static function (array $row): int { return (int) $row['id']; }, $userRows);
+        $placeholders = implode(',', array_fill(0, count($userIds), '?'));
+        $identityStatement = $database->prepare("SELECT id, user_id, provider, provider_subject, provider_union_id, display_name, avatar_url, bound_at, last_login_at, updated_at
+            FROM oauth_identities WHERE user_id IN ($placeholders) ORDER BY user_id, provider");
+        $identityStatement->execute($userIds);
+        foreach ($identityStatement->fetchAll() as $identity) {
+            $userId = (int) $identity['user_id'];
+            if (!isset($identitiesByUser[$userId])) $identitiesByUser[$userId] = [];
+            $identitiesByUser[$userId][] = $identity;
+        }
+    }
+    $rows = array_map(static function (array $row) use ($identitiesByUser): array {
+        $row['oauth_identities'] = $identitiesByUser[(int) $row['id']] ?? [];
+        return app_user_admin_row($row);
+    }, $userRows);
     $summary = $database->query("SELECT COUNT(*) AS total, SUM(disabled_at IS NULL AND (locked_until IS NULL OR locked_until <= NOW())) AS active, SUM(disabled_at IS NULL AND locked_until > NOW()) AS locked, SUM(disabled_at IS NOT NULL) AS disabled FROM user_accounts")->fetch() ?: [];
     return app_page($rows, $total, $size, $page) + ['users' => $rows, 'summary' => [
         'total' => (int) ($summary['total'] ?? 0), 'active' => (int) ($summary['active'] ?? 0),

@@ -33,3 +33,12 @@ describe('uploaded cover image filtering', () => {
     expect(filterCoverImages(null, 'cover')).toEqual([])
   })
 })
+
+describe('third-party-bound article access setting', () => {
+  it('keeps the field in new article defaults and offers a bulk action', async () => {
+    const source = await import('node:fs').then(({ readFileSync }) => readFileSync(new URL('./ArticleManager.jsx', import.meta.url), 'utf8'))
+    expect(source).toContain('requiresThirdPartyBinding: false')
+    expect(source).toContain("handleBulk('third-party-required')")
+    expect(source).toContain('需绑定至少一个第三方账号')
+  })
+})

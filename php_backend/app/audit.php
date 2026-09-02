@@ -22,6 +22,7 @@ function app_audit_context(): array
         'resourceId' => null,
         'message' => '',
         'details' => null,
+        'success' => null,
     ];
     return $context;
 }
@@ -166,7 +167,7 @@ function app_audit_insert(int $statusCode = 200, ?bool $success = null, string $
     $resourceType = (string) ($context['resourceType'] ?? '');
     $resourceId = $context['resourceId'] ?? null;
     if ($resourceType === '') [$resourceType, $resourceId] = app_audit_route_parts($route);
-    $success = $success ?? ($statusCode >= 200 && $statusCode < 400);
+    $success = $success ?? ($context['success'] ?? ($statusCode >= 200 && $statusCode < 400));
     $adminId = $context['adminId'] ?? (!empty($_SESSION['admin_id']) ? (int) $_SESSION['admin_id'] : null);
     $username = (string) ($context['username'] ?? ($_SESSION['admin_username'] ?? ''));
     $userAgent = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));

@@ -59,3 +59,12 @@ describe('static article iframe sizing', () => {
     expect(normalizeStaticSiteHeight(90000)).toBe(50000)
   })
 })
+
+describe('protected article response handling', () => {
+  it('keeps public article requests private from shared browser caches', async () => {
+    const source = await import('node:fs').then(({ readFileSync }) => readFileSync(new URL('./ArticleDetailPage.jsx', import.meta.url), 'utf8'))
+    expect(source).toContain("cache: 'no-store', credentials: 'same-origin'")
+    expect(source).toContain('article.requiresThirdPartyBinding')
+    expect(source).toContain('/account?return=')
+  })
+})

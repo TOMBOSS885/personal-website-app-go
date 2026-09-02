@@ -13,7 +13,7 @@ function app_user_email(string $value): string
 
 function app_user_session_clear(): void
 {
-    unset($_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_session_version'], $_SESSION['user_created_at'], $_SESSION['user_last_seen_at']);
+    unset($_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_session_version'], $_SESSION['user_created_at'], $_SESSION['user_last_seen_at'], $_SESSION['user_csrf_token'], $_SESSION['oauth_states']);
 }
 
 function app_user_required(): void
@@ -53,7 +53,7 @@ function app_user_register(): void
     app_audit_set_context(['username' => $email, 'action' => 'USER_REGISTER', 'eventType' => 'authentication', 'adminId' => null]);
     app_audit_set_details(['accountType' => 'user', 'email' => $email]);
     app_user_start_session($id, $email, 1);
-    app_json(['success' => true, 'email' => $email]);
+    app_json(['success' => true] + app_user_session_payload());
 }
 
 function app_user_start_session(int $id, string $email, int $sessionVersion): void
@@ -61,12 +61,26 @@ function app_user_start_session(int $id, string $email, int $sessionVersion): vo
     session_regenerate_id(true);
     // A browser may have an older administrator session. Never allow the
     // public account flow to inherit administrator privileges from it.
-    unset($_SESSION['admin_id'], $_SESSION['admin_username'], $_SESSION['admin_session_version'], $_SESSION['admin_created_at'], $_SESSION['admin_last_seen_at'], $_SESSION['csrf_token']);
+    unset($_SESSION['admin_id'], $_SESSION['admin_username'], $_SESSION['admin_session_version'], $_SESSION['admin_created_at'], $_SESSION['admin_last_seen_at'], $_SESSION['csrf_token'], $_SESSION['oauth_states']);
     $_SESSION['user_id'] = $id;
     $_SESSION['user_email'] = $email;
     $_SESSION['user_session_version'] = $sessionVersion;
     $_SESSION['user_created_at'] = time();
     $_SESSION['user_last_seen_at'] = time();
+    $_SESSION['user_csrf_token'] = bin2hex(random_bytes(32));
+}
+
+function app_user_csrf_required(): void
+{
+    $fetchSite = strtolower(trim((string) ($_SERVER['HTTP_SEC_FETCH_SITE'] ?? '')));
+    if ($fetchSite !== '' && !in_array($fetchSite, ['same-origin', 'none'], true)) {
+        app_error(403, 'Cross-site account requests are not allowed.', 'CROSS_SITE_REQUEST_BLOCKED');
+    }
+    $expected = (string) ($_SESSION['user_csrf_token'] ?? '');
+    $provided = (string) ($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
+    if ($expected === '' || $provided === '' || !hash_equals($expected, $provided)) {
+        app_error(403, 'CSRF validation failed. Refresh the page and try again.', 'CSRF_FAILED');
+    }
 }
 
 function app_user_login(): void
@@ -106,7 +120,7 @@ function app_user_login(): void
     }
     app_audit_set_details(['accountType' => 'user', 'email' => $email]);
     app_user_start_session((int) $user['id'], $email, (int) $user['session_version']);
-    app_json(['success' => true, 'email' => $email]);
+    app_json(['success' => true] + app_user_session_payload());
 }
 
 function app_user_logout(): void
@@ -123,5 +137,14 @@ function app_user_session_payload(): array
 {
     if (empty($_SESSION['user_id'])) return ['authenticated' => false];
     app_user_required();
-    return ['authenticated' => true, 'email' => (string) $_SESSION['user_email']];
+    if (empty($_SESSION['user_csrf_token'])) $_SESSION['user_csrf_token'] = bin2hex(random_bytes(32));
+    $hasOAuthIdentity = function_exists('app_schema_015_ready') && app_schema_015_ready()
+        ? app_oauth_user_has_identity((int) $_SESSION['user_id']) : false;
+    return [
+        'authenticated' => true,
+        'userId' => (int) $_SESSION['user_id'],
+        'email' => (string) $_SESSION['user_email'],
+        'csrfToken' => (string) $_SESSION['user_csrf_token'],
+        'hasOAuthIdentity' => $hasOAuthIdentity,
+    ];
 }

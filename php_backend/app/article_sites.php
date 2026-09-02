@@ -203,7 +203,8 @@ function app_article_site_signed_url(array $article): string
 
 function app_article_site_serve(int $id, string $key, int $version, int $expires, string $signature, string $requested): void
 {
-    if (function_exists('app_require_schema_014')) app_require_schema_014();
+    if (function_exists('app_require_schema_015')) app_require_schema_015();
+    elseif (function_exists('app_require_schema_014')) app_require_schema_014();
     elseif (function_exists('app_require_schema_013')) app_require_schema_013();
     // Static article assets are a separate route from /public/articles/{id};
     // start the same session here so login-gated articles cannot be reached
@@ -217,7 +218,7 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
         app_error(403, '静态前端签名无效', 'ARTICLE_SITE_SIGNATURE_INVALID');
     }
 
-    $statement = app_db()->prepare('SELECT id, published, content_type, static_site_key, is_locked, login_required, access_password_hash, updated_at FROM articles WHERE id = ?');
+    $statement = app_db()->prepare('SELECT id, published, content_type, static_site_key, is_locked, login_required, requires_oauth_identity, access_password_hash, updated_at FROM articles WHERE id = ?');
     $statement->execute([$id]);
     $article = $statement->fetch();
     $currentVersion = $article ? app_article_site_version($article) : 0;
@@ -225,7 +226,8 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
         || !hash_equals((string) $article['static_site_key'], $key) || $currentVersion !== $version) {
         app_error(404, '静态前端不存在', 'NOT_FOUND');
     }
-    $loginGated = !empty($article['login_required']);
+    $oauthGated = !empty($article['requires_oauth_identity']);
+    $loginGated = !empty($article['login_required']) || $oauthGated;
     if ($loginGated) {
         if (!empty($_SESSION['user_id'])) app_user_required();
         elseif (!empty($_SESSION['admin_id'])) app_admin_required();
@@ -233,6 +235,11 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
     if ($loginGated && empty($_SESSION['user_id']) && empty($_SESSION['admin_id'])) {
         header('Cache-Control: no-store');
         app_error(401, '请先登录后再查看文章', 'USER_UNAUTHENTICATED');
+    }
+    if ($oauthGated && empty($_SESSION['admin_id'])
+        && (empty($_SESSION['user_id']) || !app_oauth_user_has_identity((int) $_SESSION['user_id']))) {
+        header('Cache-Control: no-store');
+        app_error(403, '该文章需要账号至少绑定一个第三方登录方式', 'OAUTH_IDENTITY_REQUIRED');
     }
 
     // A signed URL is not a substitute for the article's independent access
@@ -555,6 +562,8 @@ function app_article_site_version(array $article): int
         (string) ($article['static_site_key'] ?? ''),
         !empty($article['published']) ? '1' : '0',
         !empty($article['is_locked']) ? '1' : '0',
+        !empty($article['login_required']) ? '1' : '0',
+        !empty($article['requires_oauth_identity']) ? '1' : '0',
         (string) ($article['access_password_hash'] ?? ''),
     ]);
     return max(1, (int) hexdec(substr(hash('sha256', $value), 0, 12)));

@@ -1,13 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, ArrowUpRight, Bookmark, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Clock3, ListTree, Lock, MessageCircle, Share2, Tag } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Bookmark, Check, ChevronDown, ChevronRight, ChevronsDown, ChevronsUp, Clock3, Link2, ListTree, Lock, MessageCircle, Share2, Tag } from 'lucide-react'
 import LoadingIndicator from '../components/LoadingIndicator'
 import { guestbookTargetUrl, guestMessageUrl } from '../utils/guestMessageTarget'
 import { usePageMetadata } from '../utils/pageMetadata'
 import { estimateArticleReading, getArticlePosition, isArticleFavorite, recordArticleVisit, saveArticlePosition, toggleArticleFavorite } from '../utils/readingLibrary'
 import { safeStaticSiteSrc } from '../utils/safeUrl'
 import { useUserAuth } from '../contexts/UserAuthContext'
+import { oauthFeedback, withoutOAuthFeedback } from '../utils/oauth'
 
 let markdownRendererPromise
 
@@ -33,6 +34,7 @@ export default function ArticleDetailPage() {
   const { id } = useParams()
   const location = useLocation()
   const { user, loading: userLoading } = useUserAuth()
+  const bindingFeedback = useMemo(() => oauthFeedback(location.search), [location.search])
   const [article, setArticle] = useState(null)
   const [loading, setLoading] = useState(true)
   const [shareStatus, setShareStatus] = useState('idle')
@@ -64,7 +66,7 @@ export default function ArticleDetailPage() {
   usePageMetadata(articleMetadata)
 
   useEffect(() => {
-    if (!article?.id || article.requiresPassword) return undefined
+    if (!article?.id || article.requiresPassword || article.requiresLogin || (article.requiresThirdPartyBinding && !user?.hasOAuthIdentity && !article.adminAuthenticated)) return undefined
     setFavorite(isArticleFavorite(article.id))
     setResumeProgress(getArticlePosition(article.id))
     recordArticleVisit(article)
@@ -93,13 +95,13 @@ export default function ArticleDetailPage() {
       if (frame) window.cancelAnimationFrame(frame)
       saveArticlePosition(article.id, readingProgressRef.current)
     }
-  }, [article?.id, article?.requiresPassword, markdownRenderVersion])
+  }, [article?.id, article?.requiresPassword, article?.requiresLogin, article?.requiresThirdPartyBinding, article?.adminAuthenticated, user?.hasOAuthIdentity, markdownRenderVersion])
 
   useEffect(() => {
-    if (!article?.id || article.requiresPassword) return undefined
+    if (!article?.id || article.requiresPassword || article.requiresLogin || (article.requiresThirdPartyBinding && !user?.hasOAuthIdentity && !article.adminAuthenticated)) return undefined
     const timer = window.setTimeout(() => saveArticlePosition(article.id, readingProgress), 800)
     return () => window.clearTimeout(timer)
-  }, [article?.id, article?.requiresPassword, readingProgress])
+  }, [article?.id, article?.requiresPassword, article?.requiresLogin, article?.requiresThirdPartyBinding, article?.adminAuthenticated, user?.hasOAuthIdentity, readingProgress])
 
   const handleMarkdownRendered = useCallback(() => {
     setMarkdownRenderVersion(current => current + 1)
@@ -113,7 +115,7 @@ export default function ArticleDetailPage() {
     // Start the optional Markdown renderer at the same time as the article
     // API request. This removes an otherwise sequential high-latency round.
     void loadMarkdownRenderer()
-    fetch(`/api/public/articles/${id}`)
+    fetch(`/api/public/articles/${id}`, { cache: 'no-store', credentials: 'same-origin' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (active) {
@@ -256,10 +258,32 @@ export default function ArticleDetailPage() {
     )
   }
 
+  if (article.requiresThirdPartyBinding && !article.adminAuthenticated && userLoading) {
+    return <div className="flex min-h-screen items-center justify-center"><LoadingIndicator size={52} label="验证账号权限" /></div>
+  }
+
+  if (article.requiresThirdPartyBinding && !article.adminAuthenticated && user && !user.hasOAuthIdentity) {
+    const redirect = withoutOAuthFeedback(`${location.pathname}${location.search}`)
+    return (
+      <div className="min-h-screen bg-transparent px-4 pb-12 pt-28">
+        <div className="mx-auto max-w-3xl rounded-lg border border-white/60 bg-white/80 p-6 shadow-xl backdrop-blur-md dark:border-slate-700/40 dark:bg-slate-950/70 md:p-8">
+          <Link to="/blog" className="mb-6 inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-100"><ArrowLeft className="h-4 w-4" />返回博客</Link>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-100">{article.title}</h1>
+          {article.summary && <p className="mt-3 text-gray-600 dark:text-slate-300">{article.summary}</p>}
+          {bindingFeedback?.type === 'error' && <p role="alert" className="mt-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{bindingFeedback.message}</p>}
+          <div className="mt-6 rounded-lg border border-violet-100 bg-violet-50/70 p-5 dark:border-violet-500/20 dark:bg-violet-500/10">
+            <div className="flex items-start gap-3"><Link2 className="mt-0.5 h-5 w-5 shrink-0 text-violet-600 dark:text-violet-300" /><div><p className="font-medium text-gray-800 dark:text-slate-100">该文章需要账号至少绑定一种第三方登录方式。</p><p className="mt-1 text-sm text-gray-600 dark:text-slate-300">完成官方授权绑定后即可返回阅读。</p></div></div>
+            <Link to={`/account?return=${encodeURIComponent(redirect)}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 font-medium text-white hover:bg-violet-700"><Link2 className="h-4 w-4" />前往绑定</Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // Keep a client-side guard for stale/incorrect cached responses. The API
   // explicitly marks an administrator session so that admins can read gated
   // articles even though the public shell does not load admin context.
-  if (article.requiresLogin || (article.loginRequired && !userLoading && !user && !article.adminAuthenticated)) {
+  if (article.requiresLogin || (article.requiresThirdPartyBinding && !article.adminAuthenticated && !user) || (article.loginRequired && !userLoading && !user && !article.adminAuthenticated)) {
     const redirect = `${location.pathname}${location.search}`
     return (
       <div className="min-h-screen bg-transparent px-4 pb-12 pt-28">

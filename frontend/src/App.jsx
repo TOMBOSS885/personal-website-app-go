@@ -45,6 +45,7 @@ const AuditLogManager = lazy(() => import('./pages/admin/AuditLogManager'))
 const UserManager = lazy(() => import('./pages/admin/UserManager'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const UserLoginPage = lazy(() => import('./pages/UserLoginPage'))
+const UserAccountPage = lazy(() => import('./pages/UserAccountPage'))
 const Footer = lazy(() => import('./components/Footer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
 const Live2DController = lazy(() => import('./components/Live2DController'))
@@ -116,6 +117,7 @@ function App() {
                 <Suspense fallback={<PageLoading />}>
                   <Routes>
                   <Route path="/login" element={<UserLoginPage />} />
+                  <Route path="/account" element={<UserAccountPage />} />
                   <Route path="/:adminEntry/login" element={<LoginPage />} />
                   <Route path="/:adminEntry/*" element={<PrivateRoute><AdminLayout /></PrivateRoute>}>
                     <Route index element={<Dashboard />} />
