@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Activity, BookMarked, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers, LogIn, LogOut, UserCircle } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Activity, BookMarked, ChevronDown, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers, LogIn, LogOut, UserCircle } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import LanguageSwitcher from './LanguageSwitcher'
@@ -34,6 +34,8 @@ export default function Navbar({ profile }) {
   const { user, logout } = useUserAuth()
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [logoutBusy, setLogoutBusy] = useState(false)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const accountMenuRef = useRef(null)
   const githubHref = safeExternalHref(profile?.github || '')
   const identityName = user?.email || profile?.nickname || ''
 
@@ -44,6 +46,25 @@ export default function Navbar({ profile }) {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  useEffect(() => {
+    if (!accountMenuOpen) return undefined
+    const closeAccountMenu = event => {
+      if (event.type === 'keydown' && event.key !== 'Escape') return
+      if (event.type === 'pointerdown' && accountMenuRef.current?.contains(event.target)) return
+      setAccountMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeAccountMenu)
+    document.addEventListener('keydown', closeAccountMenu)
+    return () => {
+      document.removeEventListener('pointerdown', closeAccountMenu)
+      document.removeEventListener('keydown', closeAccountMenu)
+    }
+  }, [accountMenuOpen])
+
+  useEffect(() => {
+    setAccountMenuOpen(false)
+  }, [location.pathname, location.search, user])
 
   const primaryNavLinks = [
     { path: '/', label: t('nav.home'), icon: Home },
@@ -62,6 +83,7 @@ export default function Navbar({ profile }) {
 
   const requestLogout = () => {
     setIsOpen(false)
+    setAccountMenuOpen(false)
     setLogoutConfirmOpen(true)
   }
 
@@ -178,11 +200,18 @@ export default function Navbar({ profile }) {
               </motion.button>
 
               {user ? (
-                <div className="hidden items-center gap-2 sm:flex">
-                  <span className="theme-action-surface inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-300/70 bg-emerald-50/95 px-3 text-sm font-semibold text-emerald-700 shadow-sm dark:border-emerald-500/40 dark:bg-emerald-950/70 dark:text-emerald-200" title={`已登录：${user.email}`}>
-                    <UserCircle className="h-4 w-4 shrink-0" /><span>已登录</span><span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-label="在线" />
-                  </span>
-                  <button type="button" onClick={requestLogout} className="theme-action-surface inline-flex h-10 items-center gap-2 rounded-xl border border-white/70 bg-white/90 px-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-red-50 hover:text-red-600 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-red-950/40" title="退出账号"><LogOut className="h-4 w-4" />退出</button>
+                <div ref={accountMenuRef} className="relative hidden sm:block">
+                  <button type="button" onClick={() => setAccountMenuOpen(open => !open)} className="theme-action-surface inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-300/70 bg-emerald-50/95 px-3 text-sm font-semibold text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-950/70 dark:text-emerald-200 dark:hover:bg-emerald-900/70" title={`已登录：${user.email}`} aria-haspopup="menu" aria-expanded={accountMenuOpen}>
+                    <UserCircle className="h-4 w-4 shrink-0" /><span>已登录</span><span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-label="在线" /><ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${accountMenuOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                  </button>
+                  <AnimatePresence>
+                    {accountMenuOpen && (
+                      <motion.div initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.98 }} transition={{ duration: 0.15 }} role="menu" aria-label="已登录账号操作" className="theme-action-surface absolute right-0 top-[calc(100%+0.6rem)] z-[70] w-64 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 shadow-xl shadow-slate-900/15 dark:border-slate-700 dark:bg-slate-900">
+                        <div className="border-b border-gray-100 px-3 py-2.5 dark:border-slate-800"><div className="text-xs font-medium text-gray-400 dark:text-slate-500">当前账号</div><div className="mt-1 truncate text-sm font-semibold text-gray-800 dark:text-slate-100" title={user.email}>{user.email}</div></div>
+                        <button type="button" role="menuitem" onClick={requestLogout} className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"><LogOut className="h-4 w-4" />退出登录</button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
               ) : <Link to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} className="theme-action-surface hidden h-10 items-center gap-2 rounded-xl border border-white/70 bg-white/90 px-3 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-white hover:text-indigo-600 dark:border-gray-700/70 dark:bg-gray-800/90 dark:text-gray-100 dark:hover:bg-gray-700 sm:inline-flex" title="账号登录"><LogIn className="h-4 w-4" />登录</Link>}
 

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Code2, Edit2, FileArchive, FileText, Image, Layers3, Lock, Plus, Save, Search, Trash2, Upload, UploadCloud, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Code2, Edit2, FileArchive, FileText, Image, Layers3, Lock, Plus, RefreshCw, Save, Search, Trash2, Upload, UploadCloud, X } from 'lucide-react'
 import RichTextEditor from '../../components/RichTextEditor'
 import LoadingIndicator from '../../components/LoadingIndicator'
+import OptimizedImage from '../../components/OptimizedImage'
 import { optimizeCoverImage } from '../../utils/imageCompression'
 
 const emptyForm = {
@@ -21,6 +22,15 @@ export function validateStaticSiteZipSelection(files) {
     return { file: null, error: '静态前端必须使用 .zip 压缩包' }
   }
   return { file, error: '' }
+}
+
+export function filterCoverImages(images, query) {
+  const keyword = String(query || '').trim().toLocaleLowerCase()
+  const safeImages = Array.isArray(images)
+    ? images.filter(image => image && typeof image.url === 'string' && image.url.trim())
+    : []
+  if (!keyword) return safeImages
+  return safeImages.filter(image => `${image.name || ''} ${image.url}`.toLocaleLowerCase().includes(keyword))
 }
 
 export default function ArticleManager() {
@@ -44,10 +54,16 @@ export default function ArticleManager() {
   const [searchInput, setSearchInput] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [bulkBusy, setBulkBusy] = useState(false)
+  const [showCoverLibrary, setShowCoverLibrary] = useState(false)
+  const [coverImages, setCoverImages] = useState([])
+  const [coverImagesLoading, setCoverImagesLoading] = useState(false)
+  const [coverImagesError, setCoverImagesError] = useState('')
+  const [coverSearch, setCoverSearch] = useState('')
   const fileInputRef = useRef(null)
   const siteFileInputRef = useRef(null)
   const siteDragDepthRef = useRef(0)
   const articleRequestRef = useRef(0)
+  const coverLibraryRequestRef = useRef(0)
 
   const fetchArticles = async (requestedPage = page, requestedQuery = searchQuery) => {
     const requestId = ++articleRequestRef.current
@@ -148,8 +164,60 @@ export default function ArticleManager() {
     setForm(emptyForm)
     setSiteUploadError('')
     setSiteDragActive(false)
+    setShowCoverLibrary(false)
+    setCoverSearch('')
+    coverLibraryRequestRef.current += 1
     siteDragDepthRef.current = 0
   }
+
+  const fetchCoverImages = async () => {
+    const requestId = ++coverLibraryRequestRef.current
+    setCoverImagesLoading(true)
+    setCoverImagesError('')
+    try {
+      const response = await fetch('/api/admin/article-images', { cache: 'no-store' })
+      const data = await response.json().catch(() => [])
+      if (!response.ok) throw new Error(data.message || '加载已上传图片失败')
+      if (requestId !== coverLibraryRequestRef.current) return
+      setCoverImages(filterCoverImages(data, ''))
+    } catch (error) {
+      if (requestId !== coverLibraryRequestRef.current) return
+      setCoverImages([])
+      setCoverImagesError(error.message || '加载已上传图片失败')
+    } finally {
+      if (requestId === coverLibraryRequestRef.current) setCoverImagesLoading(false)
+    }
+  }
+
+  const openCoverLibrary = () => {
+    setCoverSearch('')
+    setShowCoverLibrary(true)
+    void fetchCoverImages()
+  }
+
+  const closeCoverLibrary = () => {
+    coverLibraryRequestRef.current += 1
+    setShowCoverLibrary(false)
+    setCoverImagesLoading(false)
+  }
+
+  const selectCoverImage = image => {
+    if (!image || typeof image.url !== 'string' || !image.url.trim()) return
+    setForm(current => ({ ...current, coverImage: image.url.trim() }))
+    closeCoverLibrary()
+  }
+
+  useEffect(() => {
+    if (!showCoverLibrary) return undefined
+    const closeOnEscape = event => {
+      if (event.key !== 'Escape') return
+      coverLibraryRequestRef.current += 1
+      setShowCoverLibrary(false)
+      setCoverImagesLoading(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [showCoverLibrary])
 
   const uploadCover = async file => {
     if (!file) return
@@ -298,6 +366,8 @@ export default function ArticleManager() {
     } catch (error) { alert(error.message || '批量操作失败') } finally { setBulkBusy(false) }
   }
 
+  const visibleCoverImages = filterCoverImages(coverImages, coverSearch)
+
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -349,8 +419,21 @@ export default function ArticleManager() {
             <form onSubmit={handleSubmit} className="space-y-5 p-5">
               <div className="grid gap-4 md:grid-cols-2"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">标题<input value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" required /></label><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">分类<input value={form.category} onChange={event => setForm({ ...form, category: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label></div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">摘要<textarea value={form.summary} onChange={event => setForm({ ...form, summary: event.target.value })} rows={2} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
-              <div className="grid gap-4 md:grid-cols-[1fr_auto]"><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">封面 URL<input value={form.coverImage} onChange={event => setForm({ ...form, coverImage: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label><div className="flex items-end"><input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => uploadCover(event.target.files?.[0])} className="hidden" /><button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:text-slate-200">{uploading ? <LoadingIndicator size={16} /> : <Upload className="h-4 w-4" />}{uploading ? '压缩并上传中...' : '上传封面'}</button></div></div>
-              {form.coverImage && <div className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-600 dark:bg-slate-950"><Image className="h-5 w-5" /><span className="min-w-0 flex-1 truncate">{form.coverImage}</span></div>}
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">封面 URL<input value={form.coverImage} onChange={event => setForm({ ...form, coverImage: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
+                <div className="flex flex-wrap items-end gap-2">
+                  <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={event => uploadCover(event.target.files?.[0])} className="hidden" />
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">{uploading ? <LoadingIndicator size={16} /> : <Upload className="h-4 w-4" />}{uploading ? '压缩并上传中...' : '上传新封面'}</button>
+                  <button type="button" onClick={openCoverLibrary} className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700"><Image className="h-4 w-4" />选择已有封面</button>
+                </div>
+              </div>
+              {form.coverImage && (
+                <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center dark:border-slate-700 dark:bg-slate-950">
+                  <OptimizedImage src={form.coverImage} alt="当前文章封面" className="h-full w-full object-cover" wrapperClassName="block h-20 w-full shrink-0 overflow-hidden rounded-md bg-gray-100 sm:w-36 dark:bg-slate-800" fallback={<span className="flex h-20 w-full items-center justify-center rounded-md bg-gray-100 text-gray-400 sm:w-36 dark:bg-slate-800"><Image className="h-6 w-6" /></span>} />
+                  <div className="min-w-0 flex-1"><div className="text-xs font-semibold text-gray-700 dark:text-slate-200">当前封面</div><div className="mt-1 truncate text-xs text-gray-500 dark:text-slate-400" title={form.coverImage}>{form.coverImage}</div></div>
+                  <button type="button" onClick={() => setForm(current => ({ ...current, coverImage: '' }))} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 text-sm text-gray-600 hover:bg-white dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><X className="h-4 w-4" />移除</button>
+                </div>
+              )}
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">标签（英文逗号分隔）<input value={form.tags} onChange={event => setForm({ ...form, tags: event.target.value })} className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 dark:border-slate-700 dark:bg-slate-950" /></label>
               <section className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-4 dark:border-indigo-500/20 dark:bg-indigo-500/5">
                 <div className="flex items-start gap-3"><span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"><Layers3 className="h-5 w-5" /></span><div><h3 className="font-semibold text-gray-900 dark:text-slate-100">专题设置</h3><p className="mt-1 text-xs leading-5 text-gray-500 dark:text-slate-400">同名文章会自动组成专题；顺序数字越小，文章越靠前。清空专题名称即可移出专题。</p></div></div>
@@ -404,6 +487,50 @@ export default function ArticleManager() {
           </div>
         </div>
       )}
+
+      {showCoverLibrary && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 p-3 backdrop-blur-sm sm:p-6" onMouseDown={event => { if (event.target === event.currentTarget) closeCoverLibrary() }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="cover-library-title" className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl dark:bg-slate-900">
+            <header className="flex items-center justify-between gap-4 border-b border-gray-200 px-4 py-3 sm:px-5 dark:border-slate-800">
+              <div className="min-w-0"><h2 id="cover-library-title" className="flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-slate-100"><Image className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />选择已有封面</h2><p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">共 {coverImages.length} 张已上传图片</p></div>
+              <button type="button" onClick={closeCoverLibrary} className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:text-slate-400 dark:hover:bg-slate-800" aria-label="关闭封面图库"><X className="h-5 w-5" /></button>
+            </header>
+            <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50/80 p-3 sm:px-5 dark:border-slate-800 dark:bg-slate-950/60">
+              <label className="relative min-w-[220px] flex-1"><span className="sr-only">搜索已上传封面</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><input type="search" value={coverSearch} onChange={event => setCoverSearch(event.target.value)} placeholder="按文件名或地址搜索" className="admin-input w-full pl-9 pr-3" autoFocus /></label>
+              <button type="button" onClick={() => void fetchCoverImages()} disabled={coverImagesLoading} className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-wait disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800">{coverImagesLoading ? <LoadingIndicator size={16} /> : <RefreshCw className="h-4 w-4" />}刷新</button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-5">
+              {coverImagesLoading ? (
+                <div className="flex min-h-56 items-center justify-center text-sm text-gray-500 dark:text-slate-400"><LoadingIndicator size={20} className="mr-2" />正在加载已上传图片...</div>
+              ) : coverImagesError ? (
+                <div className="flex min-h-56 flex-col items-center justify-center text-center"><p role="alert" className="text-sm font-medium text-red-600 dark:text-red-300">{coverImagesError}</p><button type="button" onClick={() => void fetchCoverImages()} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm text-red-700 hover:bg-red-50 dark:border-red-500/30 dark:text-red-300 dark:hover:bg-red-500/10"><RefreshCw className="h-4 w-4" />重新加载</button></div>
+              ) : visibleCoverImages.length === 0 ? (
+                <div className="flex min-h-56 flex-col items-center justify-center text-center text-gray-500 dark:text-slate-400"><Image className="h-9 w-9" /><p className="mt-3 text-sm">{coverImages.length === 0 ? '暂无已上传图片，请先上传一张新封面' : '没有找到匹配的图片'}</p></div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                  {visibleCoverImages.map(image => {
+                    const selected = form.coverImage === image.url
+                    return (
+                      <button key={image.url} type="button" onClick={() => selectCoverImage(image)} aria-pressed={selected} className={`group relative overflow-hidden rounded-lg border bg-white text-left transition hover:border-indigo-400 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:bg-slate-950 ${selected ? 'border-indigo-600 ring-2 ring-indigo-500/30 dark:border-indigo-400' : 'border-gray-200 dark:border-slate-700'}`}>
+                        <OptimizedImage src={image.url} alt={image.name || '已上传封面'} sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" wrapperClassName="block aspect-[16/10] w-full overflow-hidden bg-gray-100 dark:bg-slate-800" fallback={<span className="flex aspect-[16/10] w-full items-center justify-center bg-gray-100 text-gray-400 dark:bg-slate-800"><Image className="h-7 w-7" /></span>} />
+                        {selected && <span className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-white shadow" aria-label="当前封面"><Check className="h-4 w-4" /></span>}
+                        <span className="block min-w-0 p-2.5"><span className="block truncate text-xs font-medium text-gray-800 dark:text-slate-200" title={image.name || image.url}>{image.name || '未命名图片'}</span><span className="mt-1 block text-[11px] text-gray-400 dark:text-slate-500">{formatCoverSize(image.size)}</span></span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   )
+}
+
+function formatCoverSize(size) {
+  const bytes = Number(size)
+  if (!Number.isFinite(bytes) || bytes <= 0) return '大小未知'
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }

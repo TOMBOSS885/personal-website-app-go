@@ -17,3 +17,14 @@ describe('navbar search entry', () => {
     expect(source).not.toContain('setCommandOpen')
   })
 })
+
+describe('navbar signed-in account menu', () => {
+  it('keeps logout inside the signed-in menu and behind confirmation', () => {
+    expect(source).toContain('aria-haspopup="menu"')
+    expect(source).toContain('aria-expanded={accountMenuOpen}')
+    expect(source).toContain('role="menuitem" onClick={requestLogout}')
+    expect(source).toContain('setLogoutConfirmOpen(true)')
+    expect(source).toContain('<LogoutConfirmDialog')
+    expect(source).not.toContain('title="退出账号"')
+  })
+})
