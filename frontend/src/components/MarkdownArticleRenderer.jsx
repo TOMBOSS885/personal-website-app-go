@@ -1,7 +1,6 @@
 import 'katex/dist/katex.min.css'
 import { cloneElement, isValidElement, memo, useEffect, useId, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -9,6 +8,7 @@ import { Check, Copy, Link as LinkIcon } from 'lucide-react'
 import OptimizedImage from './OptimizedImage'
 import { KATEX_OPTIONS, normalizeMarkdownMath, remarkSingleLineDisplayMath } from '../utils/markdownMath'
 import { remarkGithubAlerts, remarkSafeHtml } from '../utils/markdownPlugins'
+import { getMarkdownCodeLanguage, rehypeMarkdownHighlight } from '../utils/markdownHighlight'
 
 function MarkdownArticleRenderer({ content, resolveHeadingId, onRendered }) {
   useEffect(() => {
@@ -18,7 +18,7 @@ function MarkdownArticleRenderer({ content, resolveHeadingId, onRendered }) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath, remarkSingleLineDisplayMath, remarkSafeHtml, remarkGithubAlerts]}
-      rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}
+      rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeMarkdownHighlight]}
       components={{
         a: ({ node, href, children, ...props }) => {
           if (!isSafeMarkdownHref(href)) return <span>{children}</span>
@@ -71,7 +71,7 @@ function MarkdownHeading({ level, id, children, ...props }) {
 
 function MarkdownCode({ node: _node, markdownBlock = false, className, children, ...props }) {
   const source = String(children || '').replace(/\n$/, '')
-  const language = /language-([\w-]+)/i.exec(className || '')?.[1] || 'text'
+  const language = getMarkdownCodeLanguage(className) || 'text'
   const [copied, setCopied] = useState(false)
   const isBlock = markdownBlock
 

@@ -1,7 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import 'katex/dist/katex.min.css'
 import ReactMarkdown from 'react-markdown'
-import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -16,6 +15,7 @@ import LoadingIndicator from './LoadingIndicator'
 import { KATEX_OPTIONS, normalizeMarkdownMath, remarkSingleLineDisplayMath } from '../utils/markdownMath'
 import { optimizeArticleImage } from '../utils/imageCompression'
 import { normalizeImportedMarkdown, validateMarkdownImportFile } from '../utils/markdownImport'
+import { rehypeMarkdownHighlight } from '../utils/markdownHighlight'
 
 const API_BASE = ''
 
@@ -279,7 +279,7 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const deferredValue = useDeferredValue(preview === 'edit' ? ' ' : (value || ' '))
   const normalizedValue = useMemo(() => normalizeMarkdownMath(deferredValue), [deferredValue])
   const previewContent = (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkSingleLineDisplayMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeHighlight]}>
+    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkSingleLineDisplayMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeMarkdownHighlight]}>
       {normalizedValue}
     </ReactMarkdown>
   )

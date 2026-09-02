@@ -981,6 +981,16 @@ html.surfaces-transparent .friends-page .guest-message-card--focused {
   border-radius: 0 0 0.875rem 0.875rem;
 }
 
+/* Highlight.js token spans inherit the code surface.  Some grammars emit a
+   background on nested tokens; suppress it so dark mode never shows stray
+   coloured rectangles behind individual words. */
+.article-content .markdown-code-block pre code,
+.article-content .markdown-code-block pre code *,
+.article-editor-preview pre code,
+.article-editor-preview pre code * {
+  background: transparent !important;
+}
+
 .article-content .markdown-mermaid {
   position: relative;
   min-height: 7rem;
@@ -1100,6 +1110,57 @@ html.surfaces-transparent .friends-page .guest-message-card--focused {
 .article-content .hljs-selector-id {
   color: #93c5fd;
 }
+
+.article-content .hljs-attr,
+.article-content .hljs-attribute,
+.article-content .hljs-name,
+.article-content .hljs-built_in,
+.article-content .hljs-type,
+.article-content .hljs-class .hljs-title,
+.article-content .hljs-function .hljs-title {
+  color: #67e8f9;
+}
+
+.article-content .hljs-meta,
+.article-content .hljs-symbol,
+.article-content .hljs-bullet,
+.article-content .hljs-link {
+  color: #f0abfc;
+}
+
+.article-content .hljs-regexp,
+.article-content .hljs-template-tag,
+.article-content .hljs-template-variable {
+  color: #fda4af;
+}
+
+/* The admin live preview uses the same dark code surface as article pages. */
+.article-editor-preview .hljs-comment,
+.article-editor-preview .hljs-quote { color: #94a3b8; }
+.article-editor-preview .hljs-keyword,
+.article-editor-preview .hljs-selector-tag,
+.article-editor-preview .hljs-subst { color: #c4b5fd; }
+.article-editor-preview .hljs-string,
+.article-editor-preview .hljs-doctag { color: #86efac; }
+.article-editor-preview .hljs-number,
+.article-editor-preview .hljs-literal,
+.article-editor-preview .hljs-variable,
+.article-editor-preview .hljs-template-variable,
+.article-editor-preview .hljs-tag .hljs-attr { color: #fbbf24; }
+.article-editor-preview .hljs-title,
+.article-editor-preview .hljs-section,
+.article-editor-preview .hljs-selector-id,
+.article-editor-preview .hljs-attr,
+.article-editor-preview .hljs-attribute,
+.article-editor-preview .hljs-name,
+.article-editor-preview .hljs-built_in,
+.article-editor-preview .hljs-type { color: #67e8f9; }
+.article-editor-preview .hljs-meta,
+.article-editor-preview .hljs-symbol,
+.article-editor-preview .hljs-bullet,
+.article-editor-preview .hljs-link { color: #f0abfc; }
+.article-editor-preview .hljs-regexp,
+.article-editor-preview .hljs-template-tag { color: #fda4af; }
 
 .article-content .article-table-wrap {
   width: 100%;
@@ -1230,6 +1291,13 @@ html.theme-dark .article-content pre {
   background: rgba(2, 6, 23, 0.9);
   color: #e2e8f0;
   box-shadow: none;
+}
+
+html.theme-dark .article-content .markdown-code-block pre code,
+html.theme-dark .article-content .markdown-code-block pre code *,
+html.theme-dark .article-editor-preview pre code,
+html.theme-dark .article-editor-preview pre code * {
+  background: transparent !important;
 }
 
 html.theme-dark .article-content .markdown-code-block {

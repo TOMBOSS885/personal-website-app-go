@@ -26,11 +26,24 @@ describe('article markdown presentation', () => {
     expect(html).not.toContain('<pre><div class="markdown-code-block">')
   })
 
+  it('highlights broad language grammars and common fence aliases', () => {
+    const html = render('```rust\nfn main() { println!("ok"); }\n```\n\n```c++\nstd::vector<int> values;\n```')
+    expect(html).toContain('class="hljs language-rust"')
+    expect(html).toContain('class="hljs-keyword"')
+    expect(html).toContain('class="hljs language-c++"')
+  })
+
   it('keeps single and double backtick content inline', () => {
     const html = render('Use `npm run build` and ``a value with ` inside`` in a paragraph.')
     expect(html).toContain('<code>npm run build</code>')
     expect(html).toContain('<code>a value with ` inside</code>')
     expect(html).not.toContain('markdown-code-block')
+  })
+
+  it('auto-detects unlabeled programming fences without affecting the wrapper', () => {
+    const html = render('```\nconst answer = 42\n```')
+    expect(html).toContain('class="markdown-code-block"')
+    expect(html).toContain('class="hljs ')
   })
 
   it('keeps image alt text accessible and exposes it as a caption', () => {
