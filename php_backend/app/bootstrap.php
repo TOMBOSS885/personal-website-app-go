@@ -2237,10 +2237,10 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'auth/user-session') { app_require_schema_014(); app_json(app_user_session_payload()); }
         if ($method === 'GET' && $route === 'auth/oauth/providers') app_json(app_oauth_providers_payload());
         if ($method === 'GET' && $route === 'auth/oauth/identities') app_json(app_oauth_identities_payload());
-        if ($method === 'GET' && preg_match('#^auth/oauth/(github|qq|wechat)/start$#', $route, $match)) app_oauth_start($match[1]);
-        if ($method === 'POST' && preg_match('#^auth/oauth/(github|qq|wechat)/bind-start$#', $route, $match)) app_oauth_bind_start($match[1]);
-        if ($method === 'POST' && preg_match('#^auth/oauth/(github|qq|wechat)/unbind$#', $route, $match)) app_oauth_unbind($match[1]);
-        if ($method === 'GET' && preg_match('#^auth/oauth/(github|qq|wechat)/callback$#', $route, $match)) app_oauth_callback($match[1]);
+        if ($method === 'GET' && preg_match('#^auth/oauth/(github|qq|wechat|google|microsoft)/start$#', $route, $match)) app_oauth_start($match[1]);
+        if ($method === 'POST' && preg_match('#^auth/oauth/(github|qq|wechat|google|microsoft)/bind-start$#', $route, $match)) app_oauth_bind_start($match[1]);
+        if ($method === 'POST' && preg_match('#^auth/oauth/(github|qq|wechat|google|microsoft)/unbind$#', $route, $match)) app_oauth_unbind($match[1]);
+        if ($method === 'GET' && preg_match('#^auth/oauth/(github|qq|wechat|google|microsoft)/callback$#', $route, $match)) app_oauth_callback($match[1]);
 
         if ($method === 'GET' && $route === 'public/profile') {
             $language = strtolower((string) ($_GET['lang'] ?? 'zh')) === 'en' ? 'en' : 'zh';

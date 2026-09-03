@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isAllowedOAuthAuthorizationUrl, isSafeInternalPath, normalizeOAuthProviders, oauthFeedback, oauthStartUrl, withoutOAuthFeedback } from './oauth'
+import { isAllowedOAuthAuthorizationUrl, isSafeInternalPath, normalizeOAuthProviders, oauthFeedback, oauthStartUrl, OAUTH_PROVIDERS, withoutOAuthFeedback } from './oauth'
 
 describe('OAuth frontend safety helpers', () => {
   it('allows only known providers and normalizes public flags', () => {
@@ -7,6 +7,8 @@ describe('OAuth frontend safety helpers', () => {
       { provider: 'github', enabled: 1, configured: true },
       { provider: 'unknown', enabled: true, configured: true },
     ])).toEqual([{ provider: 'github', name: 'GitHub', enabled: true, configured: true }])
+    expect(OAUTH_PROVIDERS.google.name).toBe('Google')
+    expect(OAUTH_PROVIDERS.microsoft.name).toBe('Microsoft')
     expect(oauthStartUrl('unknown', 'login', '/')).toBe('')
   })
 
@@ -29,6 +31,8 @@ describe('OAuth frontend safety helpers', () => {
     expect(isAllowedOAuthAuthorizationUrl('github', 'https://github.com.evil.example/login')).toBe(false)
     expect(isAllowedOAuthAuthorizationUrl('github', 'http://github.com/login')).toBe(false)
     expect(isAllowedOAuthAuthorizationUrl('qq', 'https://graph.qq.com/oauth2.0/authorize')).toBe(true)
+    expect(isAllowedOAuthAuthorizationUrl('google', 'https://accounts.google.com/o/oauth2/v2/auth')).toBe(true)
+    expect(isAllowedOAuthAuthorizationUrl('microsoft', 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize')).toBe(true)
   })
 
   it('removes stale OAuth callback metadata before retrying', () => {

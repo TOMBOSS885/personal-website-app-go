@@ -3,7 +3,7 @@ import { Eye, Link2, Lock, Search, ShieldCheck, Trash2, Unlock, UserCheck, UserX
 import LoadingIndicator from '../../components/LoadingIndicator'
 import { safeDownloadHref } from '../../utils/safeUrl'
 
-const PROVIDER_NAMES = { github: 'GitHub', qq: 'QQ', wechat: '微信' }
+const PROVIDER_NAMES = { github: 'GitHub', qq: 'QQ', wechat: '微信', google: 'Google', microsoft: 'Microsoft' }
 
 export function oauthProviderName(provider) {
   return PROVIDER_NAMES[provider] || provider || '第三方账号'

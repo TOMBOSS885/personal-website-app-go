@@ -1,9 +1,11 @@
-import { Github, MessageCircle, MessagesSquare } from 'lucide-react'
+import { Building2, Github, Globe2, MessageCircle, MessagesSquare } from 'lucide-react'
 
 export const OAUTH_PROVIDERS = {
   github: { name: 'GitHub', icon: Github },
   qq: { name: 'QQ', icon: MessagesSquare },
   wechat: { name: '微信', icon: MessageCircle },
+  google: { name: 'Google', icon: Globe2 },
+  microsoft: { name: 'Microsoft', icon: Building2 },
 }
 
 export function normalizeOAuthProviders(value) {
@@ -39,6 +41,8 @@ const OAUTH_AUTHORIZATION_HOSTS = {
   github: new Set(['github.com']),
   qq: new Set(['graph.qq.com']),
   wechat: new Set(['open.weixin.qq.com']),
+  google: new Set(['accounts.google.com']),
+  microsoft: new Set(['login.microsoftonline.com']),
 }
 
 export function isAllowedOAuthAuthorizationUrl(provider, value) {

@@ -46,5 +46,17 @@ return [
             'client_secret' => '',
             'callback_url' => 'https://omblog.tombossking.xyz/api/auth/oauth/wechat/callback',
         ],
+        'google' => [
+            'enabled' => false,
+            'client_id' => '',
+            'client_secret' => '',
+            'callback_url' => 'https://omblog.tombossking.xyz/api/auth/oauth/google/callback',
+        ],
+        'microsoft' => [
+            'enabled' => false,
+            'client_id' => '',
+            'client_secret' => '',
+            'callback_url' => 'https://omblog.tombossking.xyz/api/auth/oauth/microsoft/callback',
+        ],
     ],
 ];

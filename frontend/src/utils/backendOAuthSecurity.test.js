@@ -45,6 +45,16 @@ describe('PHP OAuth security contract', () => {
     expect(githubBranch).not.toMatch(/'subject'\s*=>.*\['(?:login|email|name)'\]/)
   })
 
+  it('implements Google OIDC and Microsoft Graph identity lookups', () => {
+    expect(oauth).toContain("'google' => 'Google'")
+    expect(oauth).toContain("'microsoft' => 'Microsoft'")
+    expect(oauth).toContain('openidconnect.googleapis.com/v1/userinfo')
+    expect(oauth).toContain("$profile['sub']")
+    expect(oauth).toContain('graph.microsoft.com/v1.0/me')
+    expect(oauth).toContain("$profile['id']")
+    expect(backend('app/bootstrap.php')).toContain('github|qq|wechat|google|microsoft')
+  })
+
   it('enforces identity ownership and concurrency invariants in MySQL', () => {
     expect(migration).toMatch(/provider_scope VARCHAR\(191\).+(?:ascii_bin|utf8mb4_bin)/i)
     expect(migration).toMatch(/provider_subject VARCHAR\(191\).+(?:ascii_bin|utf8mb4_bin)/i)

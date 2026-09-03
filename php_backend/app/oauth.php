@@ -12,7 +12,7 @@ function app_oauth_base64url(string $value): string
 
 function app_oauth_provider_names(): array
 {
-    return ['github' => 'GitHub', 'qq' => 'QQ', 'wechat' => '微信'];
+    return ['github' => 'GitHub', 'qq' => 'QQ', 'wechat' => '微信', 'google' => 'Google', 'microsoft' => 'Microsoft'];
 }
 
 function app_oauth_provider(string $provider, bool $requireConfigured = true): array
@@ -106,6 +106,22 @@ function app_oauth_authorize_url(array $provider, string $state, string $challen
         return 'https://graph.qq.com/oauth2.0/authorize?' . http_build_query([
             'response_type' => 'code', 'client_id' => $provider['client_id'],
             'redirect_uri' => $provider['callback_url'], 'scope' => 'get_user_info', 'state' => $state,
+        ], '', '&', PHP_QUERY_RFC3986);
+    }
+    if ($key === 'google') {
+        return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+            'client_id' => $provider['client_id'], 'redirect_uri' => $provider['callback_url'],
+            'response_type' => 'code', 'scope' => 'openid email profile', 'state' => $state,
+            'code_challenge' => $challenge, 'code_challenge_method' => 'S256',
+            'access_type' => 'online', 'prompt' => 'select_account',
+        ], '', '&', PHP_QUERY_RFC3986);
+    }
+    if ($key === 'microsoft') {
+        return 'https://login.microsoftonline.com/common/oauth2/v2.0/authorize?' . http_build_query([
+            'client_id' => $provider['client_id'], 'redirect_uri' => $provider['callback_url'],
+            'response_type' => 'code', 'scope' => 'openid profile email User.Read', 'state' => $state,
+            'code_challenge' => $challenge, 'code_challenge_method' => 'S256',
+            'response_mode' => 'query',
         ], '', '&', PHP_QUERY_RFC3986);
     }
     return 'https://open.weixin.qq.com/connect/qrconnect?' . http_build_query([
@@ -267,6 +283,34 @@ function app_oauth_remote_identity(array $provider, string $code, string $verifi
         ])['body']);
         return ['subject' => (string) $me['openid'], 'scope' => $provider['client_id'], 'union' => !empty($me['unionid']) ? (string) $me['unionid'] : null,
             'displayName' => (string) ($profile['nickname'] ?? ''), 'avatarUrl' => (string) ($profile['figureurl_qq_2'] ?? ($profile['figureurl_qq_1'] ?? ''))];
+    }
+    if ($key === 'google') {
+        $token = app_oauth_json(app_oauth_http('POST', 'https://oauth2.googleapis.com/token', [
+            'client_id' => $provider['client_id'], 'client_secret' => $provider['client_secret'],
+            'code' => $code, 'redirect_uri' => $provider['callback_url'],
+            'grant_type' => 'authorization_code', 'code_verifier' => $verifier,
+        ], ['Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'])['body']);
+        if (empty($token['access_token']) || !empty($token['error'])) throw new RuntimeException('Google denied the OAuth request.');
+        $profile = app_oauth_json(app_oauth_http('GET', 'https://openidconnect.googleapis.com/v1/userinfo', [], [
+            'Authorization: Bearer ' . $token['access_token'], 'Accept: application/json',
+        ])['body']);
+        if (empty($profile['sub'])) throw new RuntimeException('Google identity is missing a stable ID.');
+        return ['subject' => (string) $profile['sub'], 'scope' => 'global', 'union' => null,
+            'displayName' => (string) ($profile['name'] ?? ''), 'avatarUrl' => (string) ($profile['picture'] ?? '')];
+    }
+    if ($key === 'microsoft') {
+        $token = app_oauth_json(app_oauth_http('POST', 'https://login.microsoftonline.com/common/oauth2/v2.0/token', [
+            'client_id' => $provider['client_id'], 'client_secret' => $provider['client_secret'],
+            'code' => $code, 'redirect_uri' => $provider['callback_url'],
+            'grant_type' => 'authorization_code', 'code_verifier' => $verifier,
+        ], ['Accept: application/json', 'Content-Type: application/x-www-form-urlencoded'])['body']);
+        if (empty($token['access_token']) || !empty($token['error'])) throw new RuntimeException('Microsoft denied the OAuth request.');
+        $profile = app_oauth_json(app_oauth_http('GET', 'https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName', [], [
+            'Authorization: Bearer ' . $token['access_token'], 'Accept: application/json',
+        ])['body']);
+        if (empty($profile['id'])) throw new RuntimeException('Microsoft identity is missing a stable ID.');
+        return ['subject' => (string) $profile['id'], 'scope' => 'graph-common', 'union' => null,
+            'displayName' => (string) ($profile['displayName'] ?? ($profile['userPrincipalName'] ?? '')), 'avatarUrl' => ''];
     }
     $token = app_oauth_json(app_oauth_http('GET', 'https://api.weixin.qq.com/sns/oauth2/access_token', [
         'appid' => $provider['client_id'], 'secret' => $provider['client_secret'], 'code' => $code, 'grant_type' => 'authorization_code',
