@@ -2,10 +2,10 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version="20260904-echarts"
-release_prefix="r${version}mindmap"
-release_dir="${repo_root}/release/personal-website-mindmap-incremental-update-${version}"
-archive="${repo_root}/release/personal-website-mindmap-incremental-update-${version}.zip"
+version="20260904-smtp"
+release_prefix="r${version}"
+release_dir="${repo_root}/release/personal-website-smtp-incremental-update-${version}"
+archive="${repo_root}/release/personal-website-smtp-incremental-update-${version}.zip"
 
 command -v node >/dev/null || { echo "node is required" >&2; exit 1; }
 command -v npm >/dev/null || { echo "npm is required" >&2; exit 1; }
@@ -22,8 +22,10 @@ cp -a "${repo_root}/frontend/dist/assets" "${release_dir}/"
 cp -a "${repo_root}/php_backend/public/api/index.php" "${release_dir}/api/index.php"
 cp -a "${repo_root}/php_backend/app/bootstrap.php" "${release_dir}/app/bootstrap.php"
 cp -a "${repo_root}/php_backend/app/mind_maps.php" "${release_dir}/app/mind_maps.php"
-cp -a "${repo_root}/php_backend/migrations/016_mind_maps.sql" "${release_dir}/migrations/016_mind_maps.sql"
-cp -a "${repo_root}/docs/mindmap-incremental-deploy.md" "${release_dir}/DEPLOY-MINDMAP.md"
+cp -a "${repo_root}/php_backend/app/mail.php" "${release_dir}/app/mail.php"
+cp -a "${repo_root}/php_backend/app/mail_templates.php" "${release_dir}/app/mail_templates.php"
+cp -a "${repo_root}/php_backend/migrations/017_smtp_email_verification.sql" "${release_dir}/migrations/017_smtp_email_verification.sql"
+cp -a "${repo_root}/docs/smtp-incremental-deploy.md" "${release_dir}/DEPLOY-SMTP.md"
 
 echo "[3/5] Writing checksums..."
 (cd "${release_dir}" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)

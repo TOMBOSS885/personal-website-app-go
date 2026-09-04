@@ -45,6 +45,7 @@ const SocialManager = lazy(() => import('./pages/admin/SocialManager'))
 const AuditLogManager = lazy(() => import('./pages/admin/AuditLogManager'))
 const UserManager = lazy(() => import('./pages/admin/UserManager'))
 const MindMapManager = lazy(() => import('./pages/admin/MindMapManager'))
+const MailServiceManager = lazy(() => import('./pages/admin/MailServiceManager'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const UserLoginPage = lazy(() => import('./pages/UserLoginPage'))
 const UserAccountPage = lazy(() => import('./pages/UserAccountPage'))
@@ -137,6 +138,7 @@ function App() {
                     <Route path="audit-logs" element={<AuditLogManager />} />
                     <Route path="users" element={<UserManager />} />
                     <Route path="mindmaps" element={<MindMapManager />} />
+                    <Route path="mail" element={<MailServiceManager />} />
                     <Route path="*" element={<Navigate to="." replace />} />
                   </Route>
                   <Route path="/" element={<PublicLayout profile={profile} />}>

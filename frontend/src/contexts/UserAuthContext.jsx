@@ -49,8 +49,8 @@ export function UserAuthProvider({ children }) {
     const data = await requestUserAuth('/api/auth/user-login', { email, password })
     setUser(normalizeSessionUser(data, email)); return data
   }, [])
-  const register = useCallback(async (email, password) => {
-    const data = await requestUserAuth('/api/auth/user-register', { email, password })
+  const register = useCallback(async (email, password, emailCode = '') => {
+    const data = await requestUserAuth('/api/auth/user-register', { email, password, emailCode })
     setUser(normalizeSessionUser(data, email)); return data
   }, [])
   const logout = useCallback(async () => {

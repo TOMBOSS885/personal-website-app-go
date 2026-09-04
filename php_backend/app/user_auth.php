@@ -42,6 +42,10 @@ function app_user_register(): void
     $email = app_user_email((string) ($body['email'] ?? ''));
     $password = (string) ($body['password'] ?? '');
     if (strlen($password) < 10 || strlen($password) > 128) app_error(400, '密码长度必须为 10 至 128 位。', 'PASSWORD_INVALID');
+    // Registration verification is opt-in and deliberately does not affect login or OAuth.
+    if (function_exists('app_registration_email_verification_enabled') && app_registration_email_verification_enabled()) {
+        app_verify_registration_code($email, (string) ($body['emailCode'] ?? ''));
+    }
     try {
         $statement = app_db()->prepare('INSERT INTO user_accounts (email, password_hash, created_at, updated_at) VALUES (?, ?, NOW(), NOW())');
         $statement->execute([$email, password_hash($password, PASSWORD_DEFAULT)]);
