@@ -302,7 +302,9 @@ mysql -u YOUR_DATABASE_USER -p YOUR_DATABASE_NAME < php_backend/migrations/016_m
 mysql -u YOUR_DATABASE_USER -p YOUR_DATABASE_NAME < php_backend/migrations/017_smtp_email_verification.sql
 ```
 
-前台入口为 `/mindmaps`，后台入口为当前动态管理路径下的 `/mindmaps`。前台不会提供整张导图删除操作；管理员可在后台“思维导图”中删除。邮件服务配置入口为后台“邮件服务”，可配置 SMTP 并启用注册邮箱验证码验证。
+前台入口为 `/mindmaps`，后台入口为当前动态管理路径下的 `/mindmaps`。前台不会提供整张导图删除操作；管理员可在后台“思维导图”中删除。邮件服务配置入口为后台“邮件服务”，可配置 SMTP 并启用注册邮箱验证码验证。后台“站点健康与备份”的完整备份会加密包含数据库结构、全部数据、OAuth/应用配置和 uploads 文件，可用于一键导入恢复。
+
+管理员操作日志只保留最近 200000 条，超出的旧记录会在写入或查看日志时自动清理。
 
 后台接口需要 `Authorization: Bearer <token>`：
 

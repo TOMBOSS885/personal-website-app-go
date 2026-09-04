@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+const APP_AUDIT_MAX_ROWS = 200000;
+
 /**
  * Audit logging for administrator authentication and API activity.
  *
@@ -120,6 +122,20 @@ function app_audit_diff(?array $before, ?array $after): array
     return $changes;
 }
 
+function app_audit_prune(PDO $database): void
+{
+    // Keep the newest 200,000 rows. The primary-key lookup avoids loading log
+    // details into PHP and works without a MySQL event scheduler.
+    $cutoff = $database->query('SELECT id FROM admin_operation_logs ORDER BY id DESC LIMIT 1 OFFSET ' . APP_AUDIT_MAX_ROWS)->fetchColumn();
+    if ($cutoff !== false && $cutoff !== null) {
+        $statement = $database->prepare('DELETE FROM admin_operation_logs WHERE id <= ?');
+        $statement->execute([(int) $cutoff]);
+    }
+    // Retain the existing age cleanup as a second bound for stale data that
+    // may have been imported from an older backup.
+    $database->exec('DELETE FROM admin_operation_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 YEAR) LIMIT 5000');
+}
+
 function app_audit_set_change(string $resourceType, ?int $resourceId, ?array $before, ?array $after, string $action): void
 {
     app_audit_set_context([
@@ -212,7 +228,7 @@ function app_audit_insert(int $statusCode = 200, ?bool $success = null, string $
         ]);
         // Retention is enforced during writes and reads so shared hosting does
         // not require a privileged MySQL event scheduler configuration.
-        $database->exec('DELETE FROM admin_operation_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 YEAR) LIMIT 5000');
+        app_audit_prune($database);
     } catch (Throwable $error) {
         // Auditing must never turn a valid admin operation into a 500 response.
         error_log('Admin audit log failed: ' . $error->getMessage());
@@ -239,7 +255,7 @@ function app_audit_register_shutdown(): void
 function app_audit_logs(): array
 {
     $database = app_db();
-    $database->exec('DELETE FROM admin_operation_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 1 YEAR) LIMIT 5000');
+    app_audit_prune($database);
     $page = max(0, app_int($_GET['page'] ?? 0));
     $size = app_clamp(app_int($_GET['size'] ?? 50, 50), 1, 100);
     $eventType = trim((string) ($_GET['eventType'] ?? ''));

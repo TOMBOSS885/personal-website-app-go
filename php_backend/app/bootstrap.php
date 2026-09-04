@@ -698,7 +698,7 @@ function app_public_feed(string $format = 'rss'): void
 
 function app_admin_backup_manifest(): array
 {
-    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'mail_settings', 'email_verification_codes', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs', 'mind_maps', 'mind_map_revisions'];
+    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'oauth_transactions', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'mail_settings', 'email_verification_codes', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs', 'mind_maps', 'mind_map_revisions'];
     $counts = [];
     foreach ($tables as $table) {
         try { $counts[$table] = (int) app_db()->query("SELECT COUNT(*) FROM `$table`")->fetchColumn(); } catch (Throwable $error) { $counts[$table] = null; }
@@ -862,10 +862,7 @@ function app_backup_dump_database(string $path): array
     $handle = @fopen($path, 'wb');
     if (!$handle) throw new RuntimeException('Unable to create the database backup file.');
     $database = app_db();
-    $tables = array_values(array_filter(
-        $database->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN),
-        static function ($table): bool { return (string) $table !== 'oauth_transactions'; }
-    ));
+    $tables = array_values($database->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN));
     $rowCount = 0;
     try {
         fwrite($handle, "SET NAMES utf8mb4;\nSET time_zone = '+08:00';\nSET FOREIGN_KEY_CHECKS = 0;\n");
@@ -888,6 +885,21 @@ function app_backup_dump_database(string $path): array
         fclose($handle);
     }
     return ['tables' => count($tables), 'rows' => $rowCount];
+}
+
+function app_backup_dump_schema(string $path): array
+{
+    $database = app_db();
+    $schema = [];
+    foreach ($database->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN) as $tableName) {
+        $table = (string) $tableName;
+        $row = $database->query('SHOW CREATE TABLE ' . app_backup_identifier($table))->fetch(PDO::FETCH_NUM);
+        if (!is_array($row) || !isset($row[1])) throw new RuntimeException('Unable to read database table structure.');
+        $schema[] = ['table' => $table, 'create' => (string) $row[1]];
+    }
+    $json = json_encode($schema, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    if (@file_put_contents($path, $json, LOCK_EX) === false) throw new RuntimeException('Unable to create database schema backup.');
+    return ['tables' => count($schema)];
 }
 
 function app_backup_encrypt_file(string $path, string $password): array
@@ -929,6 +941,32 @@ function app_backup_decrypt_file(string $path, string $password, array $meta, st
     $key = hash_pbkdf2('sha256', $password, $salt, $iterations, 32, true);
     $plain = openssl_decrypt($cipher, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, '');
     if ($plain === false || @file_put_contents($target, $plain, LOCK_EX) === false) throw new RuntimeException('Incorrect backup password or decryption failed.');
+}
+
+function app_backup_execute_schema(string $path): array
+{
+    $raw = @file_get_contents($path);
+    $schema = is_string($raw) ? json_decode($raw, true) : null;
+    if (!is_array($schema) || count($schema) > APP_BACKUP_MAX_FILES) throw new RuntimeException('Backup database schema is invalid.');
+    $database = app_db();
+    $created = 0;
+    $database->exec('SET FOREIGN_KEY_CHECKS = 0');
+    try {
+        foreach ($schema as $item) {
+            $table = (string) ($item['table'] ?? '');
+            $create = trim((string) ($item['create'] ?? ''));
+            if (!preg_match('/^[A-Za-z0-9_]+$/', $table) || !preg_match('/^CREATE TABLE `'.preg_quote($table, '/').'`\s+/i', $create)) {
+                throw new RuntimeException('Backup database schema contains an unsafe statement.');
+            }
+            $createIfMissing = preg_replace('/^CREATE TABLE /i', 'CREATE TABLE IF NOT EXISTS ', $create, 1);
+            if (!is_string($createIfMissing)) throw new RuntimeException('Backup database schema is invalid.');
+            $database->exec($createIfMissing);
+            $created++;
+        }
+    } finally {
+        $database->exec('SET FOREIGN_KEY_CHECKS = 1');
+    }
+    return ['tables' => $created];
 }
 
 function app_backup_remove_tree(string $root): void
@@ -1131,6 +1169,34 @@ function app_backup_validate_app_settings(array $settings): array
     return $validated;
 }
 
+function app_backup_validate_oauth_settings($oauth): array
+{
+    if (!is_array($oauth)) throw new RuntimeException('Backup OAuth settings are invalid.');
+    $validated = [];
+    foreach ($oauth as $provider => $config) {
+        if (!preg_match('/^[a-z][a-z0-9_-]{0,31}$/i', (string) $provider) || !is_array($config)) {
+            throw new RuntimeException('Backup OAuth settings contain an invalid provider.');
+        }
+        $item = [];
+        $item['enabled'] = !empty($config['enabled']);
+        foreach (['client_id', 'client_secret', 'callback_url'] as $key) {
+            $value = (string) ($config[$key] ?? '');
+            if (strlen($value) > 2048 || preg_match('/[\x00-\x1F\x7F]/', $value)) throw new RuntimeException('Backup OAuth settings contain invalid text.');
+            $item[$key] = $value;
+        }
+        if ($item['callback_url'] !== '') {
+            $parts = parse_url($item['callback_url']);
+            if (!is_array($parts) || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)
+                || empty($parts['host']) || isset($parts['user'], $parts['pass'], $parts['query'], $parts['fragment'])
+                || !preg_match('#^/api/auth/oauth/[a-z][a-z0-9_-]{0,31}/callback$#i', (string) ($parts['path'] ?? ''))) {
+                throw new RuntimeException('Backup OAuth callback URL is invalid.');
+            }
+        }
+        $validated[(string) $provider] = $item;
+    }
+    return $validated;
+}
+
 function app_backup_apply_app_settings(array|string $settings): void
 {
     if (is_string($settings)) {
@@ -1138,10 +1204,13 @@ function app_backup_apply_app_settings(array|string $settings): void
         $decoded = is_string($raw) ? json_decode($raw, true) : null;
         $settings = is_array($decoded) ? $decoded : app_backup_parse_legacy_settings($settings);
     }
+    $oauth = array_key_exists('oauth', $settings) ? app_backup_validate_oauth_settings($settings['oauth']) : null;
+    unset($settings['oauth']);
     $settings = app_backup_validate_app_settings($settings);
     if (!is_array($settings)) throw new RuntimeException('澶囦唤涓殑搴旂敤閰嶇疆鏃犳晥');
     $config = app_config();
     foreach ($settings as $key => $value) $config['app'][$key] = $value;
+    if ($oauth !== null) $config['oauth'] = $oauth;
     $configPath = dirname(__DIR__) . '/config/config.php';
     if (!is_file($configPath) || !is_writable($configPath)) throw new RuntimeException('config/config.php 涓嶅彲鍐欙紝鏃犳硶鎭㈠搴旂敤閰嶇疆');
     $temporary = $configPath . '.restore-' . bin2hex(random_bytes(4));
@@ -1173,22 +1242,25 @@ function app_backup_create_archive(string $zipPath, string $password): array
     try {
         $databaseStats = app_backup_dump_database($working . '/database.sql');
         $encryptedSql = app_backup_encrypt_file($working . '/database.sql', $password);
+        $schemaStats = app_backup_dump_schema($working . '/database-schema.json');
+        $encryptedSchema = app_backup_encrypt_file($working . '/database-schema.json', $password);
         $app = app_config()['app'];
+        $fullConfig = app_config();
         $safeSettings = [];
         foreach (['production', 'timezone', 'session_name', 'admin_path_suffix', 'setup_key', 'analytics_key', 'site_url', 'article_site_url_ttl_seconds'] as $key) if (array_key_exists($key, $app)) $safeSettings[$key] = $app[$key];
+        if (isset($fullConfig['oauth']) && is_array($fullConfig['oauth'])) $safeSettings['oauth'] = $fullConfig['oauth'];
         $settingsPath = $working . '/app-settings.json';
-        if (@file_put_contents($settingsPath, "<?php\n\nreturn " . var_export($safeSettings, true) . ";\n", LOCK_EX) === false) throw new RuntimeException('鏃犳硶鍒涘缓搴旂敤閰嶇疆澶囦唤');
         $settingsJson = json_encode($safeSettings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         if (@file_put_contents($settingsPath, $settingsJson, LOCK_EX) === false) throw new RuntimeException('Unable to create encrypted app settings.');
         $encryptedSettings = app_backup_encrypt_file($settingsPath, $password);
-        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 1, 'generatedAt' => date(DATE_ATOM), 'schema' => '011', 'database' => $databaseStats, 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'config/app-settings.php.enc' => $encryptedSettings['meta']], 'note' => 'The database and application settings are encrypted; uploads retain their original paths.'], 'manifest' => app_admin_backup_manifest()];
-        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 2, 'generatedAt' => date(DATE_ATOM), 'schema' => '015', 'database' => $databaseStats, 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'The database and application settings are encrypted; uploads retain their original paths.'], 'manifest' => app_admin_backup_manifest()];
+        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 3, 'generatedAt' => date(DATE_ATOM), 'schema' => '017', 'database' => $databaseStats + ['schemaTables' => $schemaStats['tables']], 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'database-schema.json.enc' => $encryptedSchema['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'Database structure, data, OAuth settings, and uploads are included. Database and settings are encrypted with the backup password.'], 'manifest' => app_admin_backup_manifest()];
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('Unable to create the backup archive.');
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
         $zip->addFromString('database.sql.enc', $encryptedSql['cipher']);
+        $zip->addFromString('database-schema.json.enc', $encryptedSchema['cipher']);
         $zip->addFromString('config/app-settings.json.enc', $encryptedSettings['cipher']);
-        $zip->addFromString('README.txt', "personal-website portable backup\n\nThis archive contains the database and uploads. The database and app settings are encrypted with the password entered during export. Keep the password safe; it cannot be recovered.\n");
+        $zip->addFromString('README.txt', "personal-website portable backup\n\nThis archive contains the database schema, database data, application/OAuth settings, and uploads. The database and settings are encrypted with the password entered during export. Keep the password safe; it cannot be recovered.\n");
         app_backup_add_uploads_to_archive($zip);
         $zip->setArchiveComment('personal-website portable backup; database and app settings are encrypted');
         $zip->close();
@@ -1335,7 +1407,7 @@ function app_admin_backup_import(): void
                 $manifest = json_decode((string) $zip->getFromIndex($index), true);
                 continue;
             }
-            if (!in_array($name, ['database.sql.enc', 'config/app-settings.php.enc', 'README.txt'], true) && !str_starts_with($name, 'uploads/')) throw new RuntimeException('澶囦唤鍖呭惈涓嶅厑璁哥殑鏂囦欢');
+            if (!in_array($name, ['database.sql.enc', 'database-schema.json.enc', 'config/app-settings.php.enc', 'README.txt'], true) && !str_starts_with($name, 'uploads/')) throw new RuntimeException('澶囦唤鍖呭惈涓嶅厑璁哥殑鏂囦欢');
             if (str_starts_with($name, 'uploads/') && preg_match('/\.(?:php[0-9]?|phtml|phar)$/i', $name)) throw new RuntimeException('Backup contains an executable upload.');
             $target = $working . '/' . $name;
             $stream = $zip->getStream($zip->getNameIndex($index));
@@ -1346,14 +1418,19 @@ function app_admin_backup_import(): void
         $zip->close();
         if (!is_array($manifest) || ($manifest['format'] ?? '') !== 'personal-website-portable-backup') throw new RuntimeException('Unsupported website backup archive.');
         $backupVersion = (int) ($manifest['version'] ?? 0);
-        if (!in_array($backupVersion, [1, 2], true)) throw new RuntimeException('Unsupported website backup version.');
+        if (!in_array($backupVersion, [1, 2, 3], true)) throw new RuntimeException('Unsupported website backup version.');
         $encryption = $manifest['encryption']['files'] ?? [];
         if (isset($encryption['config/app-settings.json.enc']) && !isset($encryption['config/app-settings.php.enc'])) {
             $encryption['config/app-settings.php.enc'] = $encryption['config/app-settings.json.enc'];
         }
+        if ($backupVersion === 3 && !isset($encryption['database-schema.json.enc'])) throw new RuntimeException('Backup database schema metadata is missing.');
         if ($backupVersion === 2 && !isset($encryption['config/app-settings.json.enc'])) throw new RuntimeException('Backup settings metadata is missing.');
         if (!isset($encryption['database.sql.enc'], $encryption['config/app-settings.php.enc'])) throw new RuntimeException('澶囦唤缂哄皯鍔犲瘑鏁版嵁');
         app_backup_decrypt_file($working . '/database.sql.enc', $password, $encryption['database.sql.enc'], $working . '/database.sql');
+        if ($backupVersion === 3) {
+            app_backup_decrypt_file($working . '/database-schema.json.enc', $password, $encryption['database-schema.json.enc'], $working . '/database-schema.json');
+            app_backup_execute_schema($working . '/database-schema.json');
+        }
         app_backup_decrypt_file($working . '/config/app-settings.php.enc', $password, $encryption['config/app-settings.php.enc'], $working . '/app-settings.php');
         app_backup_apply_app_settings($working . '/app-settings.php');
         $uploadRoot = rtrim((string) app_config()['app']['upload_dir'], '/\\');
