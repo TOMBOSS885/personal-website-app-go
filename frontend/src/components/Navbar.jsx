@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Activity, BookMarked, ChevronDown, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers, Link2, LogIn, LogOut, UserCircle } from 'lucide-react'
+import { Activity, BookMarked, ChevronDown, Home, FileText, Folder, Menu, X, Sun, Moon, Github, Search, Users, Layers, Link2, LogIn, LogOut, UserCircle, GitBranch } from 'lucide-react'
 import { useState, useEffect, useRef } from 'react'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
@@ -72,6 +72,7 @@ export default function Navbar({ profile }) {
     { path: '/projects', label: t('nav.projects'), icon: Folder },
     { path: '/friends', label: t('nav.friends'), icon: Users },
     { path: '/monitor', label: t('nav.monitor'), icon: Activity },
+    { path: '/mindmaps', label: '思维导图', icon: GitBranch },
     { path: '/search', label: '搜索', icon: Search },
   ]
   const mobileNavLinks = primaryNavLinks

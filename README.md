@@ -289,6 +289,19 @@ client_max_body_size 200m;
 - `GET /api/public/feature-cards`
 - `GET /api/public/theme`
 - `GET /api/public/live2d-model`
+- `GET /api/public/mindmaps`（需登录且绑定至少一个第三方账号）
+- `GET /api/public/mindmaps/:id`
+- `POST/PUT /api/public/mindmaps[/:id]`（创建者写入，需用户 CSRF Token）
+
+## 思维导图部署
+
+在更新 PHP 代码前，使用当前站点数据库配置导入一次新增迁移：
+
+```bash
+mysql -u YOUR_DATABASE_USER -p YOUR_DATABASE_NAME < php_backend/migrations/016_mind_maps.sql
+```
+
+前台入口为 `/mindmaps`，后台入口为当前动态管理路径下的 `/mindmaps`。前台不会提供整张导图删除操作；管理员可在后台“思维导图”中查看修改历史并删除。
 
 后台接口需要 `Authorization: Bearer <token>`：
 

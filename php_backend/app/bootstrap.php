@@ -10,6 +10,7 @@ require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/user_auth.php';
 require_once __DIR__ . '/oauth.php';
 require_once __DIR__ . '/user_admin.php';
+require_once __DIR__ . '/mind_maps.php';
 
 const APP_BACKUP_MAX_ARCHIVE_BYTES = 536870912;
 const APP_BACKUP_MAX_FILES = 20000;
@@ -695,7 +696,7 @@ function app_public_feed(string $format = 'rss'): void
 
 function app_admin_backup_manifest(): array
 {
-    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs'];
+    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs', 'mind_maps', 'mind_map_revisions'];
     $counts = [];
     foreach ($tables as $table) {
         try { $counts[$table] = (int) app_db()->query("SELECT COUNT(*) FROM `$table`")->fetchColumn(); } catch (Throwable $error) { $counts[$table] = null; }
@@ -722,7 +723,7 @@ function app_admin_backup_manifest(): array
             error_log('Backup manifest upload scan failed: ' . $error->getMessage());
         }
     }
-    return ['generatedAt' => date(DATE_ATOM), 'schema' => '015', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
+    return ['generatedAt' => date(DATE_ATOM), 'schema' => '016', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
 }
 
 function app_schema_010_ready(): bool
@@ -2200,7 +2201,9 @@ function app_handle_request(): void
     $needsSession = strpos($route, 'admin/') === 0
         || strpos($route, 'auth/') === 0
         || $route === 'public/analytics/visit'
-        || preg_match('#^public/articles/\d+(?:/unlock)?$#', $route);
+        || preg_match('#^public/articles/\d+(?:/unlock)?$#', $route)
+        || preg_match('#^public/mindmaps(?:/\d+)?$#', $route)
+        || $route === 'public/mindmap-resources';
     if ($needsSession) app_start_session();
 
     try {
@@ -2222,7 +2225,8 @@ function app_handle_request(): void
             app_require_schema_013();
             app_require_schema_014();
             app_require_schema_015();
-            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '015']);
+            app_require_schema_016();
+            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '016']);
         }
         if ($method === 'POST' && $route === 'auth/login') app_handle_login();
         if ($method === 'POST' && $route === 'auth/logout') {
@@ -2350,6 +2354,11 @@ function app_handle_request(): void
         if ($method === 'POST' && $route === 'public/analytics/visit') app_json(app_analytics_record_visit(), 201);
         if ($method === 'GET' && $route === 'public/site-monitor') app_json_cached(app_analytics_public_monitor(), 30, 120);
         if ($method === 'GET' && $route === 'public/friends') app_json_cached(app_public_friend_links(), 60, 300);
+        if ($method === 'GET' && $route === 'public/mindmap-resources') app_json(app_mind_map_resources());
+        if ($method === 'GET' && $route === 'public/mindmaps') app_json(app_public_mind_maps());
+        if ($method === 'GET' && preg_match('#^public/mindmaps/(\d+)$#', $route, $match)) app_json(app_public_mind_map((int) $match[1]));
+        if ($method === 'POST' && $route === 'public/mindmaps') app_json(app_save_mind_map(null), 201);
+        if ($method === 'PUT' && preg_match('#^public/mindmaps/(\d+)$#', $route, $match)) app_json(app_save_mind_map((int) $match[1]));
         if ($method === 'GET' && $route === 'public/guest-message-targets') app_json_cached(app_public_guest_message_targets(), 30, 120);
         if ($method === 'GET' && $route === 'public/guest-messages') app_json(app_public_guest_messages());
         if ($method === 'GET' && preg_match('#^public/guest-messages/(\d+)$#', $route, $match)) app_json(app_public_guest_message((int) $match[1]));
@@ -2396,11 +2405,14 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'admin/dashboard-stats') app_json(array_merge(['articleCount'=>(int)app_db()->query('SELECT COUNT(*) FROM articles')->fetchColumn(),'publishedArticleCount'=>(int)app_db()->query('SELECT COUNT(*) FROM articles WHERE published=1')->fetchColumn(),'projectCount'=>(int)app_db()->query('SELECT COUNT(*) FROM projects')->fetchColumn(),'skillCount'=>(int)app_db()->query('SELECT COUNT(*) FROM skills')->fetchColumn(),'totalViews'=>(int)app_db()->query('SELECT COALESCE(SUM(views),0) FROM articles')->fetchColumn()], app_analytics_dashboard_summary()));
         if ($method === 'GET' && $route === 'admin/analytics') { app_require_schema_013(); app_json(app_analytics_report()); }
         if ($method === 'GET' && in_array($route, ['admin/users', 'admin/user-accounts'], true)) { app_json(app_admin_users()); }
+        if ($method === 'GET' && $route === 'admin/mindmaps') { app_json(app_admin_mind_maps()); }
+        if ($method === 'GET' && preg_match('#^admin/mindmaps/(\d+)/revisions$#', $route, $match)) app_json(app_admin_mind_map_revisions((int) $match[1]));
+        if ($method === 'DELETE' && preg_match('#^admin/mindmaps/(\d+)$#', $route, $match)) app_json(app_admin_delete_mind_map((int) $match[1]));
         if ($method === 'PUT' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_update((int) $match[1]);
         if ($method === 'DELETE' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_delete((int) $match[1]);
         if ($method === 'GET' && $route === 'admin/audit-logs') { app_require_schema_012(); app_json(app_audit_logs()); }
         if ($method === 'GET' && $route === 'admin/backup-manifest') app_json(app_admin_backup_manifest());
-        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '015', 'manifest' => app_admin_backup_manifest()]); }
+        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '016', 'manifest' => app_admin_backup_manifest()]); }
         if ($method === 'POST' && $route === 'admin/backup-export') app_admin_backup_export();
         if ($method === 'POST' && $route === 'admin/backup-import') app_admin_backup_import();
         if ($method === 'GET' && $route === 'admin/friends') app_json(app_admin_friend_links());

@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { cloneElement, isValidElement, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import 'katex/dist/katex.min.css'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
@@ -16,6 +16,7 @@ import { KATEX_OPTIONS, normalizeMarkdownMath, remarkSingleLineDisplayMath } fro
 import { optimizeArticleImage } from '../utils/imageCompression'
 import { normalizeImportedMarkdown, validateMarkdownImportFile } from '../utils/markdownImport'
 import { rehypeMarkdownHighlight } from '../utils/markdownHighlight'
+import { MarkdownCode } from './MarkdownArticleRenderer'
 
 const API_BASE = ''
 
@@ -279,7 +280,16 @@ export default function RichTextEditor({ value, onChange, height = 500 }) {
   const deferredValue = useDeferredValue(preview === 'edit' ? ' ' : (value || ' '))
   const normalizedValue = useMemo(() => normalizeMarkdownMath(deferredValue), [deferredValue])
   const previewContent = (
-    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath, remarkSingleLineDisplayMath]} rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeMarkdownHighlight]}>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath, remarkSingleLineDisplayMath]}
+      rehypePlugins={[[rehypeKatex, KATEX_OPTIONS], rehypeMarkdownHighlight]}
+      components={{
+        pre: ({ children }) => isValidElement(children)
+          ? cloneElement(children, { markdownBlock: true })
+          : <>{children}</>,
+        code: MarkdownCode,
+      }}
+    >
       {normalizedValue}
     </ReactMarkdown>
   )

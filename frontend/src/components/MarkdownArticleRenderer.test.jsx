@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import React from 'react'
 import { describe, expect, it } from 'vitest'
-import MarkdownArticleRenderer, { getMermaidCacheKey, sanitizeMermaidSvg } from './MarkdownArticleRenderer'
+import MarkdownArticleRenderer, { getMermaidCacheKey, parseEchartsOption, sanitizeMermaidSvg } from './MarkdownArticleRenderer'
 
 function render(markdown) {
   return renderToStaticMarkup(
@@ -55,5 +55,13 @@ describe('article markdown presentation', () => {
     const html = render('```mermaid\nflowchart LR\n  A --> B\n```')
     expect(html).toContain('class="markdown-mermaid')
     expect(html).not.toContain('class="markdown-code-block"')
+  })
+
+  it('renders ECharts fences as chart containers and validates JSON options', () => {
+    const html = render('```echarts\n{"xAxis":{"type":"value"},"series":[{"type":"line","data":[[0,1],[1,2]]}]}\n```')
+    expect(html).toContain('class="markdown-echarts')
+    expect(html).toContain('class="markdown-echarts-canvas"')
+    expect(parseEchartsOption('{"series":[]}')).toEqual({ series: [] })
+    expect(() => parseEchartsOption('not json')).toThrow()
   })
 })

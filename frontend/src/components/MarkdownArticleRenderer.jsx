@@ -1,5 +1,5 @@
 import 'katex/dist/katex.min.css'
-import { cloneElement, isValidElement, memo, useEffect, useId, useState } from 'react'
+import { cloneElement, isValidElement, memo, useEffect, useId, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
@@ -69,7 +69,7 @@ function MarkdownHeading({ level, id, children, ...props }) {
   )
 }
 
-function MarkdownCode({ node: _node, markdownBlock = false, className, children, ...props }) {
+export function MarkdownCode({ node: _node, markdownBlock = false, className, children, ...props }) {
   const source = String(children || '').replace(/\n$/, '')
   const language = getMarkdownCodeLanguage(className) || 'text'
   const [copied, setCopied] = useState(false)
@@ -80,6 +80,7 @@ function MarkdownCode({ node: _node, markdownBlock = false, className, children,
   // blocks, while double-backtick spans stay inline.
   if (!isBlock) return <code className={className} {...props}>{children}</code>
   if (language.toLowerCase() === 'mermaid') return <MermaidDiagram source={source} />
+  if (language.toLowerCase() === 'echarts' || language.toLowerCase() === 'echart') return <EchartsDiagram source={source} />
 
   const copyCode = async () => {
     try {
@@ -101,6 +102,94 @@ function MarkdownCode({ node: _node, markdownBlock = false, className, children,
         </button>
       </div>
       <pre><code className={className} {...props}>{children}</code></pre>
+    </div>
+  )
+}
+
+export function parseEchartsOption(source) {
+  if (typeof source !== 'string' || source.length > 512 * 1024) throw new Error('图表配置过大')
+  let option
+  try {
+    option = JSON.parse(source)
+  } catch {
+    throw new Error('图表配置不是有效 JSON')
+  }
+  if (!option || typeof option !== 'object' || Array.isArray(option)) throw new Error('图表配置必须是 JSON 对象')
+  return option
+}
+
+function EchartsDiagram({ source }) {
+  const rootRef = useRef(null)
+  const chartRef = useRef(null)
+  const [status, setStatus] = useState('loading')
+  const [error, setError] = useState('')
+  const [themeVersion, setThemeVersion] = useState(0)
+
+  useEffect(() => {
+    if (typeof MutationObserver === 'undefined') return undefined
+    const observer = new MutationObserver(() => setThemeVersion(version => version + 1))
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
+    let disposed = false
+    let resizeObserver
+    let handleResize
+    const renderChart = async () => {
+      let option
+      try {
+        option = parseEchartsOption(source)
+      } catch (nextError) {
+        if (!disposed) {
+          setError(nextError.message || '图表配置无效')
+          setStatus('error')
+        }
+        return
+      }
+      try {
+        const { init } = await import('echarts')
+        if (disposed || !rootRef.current) return
+        const dark = document.documentElement.classList.contains('theme-dark')
+        const chart = init(rootRef.current, dark ? 'dark' : undefined, { renderer: 'canvas' })
+        chartRef.current = chart
+        chart.setOption(option, { notMerge: true, lazyUpdate: true })
+        handleResize = () => chart.resize()
+        window.addEventListener('resize', handleResize, { passive: true })
+        if (typeof ResizeObserver !== 'undefined') {
+          resizeObserver = new ResizeObserver(handleResize)
+          resizeObserver.observe(rootRef.current)
+        }
+        if (!disposed) setStatus('ready')
+      } catch {
+        if (!disposed) {
+          setError('ECharts 图表无法渲染，请检查配置内容。')
+          setStatus('error')
+        }
+      }
+    }
+    void renderChart()
+    return () => {
+      disposed = true
+      resizeObserver?.disconnect()
+      if (handleResize) window.removeEventListener('resize', handleResize)
+      chartRef.current?.dispose()
+      chartRef.current = null
+    }
+  }, [source, themeVersion])
+
+  if (status === 'error') {
+    return (
+      <div className="markdown-echarts-error" role="note">
+        {error || 'ECharts 图表无法渲染，请检查配置内容。'}
+        <pre><code>{source}</code></pre>
+      </div>
+    )
+  }
+  return (
+    <div className={`markdown-echarts ${status === 'loading' ? 'is-loading' : ''}`} aria-busy={status === 'loading'}>
+      {status === 'loading' && <span className="markdown-echarts-loading">正在绘制图表...</span>}
+      <div ref={rootRef} className="markdown-echarts-canvas" role="img" aria-label="ECharts 图表" />
     </div>
   )
 }

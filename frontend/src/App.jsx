@@ -27,6 +27,7 @@ const SeriesPage = lazy(() => import('./pages/SeriesPage'))
 const ReadingLibraryPage = lazy(() => import('./pages/ReadingLibraryPage'))
 const FriendsPage = lazy(() => import('./pages/FriendsPage'))
 const SiteMonitorPage = lazy(() => import('./pages/SiteMonitorPage'))
+const MindMapsPage = lazy(() => import('./pages/MindMapsPage'))
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
@@ -43,6 +44,7 @@ const AccountSettings = lazy(() => import('./pages/admin/AccountSettings'))
 const SocialManager = lazy(() => import('./pages/admin/SocialManager'))
 const AuditLogManager = lazy(() => import('./pages/admin/AuditLogManager'))
 const UserManager = lazy(() => import('./pages/admin/UserManager'))
+const MindMapManager = lazy(() => import('./pages/admin/MindMapManager'))
 const LoginPage = lazy(() => import('./pages/admin/LoginPage'))
 const UserLoginPage = lazy(() => import('./pages/UserLoginPage'))
 const UserAccountPage = lazy(() => import('./pages/UserAccountPage'))
@@ -134,6 +136,7 @@ function App() {
                     <Route path="social" element={<SocialManager />} />
                     <Route path="audit-logs" element={<AuditLogManager />} />
                     <Route path="users" element={<UserManager />} />
+                    <Route path="mindmaps" element={<MindMapManager />} />
                     <Route path="*" element={<Navigate to="." replace />} />
                   </Route>
                   <Route path="/" element={<PublicLayout profile={profile} />}>
@@ -148,6 +151,7 @@ function App() {
                     <Route path="friends" element={<FriendsPage />} />
                     <Route path="guestbook" element={<FriendsPage />} />
                     <Route path="monitor" element={<SiteMonitorPage />} />
+                    <Route path="mindmaps" element={<MindMapsPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                   </Route>
                   </Routes>

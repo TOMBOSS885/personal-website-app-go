@@ -31,6 +31,11 @@ export function resolveRouteMetadata(pathname, profile, language) {
       title: isEnglish ? `Site Monitor - ${siteName}` : `站点监控 - ${siteName}`,
       description: isEnglish ? 'Public site usage overview.' : '站点访问与浏览器估算流量概览。',
     },
+    '/mindmaps': {
+      title: isEnglish ? `Mind Maps - ${siteName}` : `思维导图 - ${siteName}`,
+      description: isEnglish ? 'Create and browse shared mind maps.' : '创建、浏览和整理站内思维导图。',
+      robots: 'noindex, follow',
+    },
     '/search': {
       title: isEnglish ? `Search - ${siteName}` : `搜索 - ${siteName}`,
       description: isEnglish ? 'Search this site.' : '搜索站内文章、项目和内容。',
