@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight, BookOpen, Layers3 } from 'lucide-react'
 
 export default function SeriesCollection({ series, compact = false }) {
+  const [pages, setPages] = useState({})
   if (!series.length) {
     return (
       <div className="adaptive-surface rounded-2xl border border-white/60 bg-white/70 px-6 py-16 text-center backdrop-blur-md dark:border-slate-700/50 dark:bg-slate-950/60">
@@ -29,16 +31,17 @@ export default function SeriesCollection({ series, compact = false }) {
             </div>
           </div>
           <ol className="divide-y divide-gray-100 dark:divide-slate-800">
-            {group.articles.map((article, index) => (
+            {group.articles.slice((pages[group.name] || 0) * 10, (pages[group.name] || 0) * 10 + 10).map((article, index) => (
               <li key={article.id}>
                 <Link to={`/blog/${article.id}`} className="group flex items-center gap-4 px-6 py-4 transition hover:bg-white/80 dark:hover:bg-slate-900/80">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-600 group-hover:bg-indigo-600 group-hover:text-white dark:bg-slate-800 dark:text-slate-300">{article.seriesOrder > 0 ? article.seriesOrder : index + 1}</span>
-                  <span className="min-w-0 flex-1 truncate font-medium text-gray-800 group-hover:text-indigo-700 dark:text-slate-200 dark:group-hover:text-indigo-300">{article.title}</span>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gray-100 text-xs font-bold text-gray-600 group-hover:bg-indigo-600 group-hover:text-white dark:bg-slate-800 dark:text-slate-300">{article.seriesOrder > 0 ? article.seriesOrder : (pages[group.name] || 0) * 10 + index + 1}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-gray-800 group-hover:text-indigo-700 dark:text-slate-200 dark:group-hover:text-indigo-300">{article.title}<small className="ml-2 font-normal text-gray-400">作者：{article.author?.displayName || '站点管理员'}</small></span>
                   {index === 0 && groupIndex === 0 ? <BookOpen className="h-4 w-4 shrink-0 text-indigo-500" /> : <ArrowRight className="h-4 w-4 shrink-0 text-gray-400 transition group-hover:translate-x-1 group-hover:text-indigo-600" />}
                 </Link>
               </li>
             ))}
           </ol>
+          {group.count > 10 && <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3 text-xs text-gray-500 dark:border-slate-800"><span>第 {(pages[group.name] || 0) + 1} / {Math.ceil(group.count / 10)} 页</span><div className="flex gap-2"><button type="button" disabled={!pages[group.name]} onClick={() => setPages(current => ({ ...current, [group.name]: Math.max(0, (current[group.name] || 0) - 1) }))} className="rounded border px-2 py-1 disabled:opacity-40">上一页</button><button type="button" disabled={(pages[group.name] || 0) + 1 >= Math.ceil(group.count / 10)} onClick={() => setPages(current => ({ ...current, [group.name]: (current[group.name] || 0) + 1 }))} className="rounded border px-2 py-1 disabled:opacity-40">下一页</button></div></div>}
         </section>
       ))}
     </div>

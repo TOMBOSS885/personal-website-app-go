@@ -16,6 +16,7 @@ export default function UserLoginPage() {
   }, [location.search])
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
+  const [nickname, setNickname] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -85,7 +86,8 @@ export default function UserLoginPage() {
           setBusy(false)
           return
         }
-        await register(normalized, password, emailCode)
+        if (!nickname.trim()) { setError('请输入昵称。'); setBusy(false); return }
+        await register(normalized, password, emailCode, nickname.trim())
       }
       navigate(redirect, { replace: true })
     } catch (nextError) {
@@ -120,6 +122,7 @@ export default function UserLoginPage() {
         {feedback && <p role="status" className={`mt-4 rounded-lg border px-3 py-2 text-sm ${feedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300' : 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300'}`}>{feedback.message}</p>}
         <form onSubmit={submit} className="mt-6 space-y-4">
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">QQ 邮箱<input type="email" value={email} onChange={event => setEmail(event.target.value)} autoComplete="email" required className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="name@qq.com" /></label>
+          {mode === 'register' && <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">昵称<input type="text" value={nickname} onChange={event => setNickname(event.target.value.slice(0, 80))} autoComplete="nickname" required className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="用于显示作者名称" /></label>}
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">密码<input type="password" value={password} onChange={event => setPassword(event.target.value)} autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="至少 10 位" /></label>
           {mode === 'register' && registrationVerification && <div><label className="block text-sm font-medium text-gray-700 dark:text-slate-300">邮箱验证码<div className="mt-1 flex gap-2"><input inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={emailCode} onChange={event => setEmailCode(event.target.value.replace(/\D/g, '').slice(0, 6))} required className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2.5 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" placeholder="6 位验证码" /><button type="button" onClick={() => void sendCode()} disabled={codeSending || codeCooldown > 0} className="shrink-0 rounded-lg border border-indigo-200 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50 disabled:opacity-50">{codeSending ? '发送中...' : codeCooldown > 0 ? `${codeCooldown}s 后重发` : '发送验证码'}</button></div></label>{codeMessage && <p className="mt-2 text-xs text-emerald-600 dark:text-emerald-400">{codeMessage}</p>}</div>}
           {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">{error}</p>}

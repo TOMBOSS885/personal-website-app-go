@@ -40,6 +40,10 @@ function app_user_register(): void
 {
     $body = app_body();
     $email = app_user_email((string) ($body['email'] ?? ''));
+    $schema018 = function_exists('app_schema_018_ready') && app_schema_018_ready();
+    [$nickname, $nicknameNormalized] = ($schema018 && function_exists('app_normalize_nickname'))
+        ? app_normalize_nickname($body['nickname'] ?? '', true)
+        : ['', ''];
     $password = (string) ($body['password'] ?? '');
     if (strlen($password) < 10 || strlen($password) > 128) app_error(400, '密码长度必须为 10 至 128 位。', 'PASSWORD_INVALID');
     // Registration verification is opt-in and deliberately does not affect login or OAuth.
@@ -47,15 +51,20 @@ function app_user_register(): void
         app_verify_registration_code($email, (string) ($body['emailCode'] ?? ''));
     }
     try {
-        $statement = app_db()->prepare('INSERT INTO user_accounts (email, password_hash, created_at, updated_at) VALUES (?, ?, NOW(), NOW())');
-        $statement->execute([$email, password_hash($password, PASSWORD_DEFAULT)]);
+        if ($schema018) {
+            $statement = app_db()->prepare('INSERT INTO user_accounts (email, nickname, nickname_normalized, role, password_hash, created_at, updated_at) VALUES (?, ?, ?, \'USER\', ?, NOW(), NOW())');
+            $statement->execute([$email, $nickname, $nicknameNormalized, password_hash($password, PASSWORD_DEFAULT)]);
+        } else {
+            $statement = app_db()->prepare('INSERT INTO user_accounts (email, password_hash, created_at, updated_at) VALUES (?, ?, NOW(), NOW())');
+            $statement->execute([$email, password_hash($password, PASSWORD_DEFAULT)]);
+        }
     } catch (PDOException $error) {
         if ((int) $error->errorInfo[1] === 1062) app_error(409, '该 QQ 邮箱已经注册。', 'USER_EXISTS');
         throw $error;
     }
     $id = (int) app_db()->lastInsertId();
     app_audit_set_context(['username' => $email, 'action' => 'USER_REGISTER', 'eventType' => 'authentication', 'adminId' => null]);
-    app_audit_set_details(['accountType' => 'user', 'email' => $email]);
+    app_audit_set_details(['accountType' => 'user', 'email' => $email, 'nicknameSet' => $nickname !== '']);
     app_user_start_session($id, $email, 1);
     app_json(['success' => true] + app_user_session_payload());
 }
@@ -63,9 +72,6 @@ function app_user_register(): void
 function app_user_start_session(int $id, string $email, int $sessionVersion): void
 {
     session_regenerate_id(true);
-    // A browser may have an older administrator session. Never allow the
-    // public account flow to inherit administrator privileges from it.
-    unset($_SESSION['admin_id'], $_SESSION['admin_username'], $_SESSION['admin_session_version'], $_SESSION['admin_created_at'], $_SESSION['admin_last_seen_at'], $_SESSION['csrf_token'], $_SESSION['oauth_states']);
     $_SESSION['user_id'] = $id;
     $_SESSION['user_email'] = $email;
     $_SESSION['user_session_version'] = $sessionVersion;
@@ -144,11 +150,22 @@ function app_user_session_payload(): array
     if (empty($_SESSION['user_csrf_token'])) $_SESSION['user_csrf_token'] = bin2hex(random_bytes(32));
     $hasOAuthIdentity = function_exists('app_schema_015_ready') && app_schema_015_ready()
         ? app_oauth_user_has_identity((int) $_SESSION['user_id']) : false;
+    $profile = null;
+    if (function_exists('app_schema_018_ready') && app_schema_018_ready()) {
+        $statement = app_db()->prepare('SELECT nickname, role FROM user_accounts WHERE id = ?');
+        $statement->execute([(int) $_SESSION['user_id']]);
+        $profile = $statement->fetch() ?: [];
+    }
+    $nickname = (string) ($profile['nickname'] ?? '');
+    $role = strtoupper((string) ($profile['role'] ?? 'USER')) === 'ADMIN' ? 'ADMIN' : 'USER';
     return [
         'authenticated' => true,
         'userId' => (int) $_SESSION['user_id'],
         'email' => (string) $_SESSION['user_email'],
         'csrfToken' => (string) $_SESSION['user_csrf_token'],
         'hasOAuthIdentity' => $hasOAuthIdentity,
+        'nickname' => $nickname,
+        'role' => $role,
+        'displayName' => function_exists('app_display_name') ? app_display_name($nickname, (string) $_SESSION['user_email']) : (string) $_SESSION['user_email'],
     ];
 }

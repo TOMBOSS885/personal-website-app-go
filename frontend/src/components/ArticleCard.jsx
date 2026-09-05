@@ -78,6 +78,7 @@ export default function ArticleCard({ article, index = 0, priority = false }) {
             </h3>
 
             {/* 摘要 */}
+            {article.author?.displayName && <p className="mb-2 text-xs font-medium text-indigo-600 dark:text-indigo-300">作者：{article.author.displayName}</p>}
             <p className="text-gray-600 text-sm mb-5 line-clamp-2 leading-relaxed">
               {article.summary}
             </p>

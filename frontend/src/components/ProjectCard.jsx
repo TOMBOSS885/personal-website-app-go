@@ -81,6 +81,7 @@ export default function ProjectCard({ project, index = 0, messageSummary = null 
           </div>
 
           {/* 描述 */}
+          {project.author?.displayName && <p className="mb-3 text-xs font-medium text-indigo-600 dark:text-indigo-300">作者：{project.author.displayName}</p>}
           <p className="text-gray-600 mb-6 leading-relaxed">
             {project.description}
           </p>

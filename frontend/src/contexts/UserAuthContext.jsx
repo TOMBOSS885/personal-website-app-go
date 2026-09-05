@@ -22,6 +22,9 @@ function normalizeSessionUser(data, fallbackEmail = '') {
     email: data.email || fallbackEmail,
     csrfToken: data.csrfToken || '',
     hasOAuthIdentity: Boolean(data.hasOAuthIdentity),
+    nickname: data.nickname || '',
+    displayName: data.displayName || data.nickname || data.email || fallbackEmail,
+    role: data.role === 'ADMIN' ? 'ADMIN' : 'USER',
   }
 }
 
@@ -49,8 +52,8 @@ export function UserAuthProvider({ children }) {
     const data = await requestUserAuth('/api/auth/user-login', { email, password })
     setUser(normalizeSessionUser(data, email)); return data
   }, [])
-  const register = useCallback(async (email, password, emailCode = '') => {
-    const data = await requestUserAuth('/api/auth/user-register', { email, password, emailCode })
+  const register = useCallback(async (email, password, emailCode = '', nickname = '') => {
+    const data = await requestUserAuth('/api/auth/user-register', { email, password, emailCode, nickname })
     setUser(normalizeSessionUser(data, email)); return data
   }, [])
   const logout = useCallback(async () => {

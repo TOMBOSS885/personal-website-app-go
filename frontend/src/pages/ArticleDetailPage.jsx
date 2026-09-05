@@ -319,6 +319,7 @@ export default function ArticleDetailPage() {
                 </span>
               )}
               <h1 className="text-3xl font-bold leading-tight text-gray-900 dark:text-slate-100 md:text-4xl">{article.title}</h1>
+              {article.author?.displayName && <p className="mt-2 text-sm font-medium text-indigo-600 dark:text-indigo-300">作者：{article.author.displayName}</p>}
               {article.summary && <p className="mt-3 text-gray-600 dark:text-slate-300">{article.summary}</p>}
               <div className="mt-4 flex items-center gap-4 text-sm text-gray-400 dark:text-slate-500">
                 <span>{new Date(article.createdAt).toLocaleDateString('zh-CN')}</span>

@@ -37,7 +37,7 @@ export default function Navbar({ profile }) {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const accountMenuRef = useRef(null)
   const githubHref = safeExternalHref(profile?.github || '')
-  const identityName = user?.email || profile?.nickname || ''
+  const identityName = user?.displayName || user?.nickname || user?.email || profile?.nickname || ''
 
   useEffect(() => {
     const handleScroll = () => {
@@ -81,6 +81,7 @@ export default function Navbar({ profile }) {
     { path: '/series', label: '专题系列', icon: Layers },
     { path: '/library', label: '阅读清单', icon: BookMarked },
   ]
+  if (user?.role === 'ADMIN') exploreLinks.push({ path: '/creator', label: '创作中心', icon: FileText })
 
   const requestLogout = () => {
     setIsOpen(false)
@@ -209,6 +210,7 @@ export default function Navbar({ profile }) {
                     {accountMenuOpen && (
                       <motion.div initial={{ opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.98 }} transition={{ duration: 0.15 }} role="menu" aria-label="已登录账号操作" className="theme-action-surface absolute right-0 top-[calc(100%+0.6rem)] z-[70] w-64 overflow-hidden rounded-xl border border-gray-200 bg-white p-2 shadow-xl shadow-slate-900/15 dark:border-slate-700 dark:bg-slate-900">
                         <div className="border-b border-gray-100 px-3 py-2.5 dark:border-slate-800"><div className="text-xs font-medium text-gray-400 dark:text-slate-500">当前账号</div><div className="mt-1 truncate text-sm font-semibold text-gray-800 dark:text-slate-100" title={user.email}>{user.email}</div></div>
+                        {user.role === 'ADMIN' && <Link to="/creator" role="menuitem" className="mt-1 flex w-full items-center gap-3 rounded-lg bg-indigo-50 px-3 py-2.5 text-left text-sm font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-200 dark:hover:bg-indigo-500/20"><FileText className="h-4 w-4" />创作中心</Link>}
                         <Link to="/account" role="menuitem" className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:text-slate-200 dark:hover:bg-slate-800"><Link2 className="h-4 w-4" />账号与登录方式</Link>
                         <button type="button" role="menuitem" onClick={requestLogout} className="mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"><LogOut className="h-4 w-4" />退出登录</button>
                       </motion.div>
@@ -344,6 +346,7 @@ export default function Navbar({ profile }) {
                     <div className="space-y-2 rounded-xl bg-emerald-50 px-5 py-4 dark:bg-emerald-950/40">
                       <div className="flex items-center gap-3 text-emerald-700 dark:text-emerald-200"><UserCircle className="h-5 w-5" /><span className="truncate font-semibold">{user.email}</span><span className="ml-auto h-2 w-2 rounded-full bg-emerald-500" /></div>
                       <Link to="/account" onClick={() => setIsOpen(false)} className="flex w-full items-center gap-3 rounded-lg px-1 py-2 text-sm text-gray-700 hover:bg-emerald-100 dark:text-slate-200 dark:hover:bg-emerald-950/50"><Link2 className="h-4 w-4" />账号与登录方式</Link>
+                      {user.role === 'ADMIN' && <Link to="/creator" onClick={() => setIsOpen(false)} className="flex w-full items-center gap-3 rounded-lg bg-indigo-50 px-1 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-500/10 dark:text-indigo-200 dark:hover:bg-indigo-500/20"><FileText className="h-4 w-4" />创作中心</Link>}
                       <button type="button" onClick={requestLogout} className="flex w-full items-center gap-3 rounded-lg px-1 py-2 text-sm text-red-600 hover:bg-red-100 dark:text-red-300 dark:hover:bg-red-950/50"><LogOut className="h-4 w-4" />退出账号</button>
                     </div>
                   ) : (

@@ -37,6 +37,9 @@ function app_user_admin_row(array $row): array
     return [
         'id' => (int) $row['id'],
         'email' => (string) $row['email'],
+        'nickname' => (string) ($row['nickname'] ?? ''),
+        'displayName' => function_exists('app_display_name') ? app_display_name((string) ($row['nickname'] ?? ''), (string) $row['email']) : (string) $row['email'],
+        'role' => strtoupper((string) ($row['role'] ?? 'USER')) === 'ADMIN' ? 'ADMIN' : 'USER',
         'status' => $disabled ? 'disabled' : ($locked ? 'locked' : 'active'),
         'failedLoginAttempts' => (int) ($row['failed_login_attempts'] ?? 0),
         'lockedUntil' => $lockedUntil ? app_now_iso($lockedUntil) : null,
@@ -52,11 +55,40 @@ function app_user_admin_row(array $row): array
     ];
 }
 
+function app_admin_user_role_update(int $id): void
+{
+    app_require_schema_018();
+    $body = app_body();
+    $role = strtoupper(trim((string) ($body['role'] ?? '')));
+    if (!in_array($role, ['USER', 'ADMIN'], true)) app_error(400, '角色无效。', 'INVALID_ROLE');
+    $db = app_db();
+    $db->beginTransaction();
+    try {
+        $stmt = $db->prepare('SELECT * FROM user_accounts WHERE id = ? FOR UPDATE');
+        $stmt->execute([$id]);
+        $before = $stmt->fetch();
+        if (!$before) { $db->rollBack(); app_error(404, 'User not found.', 'USER_NOT_FOUND'); }
+        $beforeRole = strtoupper((string) ($before['role'] ?? 'USER')) === 'ADMIN' ? 'ADMIN' : 'USER';
+        if ($beforeRole === 'ADMIN' && $role === 'USER') {
+            $count = (int) $db->query("SELECT COUNT(*) FROM user_accounts WHERE role = 'ADMIN' AND disabled_at IS NULL")->fetchColumn();
+            if ($count <= 1) { $db->rollBack(); app_error(409, '至少需要保留一个有效管理员。', 'LAST_ADMIN_PROTECTED'); }
+        }
+        if ($beforeRole !== $role) $db->prepare('UPDATE user_accounts SET role = ?, session_version = session_version + 1, updated_at = NOW() WHERE id = ?')->execute([$role, $id]);
+        $stmt = $db->prepare('SELECT * FROM user_accounts WHERE id = ?');
+        $stmt->execute([$id]);
+        $after = $stmt->fetch() ?: $before;
+        $db->commit();
+    } catch (Throwable $error) { if ($db->inTransaction()) $db->rollBack(); throw $error; }
+    app_audit_set_change('user_account', $id, $before, $after, 'UPDATE_USER_ROLE');
+    app_json(['success' => true, 'user' => app_user_admin_row($after)]);
+}
+
 function app_admin_users(): array
 {
     app_require_schema_013();
     app_require_schema_014();
     app_require_schema_015();
+    $schema018 = function_exists('app_schema_018_ready') && app_schema_018_ready();
     $page = max(0, app_int($_GET['page'] ?? 0));
     $size = app_clamp(app_int($_GET['size'] ?? 20, 20), 1, 100);
     $search = trim((string) ($_GET['q'] ?? $_GET['search'] ?? ''));
@@ -68,9 +100,11 @@ function app_admin_users(): array
     $params = [];
     if ($search !== '') {
         $escapedSearch = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $search) . '%';
-        $where[] = '(u.email LIKE ? OR CAST(u.id AS CHAR) = ? OR EXISTS (SELECT 1 FROM oauth_identities os WHERE os.user_id = u.id AND (os.provider LIKE ? OR os.display_name LIKE ? OR os.provider_subject LIKE ? OR os.provider_union_id LIKE ?)))';
+        $nicknameCondition = $schema018 ? ' OR u.nickname LIKE ?' : '';
+        $where[] = '(u.email LIKE ? OR CAST(u.id AS CHAR) = ?' . $nicknameCondition . ' OR EXISTS (SELECT 1 FROM oauth_identities os WHERE os.user_id = u.id AND (os.provider LIKE ? OR os.display_name LIKE ? OR os.provider_subject LIKE ? OR os.provider_union_id LIKE ?)))';
         $params[] = $escapedSearch;
         $params[] = $search;
+        if ($schema018) $params[] = $escapedSearch;
         $params[] = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], strtolower($search)) . '%';
         $params[] = $escapedSearch;
         $params[] = $escapedSearch;

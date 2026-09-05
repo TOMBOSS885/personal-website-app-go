@@ -209,7 +209,9 @@ function app_article_site_serve(int $id, string $key, int $version, int $expires
     // Static article assets are a separate route from /public/articles/{id};
     // start the same session here so login-gated articles cannot be reached
     // with an otherwise valid (or previously issued) signed URL.
-    app_start_session();
+    $userCookie = function_exists('app_session_cookie_name') ? app_session_cookie_name('user') : '';
+    $adminCookie = function_exists('app_session_cookie_name') ? app_session_cookie_name('admin') : '';
+    app_start_session(($userCookie !== '' && isset($_COOKIE[$userCookie])) || ($adminCookie === '' || !isset($_COOKIE[$adminCookie])) ? 'user' : 'admin');
     if ($id <= 0 || !app_article_site_valid_key($key) || $version <= 0 || $expires < time()) {
         app_error(403, '静态前端链接无效或已过期', 'ARTICLE_SITE_LINK_EXPIRED');
     }

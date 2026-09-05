@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { FileText, Folder, MessageCircle, Search, Zap } from 'lucide-react'
 import LoadingIndicator from '../components/LoadingIndicator'
 import { safeInternalPath } from '../utils/safeUrl'
+import DropdownSelect from '../components/DropdownSelect'
 
 export default function SearchPage() {
   const [params, setParams] = useSearchParams()
@@ -84,13 +85,7 @@ export default function SearchPage() {
           </form>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <label htmlFor="search-type" className="text-sm font-medium text-gray-600 dark:text-slate-300">筛选范围</label>
-            <select id="search-type" value={type} onChange={updateType} className="rounded-xl border border-gray-200 bg-white/90 px-3 py-2 text-sm text-gray-800 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-              <option value="all">全部内容</option>
-              <option value="article">文章</option>
-              <option value="project">项目</option>
-              <option value="message">留言</option>
-              <option value="skill">技能</option>
-            </select>
+            <DropdownSelect id="search-type" value={type} onChange={updateType} aria-label="筛选范围" options={[{ value: 'all', label: '全部内容' }, { value: 'article', label: '文章' }, { value: 'project', label: '项目' }, { value: 'message', label: '留言' }, { value: 'skill', label: '技能' }]} className="min-w-28 rounded-xl border border-gray-200 bg-white/90 px-3 py-2 text-sm text-gray-800 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100" />
           </div>
         </div>
 

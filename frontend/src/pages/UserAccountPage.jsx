@@ -18,6 +18,9 @@ export default function UserAccountPage() {
   const [password, setPassword] = useState('')
   const [unbindBusy, setUnbindBusy] = useState(false)
   const [unbindError, setUnbindError] = useState('')
+  const [nickname, setNickname] = useState(user?.nickname || '')
+  const [nicknameBusy, setNicknameBusy] = useState(false)
+  const [nicknameMessage, setNicknameMessage] = useState('')
   const feedback = useMemo(() => oauthFeedback(location.search), [location.search])
   const requestedReturn = useMemo(() => {
     const value = new URLSearchParams(location.search).get('return')
@@ -51,6 +54,17 @@ export default function UserAccountPage() {
     if (!user.csrfToken) void checkSession()
     void loadAccount()
   }, [user?.id, user?.csrfToken, checkSession, loadAccount])
+
+  useEffect(() => { setNickname(user?.nickname || '') }, [user?.nickname])
+
+  const saveNickname = async event => {
+    event.preventDefault(); setNicknameBusy(true); setNicknameMessage('')
+    try {
+      const response = await fetch('/api/me/nickname', { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': user?.csrfToken || '' }, body: JSON.stringify({ nickname }) })
+      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || '昵称更新失败')
+      setNicknameMessage('昵称已更新'); await checkSession()
+    } catch (error) { setNicknameMessage(error.message || '昵称更新失败') } finally { setNicknameBusy(false) }
+  }
 
   useEffect(() => {
     if (!user || feedback?.type !== 'success' || handledSuccessRef.current) return
@@ -143,6 +157,8 @@ export default function UserAccountPage() {
         <div className="border-b border-gray-200 pb-5 dark:border-slate-800">
           <div className="flex items-center gap-3"><ShieldCheck className="h-7 w-7 text-indigo-600 dark:text-indigo-300" /><h1 className="text-2xl font-bold text-gray-900 dark:text-slate-100">账号与登录方式</h1></div>
           <p className="mt-2 text-sm text-gray-500 dark:text-slate-400">站内账号 <span className="font-medium text-gray-800 dark:text-slate-200">{user.email}</span>，已绑定的第三方账号可用于登录。</p>
+          <form onSubmit={saveNickname} className="mt-4 flex max-w-xl flex-col gap-2 sm:flex-row sm:items-end"><label className="flex-1 text-sm font-medium text-gray-700 dark:text-slate-300">昵称<input value={nickname} onChange={event => setNickname(event.target.value.slice(0, 80))} maxLength={80} required className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100" /></label><button type="submit" disabled={nicknameBusy} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{nicknameBusy ? '保存中...' : '保存昵称'}</button></form>
+          {nicknameMessage && <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">{nicknameMessage}</p>}
         </div>
 
         {feedback && <div role="status" className={`mt-5 rounded-lg border px-4 py-3 text-sm ${feedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200' : 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300'}`}>{feedback.message}</div>}

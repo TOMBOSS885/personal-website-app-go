@@ -32,6 +32,7 @@ const NotFoundPage = lazy(() => import('./pages/NotFoundPage'))
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout'))
 const Dashboard = lazy(() => import('./pages/admin/Dashboard'))
 const ArticleManager = lazy(() => import('./pages/admin/ArticleManager'))
+const ImageManager = lazy(() => import('./pages/admin/ImageManager'))
 const ProjectManager = lazy(() => import('./pages/admin/ProjectManager'))
 const SkillManager = lazy(() => import('./pages/admin/SkillManager'))
 const FeatureCardManager = lazy(() => import('./pages/admin/FeatureCardManager'))
@@ -52,6 +53,7 @@ const UserAccountPage = lazy(() => import('./pages/UserAccountPage'))
 const Footer = lazy(() => import('./components/Footer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
 const Live2DController = lazy(() => import('./components/Live2DController'))
+const CreatorCenterPage = lazy(() => import('./pages/CreatorCenterPage'))
 
 function PageLoading() {
   return (
@@ -121,10 +123,12 @@ function App() {
                   <Routes>
                   <Route path="/login" element={<UserLoginPage />} />
                   <Route path="/account" element={<UserAccountPage />} />
+                  <Route path="/creator" element={<CreatorCenterPage />} />
                   <Route path="/:adminEntry/login" element={<LoginPage />} />
                   <Route path="/:adminEntry/*" element={<PrivateRoute><AdminLayout /></PrivateRoute>}>
                     <Route index element={<Dashboard />} />
                     <Route path="articles" element={<ArticleManager />} />
+                    <Route path="images" element={<ImageManager />} />
                     <Route path="projects" element={<ProjectManager />} />
                     <Route path="feature-cards" element={<FeatureCardManager />} />
                     <Route path="skills" element={<SkillManager />} />

@@ -4,6 +4,7 @@ import { BookOpen, Check, Clipboard, ExternalLink, FolderKanban, Globe2, Link2, 
 import { Link, useLocation } from 'react-router-dom'
 import { fetchWithTimeout } from '../utils/network'
 import { safeExternalHref } from '../utils/safeUrl'
+import DropdownSelect from '../components/DropdownSelect'
 import LoadingIndicator from '../components/LoadingIndicator'
 import { guestMessageTargetUrl, messageIdFromHash, parseGuestbookTarget } from '../utils/guestMessageTarget'
 
@@ -286,18 +287,15 @@ export default function FriendsPage() {
             <label className="mt-4 block text-sm font-medium text-gray-700 dark:text-slate-200">
               关联内容
               <GuestbookField icon={Link2} className="mt-2">
-                <select
+                <DropdownSelect
                   value={form.targetType && form.targetId ? `${form.targetType}:${form.targetId}` : ''}
                   onChange={event => {
                     const [targetType = '', targetId = ''] = event.target.value.split(':')
                     setForm({ ...form, targetType, targetId })
                   }}
                   className="guestbook-field__control appearance-none"
-                >
-                  <option value="">不关联文章或项目</option>
-                  {messageTargets.articles.length > 0 && <optgroup label="文章">{messageTargets.articles.map(item => <option key={`article-${item.id}`} value={`article:${item.id}`}>{item.title}</option>)}</optgroup>}
-                  {messageTargets.projects.length > 0 && <optgroup label="项目">{messageTargets.projects.map(item => <option key={`project-${item.id}`} value={`project:${item.id}`}>{item.title}</option>)}</optgroup>}
-                </select>
+                  options={[{ value: '', label: '不关联文章或项目' }, ...messageTargets.articles.map(item => ({ value: `article:${item.id}`, label: `文章：${item.title}` })), ...messageTargets.projects.map(item => ({ value: `project:${item.id}`, label: `项目：${item.title}` }))]}
+                />
               </GuestbookField>
               <span className="mt-1 block text-xs text-gray-500 dark:text-slate-400">选择后，这条留言会显示在对应内容中</span>
             </label>

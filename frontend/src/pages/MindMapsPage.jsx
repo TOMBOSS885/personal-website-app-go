@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useUserAuth } from "../contexts/UserAuthContext";
+import DropdownSelect from "../components/DropdownSelect";
 
 const EMPTY = {
   nodes: [
@@ -78,6 +79,7 @@ export default function MindMapsPage() {
   const { user, loading: authLoading } = useUserAuth();
   const [params, setParams] = useSearchParams();
   const [maps, setMaps] = useState([]);
+  const [mapQuery, setMapQuery] = useState("");
   const [resources, setResources] = useState({ projects: [], articles: [] });
   const [map, setMap] = useState(null);
   const [data, setData] = useState(EMPTY);
@@ -99,6 +101,11 @@ export default function MindMapsPage() {
   const canUse = Boolean(user?.hasOAuthIdentity);
   const canEdit = mode === "edit" && (!map?.id || Number(map.creatorId) === Number(user?.id));
   const selected = data.nodes.find((node) => node.id === selectedId);
+  const filteredMaps = useMemo(() => {
+    const query = mapQuery.trim().toLocaleLowerCase();
+    if (!query) return maps;
+    return maps.filter((item) => `${item.title || ""} ${item.description || ""} ${item.creatorEmail || ""}`.toLocaleLowerCase().includes(query));
+  }, [mapQuery, maps]);
   const filteredProjects = useMemo(() => {
     const query = projectQuery.trim().toLocaleLowerCase();
     const matches = resources.projects.filter((project) =>
@@ -496,6 +503,7 @@ export default function MindMapsPage() {
             </button>
           </header>
           {notice && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-500/10 dark:text-amber-200">{notice}</p>}
+          {maps.length > 0 && <div className="relative mb-5 max-w-xl"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={mapQuery} onChange={(event) => setMapQuery(event.target.value)} placeholder="搜索思维导图标题、描述或创建者" className="w-full rounded-xl border border-slate-200 bg-white/85 py-2.5 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900/85 dark:text-slate-100 dark:focus:ring-indigo-500/20" /></div>}
           {maps.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-20 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900/60">
               <GitBranch className="mx-auto h-12 w-12 text-slate-400" />
@@ -503,8 +511,8 @@ export default function MindMapsPage() {
               <p className="mt-2 text-sm text-slate-500">创建第一张图，把想法整理成清晰结构。</p>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {maps.map((item) => {
+            filteredMaps.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-16 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-900/60">没有找到匹配的思维导图。</div> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredMaps.map((item) => {
                 const mine = Number(item.creatorId) === Number(user.id);
                 return (
                   <article key={item.id} onClick={() => void open(item.id, "view")} className="group cursor-pointer rounded-2xl border border-white/70 bg-white/85 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg dark:border-slate-700 dark:bg-slate-900/85">
@@ -784,17 +792,13 @@ export default function MindMapsPage() {
                 </label>
                 <label className="mb-3 block text-xs text-gray-500">
                   所属父节点
-                  <select
+                  <DropdownSelect
                     value={selected.parentId || ""}
                     onChange={(e) => update(selected.id, { parentId: e.target.value || null })}
                     disabled={!canEdit || selected.id === data.nodes[0]?.id}
                     className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  >
-                    <option value="">根节点</option>
-                    {data.nodes.filter((node) => node.id !== selected.id && !isDescendant(node.id, selected.id)).map((node) => (
-                      <option key={node.id} value={node.id}>{node.text}</option>
-                    ))}
-                  </select>
+                    options={[{ value: "", label: "根节点" }, ...data.nodes.filter((node) => node.id !== selected.id && !isDescendant(node.id, selected.id)).map((node) => ({ value: node.id, label: node.text }))]}
+                  />
                 </label>
                 <div className="mb-3 flex gap-2">
                   <button
@@ -837,7 +841,7 @@ export default function MindMapsPage() {
                       className="w-full rounded-lg border bg-white py-2 pl-8 pr-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     />
                   </div>
-                  <select
+                  <DropdownSelect
                     value={selected.projectId || ""}
                     onChange={(e) =>
                       update(selected.id, {
@@ -848,15 +852,8 @@ export default function MindMapsPage() {
                     }
                     disabled={!canEdit}
                     className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  >
-                    <option value="">不关联</option>
-                    {filteredProjects.map((project) => (
-                      <option key={project.id} value={project.id}>
-                        {project.name}
-                      </option>
-                    ))}
-                    {!filteredProjects.length && <option disabled>没有匹配的项目</option>}
-                  </select>
+                    options={[{ value: "", label: "不关联" }, ...filteredProjects.map((project) => ({ value: project.id, label: project.name }))]}
+                  />
                 </label>
                 <label className="mb-3 block text-xs text-gray-500">
                   关联文章
@@ -870,25 +867,18 @@ export default function MindMapsPage() {
                       className="w-full rounded-lg border bg-white py-2 pl-8 pr-3 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                     />
                   </div>
-                  <select
+                  <DropdownSelect
                     value={selected.articleId || ""}
                     onChange={(e) => void chooseArticle(e.target.value)}
                     disabled={!canEdit}
                     className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                  >
-                    <option value="">不关联</option>
-                    {filteredArticles.map((article) => (
-                      <option key={article.id} value={article.id}>
-                        {article.title}
-                      </option>
-                    ))}
-                    {!filteredArticles.length && <option disabled>没有匹配的文章</option>}
-                  </select>
+                    options={[{ value: "", label: "不关联" }, ...filteredArticles.map((article) => ({ value: article.id, label: article.title }))]}
+                  />
                 </label>
                 {selected.articleId && (
                   <label className="mb-3 block text-xs text-gray-500">
                     文章目录位置
-                    <select
+                    <DropdownSelect
                       value={selected.articleHeadingId || ""}
                       onChange={(e) => {
                         const heading = articleHeadings.find(
@@ -901,14 +891,8 @@ export default function MindMapsPage() {
                       }}
                       disabled={!canEdit}
                       className="mt-1 w-full rounded-lg border bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                    >
-                      <option value="">文章顶部</option>
-                      {articleHeadings.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {"#".repeat(item.level)} {item.text}
-                        </option>
-                      ))}
-                    </select>
+                      options={[{ value: "", label: "文章顶部" }, ...articleHeadings.map((item) => ({ value: item.id, label: `${"#".repeat(item.level)} ${item.text}` }))]}
+                    />
                   </label>
                 )}
                 {selected.articleId && (

@@ -23,6 +23,7 @@ export default function BlogPage() {
   const [allTags, setAllTags] = useState([])
   const [series, setSeries] = useState([])
   const [seriesLoading, setSeriesLoading] = useState(false)
+  const [seriesQuery, setSeriesQuery] = useState('')
   const contentView = searchParams.get('view') === 'series' ? 'series' : 'articles'
   const { language } = useLanguage()
   const { t } = useTranslation()
@@ -377,7 +378,8 @@ export default function BlogPage() {
         </> : (
           <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} aria-label="专题系列">
             <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-2xl font-bold text-gray-900 dark:text-slate-100">按专题连续阅读</h2><p className="mt-2 text-sm text-gray-500 dark:text-slate-400">文章按照后台设置的专题顺序排列。</p></div><span className="text-sm font-medium text-indigo-600 dark:text-indigo-300">{series.length} 个专题</span></div>
-            {seriesLoading ? <div className="flex justify-center py-24"><LoadingIndicator size={40} label="加载专题" /></div> : <SeriesCollection series={series} compact />}
+            <div className="relative mb-5 max-w-xl"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" /><input value={seriesQuery} onChange={event => setSeriesQuery(event.target.value)} placeholder="搜索专题名称或简介" className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 dark:border-slate-700 dark:bg-slate-900" /></div>
+            {seriesLoading ? <div className="flex justify-center py-24"><LoadingIndicator size={40} label="加载专题" /></div> : <SeriesCollection series={series.filter(item => `${item.name} ${item.summary || ''}`.toLocaleLowerCase().includes(seriesQuery.trim().toLocaleLowerCase()))} compact />}
           </motion.section>
         )}
       </div>

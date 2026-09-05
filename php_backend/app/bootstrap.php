@@ -8,6 +8,8 @@ require_once __DIR__ . '/article_sites.php';
 require_once __DIR__ . '/social.php';
 require_once __DIR__ . '/audit.php';
 require_once __DIR__ . '/user_auth.php';
+require_once __DIR__ . '/content_auth.php';
+require_once __DIR__ . '/creator.php';
 require_once __DIR__ . '/oauth.php';
 require_once __DIR__ . '/user_admin.php';
 require_once __DIR__ . '/mind_maps.php';
@@ -54,7 +56,20 @@ function app_db(): PDO
     return $pdo;
 }
 
-function app_start_session(): void
+function app_session_cookie_name(string $scope = 'admin'): string
+{
+    $configured = (string) (app_config()['app']['session_name'] ?? 'personal_website_admin');
+    // Keep the established administrator cookie name for compatibility. The
+    // public-account session gets a separate cookie so both identities can
+    // remain signed in within the same browser.
+    if ($scope === 'user') {
+        $configured = preg_replace('/_admin$/i', '', $configured) ?: 'personal_website';
+        return $configured . '_user';
+    }
+    return $configured;
+}
+
+function app_start_session(string $scope = 'admin'): void
 {
     if (session_status() === PHP_SESSION_ACTIVE) return;
     $app = app_config()['app'];
@@ -62,7 +77,7 @@ function app_start_session(): void
     ini_set('session.use_strict_mode', '1');
     ini_set('session.use_only_cookies', '1');
     ini_set('session.cookie_httponly', '1');
-    session_name((string) ($app['session_name'] ?? 'personal_website_admin'));
+    session_name(app_session_cookie_name($scope));
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => '/',
@@ -393,6 +408,14 @@ function app_page(array $content, int $total, int $size, int $number): array
     ];
 }
 
+function app_series_name_parts(string $value): array
+{
+    $display = trim($value);
+    $display = preg_replace('/\s+/u', ' ', $display) ?: $display;
+    $key = function_exists('mb_strtolower') ? mb_strtolower($display, 'UTF-8') : strtolower($display);
+    return [$display, $key];
+}
+
 function app_profile(bool $localized = false): array
 {
     $row = app_db()->query('SELECT * FROM site_profile WHERE id = 1')->fetch();
@@ -431,6 +454,10 @@ function app_article_row(array $row, bool $includeContent = true, bool $admin = 
         'requiresThirdPartyBinding' => (bool) ($row['requires_oauth_identity'] ?? false),
         'contentType' => $contentType, 'createdAt' => app_now_iso($row['created_at']), 'updatedAt' => app_now_iso($row['updated_at']),
     ];
+    if (array_key_exists('creator_user_id', $row)) {
+        $article['creatorId'] = $row['creator_user_id'] === null ? null : (int) $row['creator_user_id'];
+        $article['author'] = app_content_author_payload($row);
+    }
     if ($includeContent) {
         $article['content'] = $contentType === 'static' ? '' : $row['content'];
         if ($contentType === 'static') {
@@ -471,8 +498,12 @@ function app_articles(bool $admin = false): array
     $total = (int) $count->fetchColumn();
     // List endpoints never need the MEDIUMTEXT body or password hash. Article
     // content is loaded from the detail endpoint only when it is opened.
-    $columns = 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,login_required,requires_oauth_identity,content_type,static_site_key,static_site_name,is_locked,created_at,updated_at';
-    $sql = "SELECT $columns FROM articles WHERE $condition ORDER BY created_at DESC LIMIT $size OFFSET " . ($page * $size);
+    $schema018 = function_exists('app_schema_018_ready') && app_schema_018_ready();
+    $columns = 'a.id,a.title,a.summary,a.cover_image,a.category,a.tags,a.series_name,a.series_order,a.featured,a.display_order,a.views,a.published,a.login_required,a.requires_oauth_identity,a.content_type,a.static_site_key,a.static_site_name,a.is_locked,a.created_at,a.updated_at';
+    $from = $schema018 ? 'articles a LEFT JOIN user_accounts u ON u.id = a.creator_user_id' : 'articles a';
+    if ($schema018) $columns .= ',a.creator_user_id,u.email AS creator_email,u.nickname AS creator_nickname';
+    $condition = str_replace(['published','category','tags','title','summary','content','login_required','requires_oauth_identity'], ['a.published','a.category','a.tags','a.title','a.summary','a.content','a.login_required','a.requires_oauth_identity'], $condition);
+    $sql = "SELECT $columns FROM $from WHERE $condition ORDER BY a.created_at DESC LIMIT $size OFFSET " . ($page * $size);
     $statement = app_db()->prepare($sql);
     $statement->execute($params);
     $rows = array_map(function ($row) use ($admin) { return app_article_row($row, false, $admin); }, $statement->fetchAll());
@@ -481,7 +512,11 @@ function app_articles(bool $admin = false): array
 
 function app_discovery_article_columns(): string
 {
-    return 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,login_required,requires_oauth_identity,content_type,is_locked,created_at,updated_at';
+    $columns = 'id,title,summary,cover_image,category,tags,series_name,series_order,featured,display_order,views,published,login_required,requires_oauth_identity,content_type,is_locked,created_at,updated_at';
+    if (function_exists('app_schema_018_ready') && app_schema_018_ready()) {
+        $columns .= ',creator_user_id,(SELECT email FROM user_accounts cu WHERE cu.id = articles.creator_user_id) AS creator_email,(SELECT nickname FROM user_accounts cn WHERE cn.id = articles.creator_user_id) AS creator_nickname';
+    }
+    return $columns;
 }
 
 function app_discovery_articles(string $kind, $requestedLimit = null): array
@@ -558,10 +593,10 @@ function app_article_series($articleLimitPerSeries = null): array
         app_error(413, 'Series index contains too many articles.', 'SERIES_RESULT_TOO_LARGE');
     }
     foreach ($rows as $row) {
-        $name = trim((string) $row['series_name']);
+        [$name, $seriesKey] = app_series_name_parts((string) $row['series_name']);
         if ($name === '') continue;
-        if (!isset($series[$name])) {
-            $series[$name] = [
+        if (!isset($series[$seriesKey])) {
+            $series[$seriesKey] = [
                 'name' => $name,
                 'count' => 0,
                 'coverImage' => '',
@@ -572,14 +607,14 @@ function app_article_series($articleLimitPerSeries = null): array
         }
         $article = app_article_row($row, false);
         $article['order'] = (int) ($row['series_order'] ?? 0);
-        $series[$name]['count']++;
-        if ($articleLimitPerSeries === null || count($series[$name]['articles']) < $articleLimitPerSeries) {
-            $series[$name]['articles'][] = $article;
+        $series[$seriesKey]['count']++;
+        if ($articleLimitPerSeries === null || count($series[$seriesKey]['articles']) < $articleLimitPerSeries) {
+            $series[$seriesKey]['articles'][] = $article;
         }
-        if ($series[$name]['coverImage'] === '' && $article['coverImage'] !== '') $series[$name]['coverImage'] = $article['coverImage'];
-        if ($series[$name]['summary'] === '' && $article['summary'] !== '') $series[$name]['summary'] = $article['summary'];
-        if ($series[$name]['latestAt'] === null || strcmp($article['createdAt'], $series[$name]['latestAt']) > 0) {
-            $series[$name]['latestAt'] = $article['createdAt'];
+        if ($series[$seriesKey]['coverImage'] === '' && $article['coverImage'] !== '') $series[$seriesKey]['coverImage'] = $article['coverImage'];
+        if ($series[$seriesKey]['summary'] === '' && $article['summary'] !== '') $series[$seriesKey]['summary'] = $article['summary'];
+        if ($series[$seriesKey]['latestAt'] === null || strcmp($article['createdAt'], $series[$seriesKey]['latestAt']) > 0) {
+            $series[$seriesKey]['latestAt'] = $article['createdAt'];
         }
     }
     $result = array_values($series);
@@ -614,11 +649,12 @@ function app_article_navigation(int $id): array
     $next->execute([$current['created_at'], $current['created_at'], $id]);
 
     $series = [];
-    $seriesName = trim((string) ($current['series_name'] ?? ''));
+    [$seriesName, $seriesKey] = app_series_name_parts((string) ($current['series_name'] ?? ''));
     if ($seriesName !== '') {
-        $seriesStatement = $database->prepare('SELECT id, title, summary, cover_image, category, created_at, series_order FROM articles WHERE published = 1 AND series_name = ? ORDER BY series_order ASC, created_at ASC, id ASC LIMIT 50');
-        $seriesStatement->execute([$seriesName]);
+        $seriesStatement = $database->query("SELECT id, title, summary, cover_image, category, created_at, series_name, series_order FROM articles WHERE published = 1 AND TRIM(series_name) <> '' ORDER BY series_order ASC, created_at ASC, id ASC LIMIT 500");
         foreach ($seriesStatement->fetchAll() as $row) {
+            [, $candidateKey] = app_series_name_parts((string) ($row['series_name'] ?? ''));
+            if ($candidateKey !== $seriesKey) continue;
             $item = $mapArticle($row);
             $item['order'] = (int) ($row['series_order'] ?? 0);
             $item['current'] = (int) $row['id'] === $id;
@@ -698,7 +734,7 @@ function app_public_feed(string $format = 'rss'): void
 
 function app_admin_backup_manifest(): array
 {
-    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'oauth_transactions', 'articles', 'projects', 'skills', 'feature_cards', 'site_profile', 'site_settings', 'mail_settings', 'email_verification_codes', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs', 'mind_maps', 'mind_map_revisions'];
+    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'oauth_transactions', 'articles', 'projects', 'skills', 'feature_cards', 'tags', 'article_tags', 'project_tags', 'site_profile', 'site_settings', 'mail_settings', 'email_verification_codes', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs', 'mind_maps', 'mind_map_revisions'];
     $counts = [];
     foreach ($tables as $table) {
         try { $counts[$table] = (int) app_db()->query("SELECT COUNT(*) FROM `$table`")->fetchColumn(); } catch (Throwable $error) { $counts[$table] = null; }
@@ -1476,14 +1512,21 @@ function app_admin_backup_import(): void
 
 function app_projects(bool $featuredOnly = false): array
 {
-    $sql = 'SELECT * FROM projects' . ($featuredOnly ? ' WHERE featured = 1' : '') . ' ORDER BY display_order ASC, id DESC';
+    $schema018 = function_exists('app_schema_018_ready') && app_schema_018_ready();
+    $sql = $schema018
+        ? 'SELECT p.*, u.email AS creator_email, u.nickname AS creator_nickname FROM projects p LEFT JOIN user_accounts u ON u.id = p.creator_user_id'
+        : 'SELECT * FROM projects';
+    if ($featuredOnly) $sql .= ' WHERE ' . ($schema018 ? 'p.featured' : 'featured') . ' = 1';
+    $sql .= ' ORDER BY ' . ($schema018 ? 'p.display_order' : 'display_order') . ' ASC, ' . ($schema018 ? 'p.id' : 'id') . ' DESC';
     return array_map(function ($row) {
-        return [
+        $item = [
             'id' => (int) $row['id'], 'name' => $row['name'], 'description' => $row['description'],
             'coverImage' => $row['cover_image'], 'techStack' => $row['tech_stack'], 'githubUrl' => $row['github_url'],
             'demoUrl' => $row['demo_url'], 'stars' => (int) $row['stars'], 'featured' => (bool) $row['featured'],
             'displayOrder' => (int) $row['display_order'], 'createdAt' => app_now_iso($row['created_at']), 'updatedAt' => app_now_iso($row['updated_at']),
         ];
+        if (array_key_exists('creator_user_id', $row)) { $item['creatorId'] = $row['creator_user_id'] === null ? null : (int) $row['creator_user_id']; $item['author'] = app_content_author_payload($row); $item['tags'] = (string) ($row['tags'] ?? ''); }
+        return $item;
     }, app_db()->query($sql)->fetchAll());
 }
 
@@ -1750,6 +1793,100 @@ function app_list_images(string $folder): array
     return $items;
 }
 
+function app_find_uploaded_image(string $folder, string $name): array
+{
+    $name = basename(str_replace('\\', '/', trim($name)));
+    if ($name === '' || $name === '.' || $name === '..' || !preg_match('/\.(?:jpe?g|png|gif|webp)$/i', $name)) {
+        app_error(400, '图片名称无效。', 'INVALID_IMAGE_NAME');
+    }
+    $config = app_config()['app'];
+    $root = rtrim((string) $config['upload_dir'], '/\\') . '/' . $folder;
+    if (!is_dir($root)) app_error(404, '图片不存在。', 'NOT_FOUND');
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $file) {
+        if ($file->isFile() && !preg_match('/@[0-9]+w\.(?:jpe?g|png|webp)$/i', $file->getFilename()) && hash_equals($file->getFilename(), $name)) {
+            $path = $file->getPathname();
+            $relative = str_replace('\\', '/', substr($path, strlen(rtrim((string) $config['upload_dir'], '/\\')) + 1));
+            return ['path' => $path, 'url' => rtrim((string) $config['upload_url'], '/') . '/' . $relative, 'name' => $name];
+        }
+    }
+    app_error(404, '图片不存在。', 'NOT_FOUND');
+}
+
+function app_validate_image_rename(string $name, string $extension): string
+{
+    $name = trim($name);
+    if ($name === '' || $name === '.' || $name === '..' || strlen($name) > 160 || preg_match('/[\\\/\x00-\x1F\x7F]/u', $name)) {
+        app_error(400, '新图片名称无效。', 'INVALID_IMAGE_NAME');
+    }
+    if (!preg_match('/\.[a-z0-9]{2,5}$/i', $name)) $name .= '.' . strtolower($extension);
+    if (!preg_match('/\.(?:jpe?g|png|gif|webp)$/i', $name)) app_error(400, '只能使用 JPG、PNG、GIF 或 WebP 扩展名。', 'INVALID_IMAGE_NAME');
+    return $name;
+}
+
+function app_rename_article_image(string $name): array
+{
+    $image = app_find_uploaded_image('articles', $name);
+    $body = app_body();
+    $extension = pathinfo($image['name'], PATHINFO_EXTENSION);
+    $newName = app_validate_image_rename((string) ($body['newName'] ?? ''), $extension);
+    if (strcasecmp((string) pathinfo($newName, PATHINFO_EXTENSION), $extension) !== 0) app_error(400, '重命名时不能修改图片格式。', 'INVALID_IMAGE_NAME');
+    if ($newName === $image['name']) return ['success' => true, 'image' => $image];
+    $directory = dirname($image['path']);
+    $target = $directory . DIRECTORY_SEPARATOR . $newName;
+    if (is_file($target)) app_error(409, '目标图片名称已存在。', 'IMAGE_NAME_EXISTS');
+    $oldBase = preg_replace('/@responsive-[0-9-]+(?=\.[^.]+$)/i', '', $image['path']);
+    $oldStem = preg_replace('/\.[^.]+$/', '', $oldBase);
+    $newStem = preg_replace('/\.[^.]+$/', '', $target);
+    $renamed = [];
+    $variants = glob($oldStem . '@*w.' . $extension) ?: [];
+    if (!@rename($image['path'], $target)) app_error(500, '重命名图片失败，请检查目录权限。', 'IMAGE_RENAME_FAILED');
+    $renamed[] = [$target, $image['path']];
+    foreach ($variants as $variant) {
+        $variantName = basename($variant);
+        $suffix = substr($variantName, strlen(basename($oldStem)));
+        $variantTarget = $newStem . $suffix;
+        if (is_file($variantTarget) || !@rename($variant, $variantTarget)) {
+            foreach (array_reverse($renamed) as [$from, $to]) @rename($from, $to);
+            app_error(409, '无法重命名响应式图片变体。', 'IMAGE_RENAME_FAILED');
+        }
+        $renamed[] = [$variantTarget, $variant];
+    }
+    $config = app_config()['app'];
+    $oldUrl = $image['url'];
+    $newRelative = str_replace('\\', '/', substr($target, strlen(rtrim((string) $config['upload_dir'], '/\\')) + 1));
+    $newUrl = rtrim((string) $config['upload_url'], '/') . '/' . $newRelative;
+    $database = app_db();
+    try {
+        $database->beginTransaction();
+        $database->prepare('UPDATE articles SET cover_image = REPLACE(cover_image, ?, ?)')->execute([$oldUrl, $newUrl]);
+        $database->prepare('UPDATE articles SET content = REPLACE(content, ?, ?)')->execute([$oldUrl, $newUrl]);
+        $database->prepare('UPDATE projects SET cover_image = REPLACE(cover_image, ?, ?)')->execute([$oldUrl, $newUrl]);
+        $database->commit();
+    } catch (Throwable $error) {
+        if ($database->inTransaction()) $database->rollBack();
+        foreach (array_reverse($renamed) as [$from, $to]) @rename($from, $to);
+        throw $error;
+    }
+    app_public_cache_clear();
+    return ['success' => true, 'image' => ['name' => basename($target), 'url' => $newUrl, 'size' => (int) filesize($target), 'updatedAt' => date(DATE_ATOM)]];
+}
+
+function app_delete_article_image(string $name): array
+{
+    $image = app_find_uploaded_image('articles', $name);
+    $oldUrl = $image['url'];
+    $statement = app_db()->prepare('SELECT COUNT(*) FROM articles WHERE cover_image = ?');
+    $statement->execute([$oldUrl]);
+    $articleReferences = (int) $statement->fetchColumn();
+    $statement = app_db()->prepare('SELECT COUNT(*) FROM projects WHERE cover_image = ?');
+    $statement->execute([$oldUrl]);
+    $projectReferences = (int) $statement->fetchColumn();
+    if ($articleReferences + $projectReferences > 0) app_error(409, '图片仍被文章或项目引用，请先更换封面后再删除。', 'IMAGE_IN_USE');
+    if (!app_delete_responsive_image_family($image['path'])) app_error(500, '删除图片失败，请检查目录权限。', 'IMAGE_DELETE_FAILED');
+    app_public_cache_clear();
+    return ['success' => true];
+}
+
 function app_upload_path_from_url(string $url): ?string
 {
     $config = app_config()['app'];
@@ -1888,10 +2025,6 @@ function app_handle_login(): void
         throw $error;
     }
     session_regenerate_id(true);
-    // Keep administrator and public-account identities mutually exclusive in
-    // the shared session cookie. This prevents analytics/session confusion
-    // when an admin signs in after browsing as a public user.
-    unset($_SESSION['user_id'], $_SESSION['user_email'], $_SESSION['user_session_version'], $_SESSION['user_created_at'], $_SESSION['user_last_seen_at'], $_SESSION['user_csrf_token'], $_SESSION['oauth_states']);
     $_SESSION['admin_id'] = (int) $admin['id'];
     $_SESSION['admin_username'] = $admin['username'];
     $_SESSION['admin_session_version'] = (int) $admin['session_version'];
@@ -2007,10 +2140,11 @@ function app_save_article(?int $id): void
     $loginRequired = app_bool($body['loginRequired'] ?? false) || $requiresOAuthIdentity;
     $password = (string) ($body['accessPassword'] ?? '');
     $hash = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
+    [$seriesName, $seriesKey] = app_series_name_parts((string) ($body['seriesName'] ?? ''));
     $values = [
         $title, trim((string) ($body['summary'] ?? '')), $content, trim((string) ($body['coverImage'] ?? '')),
         trim((string) ($body['category'] ?? '')), trim((string) ($body['tags'] ?? '')),
-        (function_exists('mb_substr') ? mb_substr(trim((string) ($body['seriesName'] ?? '')), 0, 120) : substr(trim((string) ($body['seriesName'] ?? '')), 0, 120)), app_int($body['seriesOrder'] ?? 0),
+        (function_exists('mb_substr') ? mb_substr($seriesName, 0, 120) : substr($seriesName, 0, 120)), app_int($body['seriesOrder'] ?? 0),
         array_key_exists('featured', $body) ? (app_bool($body['featured']) ? 1 : 0) : null,
         array_key_exists('displayOrder', $body) ? app_int($body['displayOrder']) : null,
         app_bool($body['published'] ?? false) ? 1 : 0,
@@ -2033,7 +2167,17 @@ function app_save_article(?int $id): void
         $statement->execute(array_merge($values, [$hash, $id]));
         $status = 200;
     }
-    $statement = app_db()->prepare('SELECT * FROM articles WHERE id = ?');
+    if (function_exists('app_schema_018_ready') && app_schema_018_ready()) {
+        $normalizedTags = app_sync_content_tags(app_db(), 'article', (int) $id, $body['tags'] ?? '');
+        app_db()->prepare('UPDATE articles SET tags = ? WHERE id = ?')->execute([$normalizedTags, $id]);
+    }
+    if ($id !== null && function_exists('app_schema_018_ready') && app_schema_018_ready() && $before === null) {
+        $creatorUserId = function_exists('app_current_admin_user_id') ? app_current_admin_user_id() : null;
+        if ($creatorUserId !== null) app_db()->prepare('UPDATE articles SET creator_user_id = ? WHERE id = ?')->execute([$creatorUserId, $id]);
+    }
+    $statement = (function_exists('app_schema_018_ready') && app_schema_018_ready())
+        ? app_db()->prepare('SELECT a.*, u.email AS creator_email, u.nickname AS creator_nickname FROM articles a LEFT JOIN user_accounts u ON u.id = a.creator_user_id WHERE a.id = ?')
+        : app_db()->prepare('SELECT * FROM articles WHERE id = ?');
     $statement->execute([$id]);
     $after = $statement->fetch() ?: null;
     if ($oldSiteKey !== '' && $oldSiteKey !== $siteKey) app_article_site_delete_if_unreferenced($oldSiteKey);
@@ -2142,6 +2286,14 @@ function app_generic_save(string $resource, ?int $id): void
     }
     app_db()->prepare($sql)->execute($values);
     $savedId = $id ?? (int) app_db()->lastInsertId();
+    if ($resource === 'projects' && $id === null && function_exists('app_schema_018_ready') && app_schema_018_ready()) {
+        $creatorUserId = function_exists('app_current_admin_user_id') ? app_current_admin_user_id() : null;
+        if ($creatorUserId !== null) { app_db()->prepare('UPDATE projects SET creator_user_id = ? WHERE id = ?')->execute([$creatorUserId, $savedId]); }
+    }
+    if ($resource === 'projects' && function_exists('app_schema_018_ready') && app_schema_018_ready()) {
+        $normalizedTags = app_sync_content_tags(app_db(), 'project', $savedId, $body['tags'] ?? '');
+        app_db()->prepare('UPDATE projects SET tags = ? WHERE id = ?')->execute([$normalizedTags, $savedId]);
+    }
     $afterStatement = app_db()->prepare("SELECT * FROM `$resource` WHERE id = ?");
     $afterStatement->execute([$savedId]);
     $after = $afterStatement->fetch() ?: null;
@@ -2277,14 +2429,26 @@ function app_handle_request(): void
         header('Cache-Control: no-store');
         header('Pragma: no-cache');
     }
-    $needsSession = strpos($route, 'admin/') === 0
+    $adminSessionRoute = $isAdminRoute || $isAdminAuthRoute;
+    $userSessionRoute = $isUserAuthRoute
+        || $route === 'me' || $route === 'me/nickname' || strpos($route, 'creator/') === 0
+        || $route === 'public/mindmap-resources'
+        || preg_match('#^public/mindmaps(?:/\d+)?$#', $route);
+    // Article pages may be opened by either identity. Prefer the user session
+    // when both cookies exist, otherwise honor whichever cookie is present.
+    $dualIdentityRoute = preg_match('#^public/articles/\d+(?:/unlock)?$#', $route)
+        || preg_match('#^public/article-sites/\d+/#', $route);
+    if ($dualIdentityRoute && !$adminSessionRoute && !$userSessionRoute) {
+        $userCookie = app_session_cookie_name('user');
+        $adminCookie = app_session_cookie_name('admin');
+        $userSessionRoute = isset($_COOKIE[$userCookie]) || !isset($_COOKIE[$adminCookie]);
+        $adminSessionRoute = !$userSessionRoute;
+    }
+    $needsSession = $adminSessionRoute || $userSessionRoute
         || strpos($route, 'auth/') === 0
         || $route === 'public/analytics/visit'
-        || preg_match('#^public/articles/\d+(?:/unlock)?$#', $route)
-        || preg_match('#^public/mindmaps(?:/\d+)?$#', $route)
-        || $route === 'public/mindmap-resources'
         || $route === 'auth/user-register/email-code';
-    if ($needsSession) app_start_session();
+    if ($needsSession) app_start_session($adminSessionRoute ? 'admin' : 'user');
 
     try {
         if (in_array($method, ['GET', 'HEAD'], true) && $route === 'robots.txt') app_public_robots();
@@ -2307,7 +2471,8 @@ function app_handle_request(): void
             app_require_schema_015();
             app_require_schema_016();
             app_require_schema_017();
-            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '017']);
+            app_require_schema_018();
+            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '018']);
         }
         if ($method === 'POST' && $route === 'auth/login') app_handle_login();
         if ($method === 'POST' && $route === 'auth/logout') {
@@ -2325,6 +2490,8 @@ function app_handle_request(): void
         if ($method === 'POST' && $route === 'auth/user-login') { app_require_schema_014(); app_user_login(); }
         if ($method === 'POST' && $route === 'auth/user-logout') { app_require_schema_014(); app_user_logout(); }
         if ($method === 'GET' && $route === 'auth/user-session') { app_require_schema_014(); app_json(app_user_session_payload()); }
+        if ($method === 'GET' && $route === 'me') app_json(app_current_user_profile());
+        if ($method === 'PATCH' && $route === 'me/nickname') app_json(app_update_current_user_nickname());
         if ($method === 'GET' && $route === 'auth/oauth/providers') app_json(app_oauth_providers_payload());
         if ($method === 'GET' && $route === 'auth/oauth/identities') app_json(app_oauth_identities_payload());
         if ($method === 'GET' && preg_match('#^auth/oauth/(github|qq|wechat|google|microsoft)/start$#', $route, $match)) app_oauth_start($match[1]);
@@ -2391,7 +2558,7 @@ function app_handle_request(): void
         }
         if ($method === 'GET' && preg_match('#^public/articles/(\d+)$#', $route, $match)) {
             app_require_schema_015();
-            $statement=app_db()->prepare('SELECT * FROM articles WHERE id=? AND published=1'); $statement->execute([(int)$match[1]]); $row=$statement->fetch(); if(!$row)app_error(404, 'Article not found.', 'NOT_FOUND');
+            $statement=app_schema_018_ready()?app_db()->prepare('SELECT a.*, u.email AS creator_email, u.nickname AS creator_nickname FROM articles a LEFT JOIN user_accounts u ON u.id=a.creator_user_id WHERE a.id=? AND a.published=1'):app_db()->prepare('SELECT * FROM articles WHERE id=? AND published=1'); $statement->execute([(int)$match[1]]); $row=$statement->fetch(); if(!$row)app_error(404, 'Article not found.', 'NOT_FOUND');
             // Presence of a user session is not enough for gated content: a
             // locked/revoked account must lose access even if its old cookie
             // remains valid. Public articles stay readable as a guest when a
@@ -2492,6 +2659,7 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'admin/dashboard-stats') app_json(array_merge(['articleCount'=>(int)app_db()->query('SELECT COUNT(*) FROM articles')->fetchColumn(),'publishedArticleCount'=>(int)app_db()->query('SELECT COUNT(*) FROM articles WHERE published=1')->fetchColumn(),'projectCount'=>(int)app_db()->query('SELECT COUNT(*) FROM projects')->fetchColumn(),'skillCount'=>(int)app_db()->query('SELECT COUNT(*) FROM skills')->fetchColumn(),'totalViews'=>(int)app_db()->query('SELECT COALESCE(SUM(views),0) FROM articles')->fetchColumn()], app_analytics_dashboard_summary()));
         if ($method === 'GET' && $route === 'admin/analytics') { app_require_schema_013(); app_json(app_analytics_report()); }
         if ($method === 'GET' && in_array($route, ['admin/users', 'admin/user-accounts'], true)) { app_json(app_admin_users()); }
+        if ($method === 'PATCH' && preg_match('#^admin/users/(\d+)/role$#', $route, $match)) app_admin_user_role_update((int) $match[1]);
         if ($method === 'GET' && $route === 'admin/mindmaps') { app_json(app_admin_mind_maps()); }
         if ($method === 'GET' && preg_match('#^admin/mindmaps/(\d+)/revisions$#', $route, $match)) app_json(app_admin_mind_map_revisions((int) $match[1]));
         if ($method === 'DELETE' && preg_match('#^admin/mindmaps/(\d+)$#', $route, $match)) app_json(app_admin_delete_mind_map((int) $match[1]));
@@ -2502,7 +2670,7 @@ function app_handle_request(): void
         if ($method === 'DELETE' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_delete((int) $match[1]);
         if ($method === 'GET' && $route === 'admin/audit-logs') { app_require_schema_012(); app_json(app_audit_logs()); }
         if ($method === 'GET' && $route === 'admin/backup-manifest') app_json(app_admin_backup_manifest());
-        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_require_schema_017(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '017', 'manifest' => app_admin_backup_manifest()]); }
+        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_require_schema_017(); app_require_schema_018(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '018', 'manifest' => app_admin_backup_manifest()]); }
         if ($method === 'POST' && $route === 'admin/backup-export') app_admin_backup_export();
         if ($method === 'POST' && $route === 'admin/backup-import') app_admin_backup_import();
         if ($method === 'GET' && $route === 'admin/friends') app_json(app_admin_friend_links());
@@ -2517,16 +2685,21 @@ function app_handle_request(): void
         if ($method === 'GET' && $route === 'admin/articles') { app_require_schema_015(); app_json(app_articles(true)); }
         if ($method === 'GET' && $route === 'admin/article-series') {
             app_require_schema_011();
-            $statement = app_db()->query("SELECT series_name AS name, COUNT(*) AS article_count FROM articles WHERE TRIM(series_name) <> '' GROUP BY series_name ORDER BY series_name ASC LIMIT 200");
-            app_json(array_map(static function (array $row): array {
-                return ['name' => (string) $row['name'], 'articleCount' => (int) $row['article_count']];
-            }, $statement->fetchAll()));
+            $statement = app_db()->query("SELECT series_name AS name FROM articles WHERE TRIM(series_name) <> '' ORDER BY series_name ASC LIMIT 5000");
+            $grouped = [];
+            foreach ($statement->fetchAll() as $row) {
+                [$display, $key] = app_series_name_parts((string) $row['name']);
+                if ($display === '') continue;
+                if (!isset($grouped[$key])) $grouped[$key] = ['name' => $display, 'articleCount' => 0];
+                $grouped[$key]['articleCount']++;
+            }
+            app_json(array_values($grouped));
         }
         if ($method === 'POST' && $route === 'admin/articles') { app_require_schema_015(); app_save_article(null); }
         if ($method === 'POST' && in_array($route, ['admin/articles/bulk', 'admin/articles/batch'], true)) app_bulk_articles_v2();
         if (preg_match('#^admin/articles/(\d+)$#',$route,$match)) {
             $id=(int)$match[1];
-            if($method==='GET'){app_require_schema_015();$statement=app_db()->prepare('SELECT * FROM articles WHERE id=?');$statement->execute([$id]);$article=$statement->fetch();if(!$article)app_error(404, 'Article not found.', 'NOT_FOUND');app_json(app_article_row($article,true,true));}
+            if($method==='GET'){app_require_schema_015();$statement=app_schema_018_ready()?app_db()->prepare('SELECT a.*, u.email AS creator_email, u.nickname AS creator_nickname FROM articles a LEFT JOIN user_accounts u ON u.id = a.creator_user_id WHERE a.id=?'):app_db()->prepare('SELECT * FROM articles WHERE id=?');$statement->execute([$id]);$article=$statement->fetch();if(!$article)app_error(404, 'Article not found.', 'NOT_FOUND');app_json(app_article_row($article,true,true));}
             if($method==='PUT'){app_require_schema_015();app_save_article($id);}
             if($method==='DELETE')app_delete_article($id);
         }
@@ -2542,8 +2715,21 @@ function app_handle_request(): void
         }
         if ($method === 'GET' && $route === 'admin/article-images') app_json(app_list_images('articles'));
         if ($method === 'POST' && $route === 'admin/article-images') app_json(app_upload_image('article'),201);
+        if ($method === 'PUT' && preg_match('#^admin/article-images/([^/]+)$#', $route, $match)) { app_csrf_required(); app_json(app_rename_article_image(rawurldecode($match[1]))); }
+        if ($method === 'DELETE' && preg_match('#^admin/article-images/([^/]+)$#', $route, $match)) { app_csrf_required(); app_json(app_delete_article_image(rawurldecode($match[1]))); }
         if ($method === 'POST' && $route === 'admin/upload-assets/cleanup') app_json(app_cleanup_upload_assets((string) ($_GET['kind'] ?? '')));
         if ($method === 'GET' && $route === 'admin/projects') app_json(app_projects(false));
+        if ($method === 'GET' && $route === 'creator/articles') app_json(app_creator_articles());
+        if ($method === 'GET' && $route === 'creator/article-images') { app_user_admin_required(); app_json(app_list_images('articles')); }
+        if ($method === 'POST' && $route === 'creator/article-images') { app_user_admin_required(); app_user_csrf_required(); app_json(app_upload_image('article'), 201); }
+        if ($method === 'GET' && preg_match('#^creator/articles/(\d+)$#', $route, $match)) app_creator_article_detail((int) $match[1]);
+        if ($method === 'POST' && $route === 'creator/articles') app_creator_save_article(null);
+        if ($method === 'PUT' && preg_match('#^creator/articles/(\d+)$#', $route, $match)) app_creator_save_article((int) $match[1]);
+        if ($method === 'DELETE' && preg_match('#^creator/articles/(\d+)$#', $route, $match)) app_creator_delete_article((int) $match[1]);
+        if ($method === 'GET' && $route === 'creator/projects') app_json(app_creator_projects());
+        if ($method === 'POST' && $route === 'creator/projects') app_creator_save_project(null);
+        if ($method === 'PUT' && preg_match('#^creator/projects/(\d+)$#', $route, $match)) app_creator_save_project((int) $match[1]);
+        if ($method === 'DELETE' && preg_match('#^creator/projects/(\d+)$#', $route, $match)) app_creator_delete_project((int) $match[1]);
         if ($method === 'GET' && $route === 'admin/skills') app_json(app_skills());
         if ($method === 'GET' && $route === 'admin/feature-cards') app_json(app_feature_cards(false));
         foreach(['projects','skills','feature-cards'] as $resource){$dbResource=$resource==='feature-cards'?'feature_cards':$resource;if($method==='POST'&&$route==='admin/'.$resource)app_generic_save($dbResource,null);if(preg_match('#^admin/'.preg_quote($resource,'#').'/(\d+)$#',$route,$match)){if($method==='PUT')app_generic_save($dbResource,(int)$match[1]);if($method==='DELETE')app_generic_delete($dbResource,(int)$match[1]);}}

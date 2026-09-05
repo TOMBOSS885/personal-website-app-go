@@ -129,6 +129,14 @@ export default function UserManager() {
     }
   }
 
+  const changeRole = async (user, role) => {
+    if (role === user.role || !window.confirm(`确定将 ${user.email} 设置为 ${role} 吗？`)) return
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}/role`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) })
+      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || '角色更新失败'); await load()
+    } catch (error) { window.alert(error.message || '角色更新失败') }
+  }
+
   return <div>
     <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
       <div><h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-slate-100"><ShieldCheck className="h-7 w-7 text-indigo-600" />用户账号</h1><p className="mt-1 text-sm text-gray-500">管理站内账号及其第三方登录身份</p></div>
@@ -141,11 +149,12 @@ export default function UserManager() {
     </div>
     <div className="overflow-x-auto rounded-lg border border-gray-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
       {loading ? <div className="py-16 text-center"><LoadingIndicator size={22} /></div> : error ? <div className="py-16 text-center text-red-600">{error}</div> : <table className="w-full min-w-[960px] text-sm">
-        <thead className="border-b border-gray-100 bg-gray-50 text-left text-gray-500 dark:border-slate-800 dark:bg-slate-950"><tr><th className="px-5 py-3">账号</th><th className="px-5 py-3">状态</th><th className="w-[260px] px-5 py-3">第三方绑定</th><th className="px-5 py-3">注册时间</th><th className="px-5 py-3">最后登录</th><th className="px-5 py-3">访问次数</th><th className="px-5 py-3 text-right">操作</th></tr></thead>
+        <thead className="border-b border-gray-100 bg-gray-50 text-left text-gray-500 dark:border-slate-800 dark:bg-slate-950"><tr><th className="px-5 py-3">账号</th><th className="px-5 py-3">角色</th><th className="px-5 py-3">状态</th><th className="w-[260px] px-5 py-3">第三方绑定</th><th className="px-5 py-3">注册时间</th><th className="px-5 py-3">最后登录</th><th className="px-5 py-3">访问次数</th><th className="px-5 py-3 text-right">操作</th></tr></thead>
         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">{users.map(user => {
           const identities = Array.isArray(user.oauthIdentities) ? user.oauthIdentities : []
           return <tr key={user.id} className="align-top">
-            <td className="px-5 py-4"><div className="font-medium text-gray-900 dark:text-slate-100">{user.email}</div><div className="text-xs text-gray-400">ID: {user.id}</div></td>
+            <td className="px-5 py-4"><div className="font-medium text-gray-900 dark:text-slate-100">{user.displayName || user.nickname || user.email}</div><div className="text-xs text-gray-400">{user.email} · ID: {user.id}</div></td>
+            <td className="px-5 py-4"><select value={user.role || 'USER'} onChange={event => void changeRole(user, event.target.value)} className="rounded border border-gray-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900"><option value="USER">USER</option><option value="ADMIN">ADMIN</option></select></td>
             <td className="px-5 py-4"><span className={`rounded-full px-2 py-1 text-xs ${user.status === 'active' ? 'bg-emerald-50 text-emerald-700' : user.status === 'locked' ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'}`}>{user.status === 'active' ? '正常' : user.status === 'locked' ? '冻结' : '已禁用'}</span></td>
             <td className="px-5 py-4">{identities.length ? <button type="button" onClick={() => setSelectedUser(user)} className="inline-flex max-w-full items-center gap-1.5 rounded-md p-1 text-left hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:hover:bg-slate-800" title="查看第三方账号详情" aria-label={`查看 ${user.email} 的第三方账号详情`}>{identities.map(identity => <span key={identity.id || identity.provider} className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"><Link2 className="h-3 w-3" />{oauthProviderName(identity.provider)}</span>)}<Eye className="ml-1 h-4 w-4 shrink-0 text-gray-400" /></button> : <span className="text-xs text-gray-400">未绑定</span>}</td>
             <td className="whitespace-nowrap px-5 py-4 text-gray-500">{formatAdminDate(user.createdAt)}</td>

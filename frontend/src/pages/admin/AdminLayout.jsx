@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { Award, BarChart3, Bot, ClipboardList, FileText, Folder, GitBranch, LayoutDashboard, LayoutGrid, LogOut, Mail, Moon, Palette, ShieldCheck, Sparkles, Sun, UploadCloud, User, Users } from 'lucide-react'
+import { Award, BarChart3, Bot, ClipboardList, FileText, Folder, GitBranch, Image, LayoutDashboard, LayoutGrid, LogOut, Mail, Moon, Palette, ShieldCheck, Sparkles, Sun, UploadCloud, User, Users } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAdminAuth } from '../../contexts/AdminAuthContext'
 import { getAdminBasePath } from '../../utils/adminEntry'
@@ -9,6 +9,7 @@ import LogoutConfirmDialog from '../../components/LogoutConfirmDialog'
 const navItems = adminBasePath => [
   { path: adminBasePath, label: '概览', icon: LayoutDashboard, exact: true },
   { path: `${adminBasePath}/articles`, label: '文章管理', icon: FileText },
+  { path: `${adminBasePath}/images`, label: '图片管理', icon: Image },
   { path: `${adminBasePath}/projects`, label: '项目管理', icon: Folder },
   { path: `${adminBasePath}/feature-cards`, label: '能力卡片', icon: LayoutGrid },
   { path: `${adminBasePath}/skills`, label: '专业技能', icon: Award },
