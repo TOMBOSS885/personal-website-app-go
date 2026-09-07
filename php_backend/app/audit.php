@@ -50,7 +50,7 @@ function app_audit_request_start(string $route, string $method): void
     app_audit_set_context([
         'route' => $route,
         'method' => $method,
-        'eventType' => str_starts_with($route, 'auth/') ? 'authentication' : 'admin_request',
+        'eventType' => str_starts_with($route, 'auth/') ? 'authentication' : (str_starts_with($route, 'creator/') ? 'content_request' : 'admin_request'),
         'action' => $method . ' ' . $route,
     ]);
 }
@@ -178,14 +178,16 @@ function app_audit_insert(int $statusCode = 200, ?bool $success = null, string $
 {
     $context = app_audit_current_context();
     $route = (string) ($context['route'] ?? '');
-    if ($route === '' || (!str_starts_with($route, 'admin/') && !str_starts_with($route, 'auth/'))) return;
+    // Creator operations are authenticated user actions too. Keep them in the
+    // shared audit table so article/project ownership changes are traceable.
+    if ($route === '' || (!str_starts_with($route, 'admin/') && !str_starts_with($route, 'auth/') && !str_starts_with($route, 'creator/'))) return;
 
     $resourceType = (string) ($context['resourceType'] ?? '');
     $resourceId = $context['resourceId'] ?? null;
     if ($resourceType === '') [$resourceType, $resourceId] = app_audit_route_parts($route);
     $success = $success ?? ($context['success'] ?? ($statusCode >= 200 && $statusCode < 400));
     $adminId = $context['adminId'] ?? (!empty($_SESSION['admin_id']) ? (int) $_SESSION['admin_id'] : null);
-    $username = (string) ($context['username'] ?? ($_SESSION['admin_username'] ?? ''));
+    $username = (string) ($context['username'] ?? ($_SESSION['admin_username'] ?? ($_SESSION['user_email'] ?? '')));
     $userAgent = trim((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
     if (function_exists('mb_substr')) $userAgent = mb_substr($userAgent, 0, 512);
     else $userAgent = substr($userAgent, 0, 512);
@@ -211,7 +213,7 @@ function app_audit_insert(int $statusCode = 200, ?bool $success = null, string $
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
         );
         $statement->execute([
-            (string) ($context['eventType'] ?? 'admin_request'),
+            (string) ($context['eventType'] ?? (str_starts_with($route, 'creator/') ? 'content_request' : 'admin_request')),
             (string) ($context['action'] ?? ((string) ($context['method'] ?? '') . ' ' . $route)),
             $adminId,
             $username,
@@ -262,7 +264,7 @@ function app_audit_logs(): array
     $success = (string) ($_GET['success'] ?? '');
     $where = ['1=1'];
     $params = [];
-    if (in_array($eventType, ['authentication', 'admin_request'], true)) {
+    if (in_array($eventType, ['authentication', 'admin_request', 'content_request'], true)) {
         $where[] = 'event_type = ?';
         $params[] = $eventType;
     }

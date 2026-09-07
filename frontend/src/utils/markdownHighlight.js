@@ -1,10 +1,10 @@
 import rehypeHighlight from 'rehype-highlight'
-import { all } from 'lowlight'
+import { common } from 'lowlight'
 
-// Register every grammar shipped by highlight.js.  The renderer still emits
-// virtual HAST nodes, so no HTML from a source file is ever inserted into the
-// document.  This keeps the broad language support of highlight.js while
-// retaining rehype-highlight's safe rendering model.
+// Keep the renderer on lowlight's curated common-language set. Loading every
+// grammar makes the article renderer unnecessarily large while most posts use
+// a small set of mainstream languages. The renderer still emits virtual HAST
+// nodes, so no source HTML is inserted into the document.
 const LANGUAGE_ALIASES = {
   javascript: ['js', 'jsx', 'node', 'nodejs'],
   typescript: ['ts', 'tsx'],
@@ -37,7 +37,7 @@ const DETECTION_SUBSET = [
 ]
 
 export const MARKDOWN_HIGHLIGHT_OPTIONS = {
-  languages: all,
+  languages: common,
   aliases: LANGUAGE_ALIASES,
   detect: true,
   subset: DETECTION_SUBSET,
