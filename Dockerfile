@@ -34,7 +34,7 @@ RUN find /app/frontend/dist -type f \( \
       -name '*.txt' \
     \) -exec sh -c 'gzip -9 -c "$1" > "$1.gz"' sh {} \;
 
-FROM golang:1.26.5-alpine AS backend-builder
+FROM golang:1.27.1-alpine AS backend-builder
 
 ARG GOPROXY=https://goproxy.cn,direct
 ENV GOPROXY=$GOPROXY
