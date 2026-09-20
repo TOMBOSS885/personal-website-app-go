@@ -322,18 +322,29 @@ export default function ArticleManager() {
       alert('请为加锁文章设置访问密码')
       return
     }
+    const normalizedSeriesName = String(form.seriesName || '').trim().replace(/\s+/g, ' ')
+    const normalizedForm = {
+      ...form,
+      seriesName: normalizedSeriesName,
+      seriesOrder: normalizedSeriesName ? Math.max(0, Number(form.seriesOrder) || 0) : 0,
+    }
     setSaving(true)
     try {
       const response = await fetch(editingArticle ? `/api/admin/articles/${editingArticle.id}` : '/api/admin/articles', {
         method: editingArticle ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify(normalizedForm),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data.message || '保存失败')
       sessionStorage.removeItem(DRAFT_KEY)
       closeModal()
       await fetchArticles(page)
+      const seriesResponse = await fetch('/api/admin/article-series', { cache: 'no-store' })
+      if (seriesResponse.ok) {
+        const seriesData = await seriesResponse.json().catch(() => [])
+        setAvailableSeries(Array.isArray(seriesData) ? seriesData : [])
+      }
     } catch (error) {
       alert(error.message || '保存失败')
     } finally {

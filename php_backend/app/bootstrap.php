@@ -15,6 +15,7 @@ require_once __DIR__ . '/user_admin.php';
 require_once __DIR__ . '/mind_maps.php';
 require_once __DIR__ . '/mail_templates.php';
 require_once __DIR__ . '/mail.php';
+require_once __DIR__ . '/admin_totp.php';
 
 const APP_BACKUP_MAX_ARCHIVE_BYTES = 536870912;
 const APP_BACKUP_MAX_FILES = 20000;
@@ -761,7 +762,7 @@ function app_admin_backup_manifest(): array
             error_log('Backup manifest upload scan failed: ' . $error->getMessage());
         }
     }
-    return ['generatedAt' => date(DATE_ATOM), 'schema' => '018', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
+    return ['generatedAt' => date(DATE_ATOM), 'schema' => '019', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
 }
 
 function app_schema_010_ready(): bool
@@ -1289,7 +1290,7 @@ function app_backup_create_archive(string $zipPath, string $password): array
         $settingsJson = json_encode($safeSettings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         if (@file_put_contents($settingsPath, $settingsJson, LOCK_EX) === false) throw new RuntimeException('Unable to create encrypted app settings.');
         $encryptedSettings = app_backup_encrypt_file($settingsPath, $password);
-        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 3, 'generatedAt' => date(DATE_ATOM), 'schema' => '018', 'database' => $databaseStats + ['schemaTables' => $schemaStats['tables']], 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'database-schema.json.enc' => $encryptedSchema['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'Database structure, data, OAuth settings, and uploads are included. Database and settings are encrypted with the backup password.'], 'manifest' => app_admin_backup_manifest()];
+        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 3, 'generatedAt' => date(DATE_ATOM), 'schema' => '019', 'database' => $databaseStats + ['schemaTables' => $schemaStats['tables']], 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'database-schema.json.enc' => $encryptedSchema['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'Database structure, data, OAuth settings, and uploads are included. Database and settings are encrypted with the backup password.'], 'manifest' => app_admin_backup_manifest()];
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('Unable to create the backup archive.');
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
@@ -1377,6 +1378,7 @@ function app_admin_backup_export(): void
 {
     app_require_schema_010();
     app_require_schema_011();
+    app_require_schema_019();
     $body = app_body();
     $password = app_backup_require_password($body['password'] ?? '');
     if (!class_exists('ZipArchive')) app_error(503, '涓绘満鏈惎鐢?PHP ZipArchive 鎵╁睍', 'ZIP_EXTENSION_REQUIRED');
@@ -1400,6 +1402,7 @@ function app_admin_backup_export(): void
 
 function app_admin_backup_import(): void
 {
+    app_require_schema_019();
     $password = app_backup_require_password($_POST['password'] ?? '');
     if (!class_exists('ZipArchive')) app_error(503, '涓绘満鏈惎鐢?PHP ZipArchive 鎵╁睍', 'ZIP_EXTENSION_REQUIRED');
     $file = $_FILES['backup'] ?? null;
@@ -1970,6 +1973,7 @@ function app_handle_login(): void
     if (!app_security_peer_rate_limit_allow('admin-login', 60)) app_error(429, '鐧诲綍灏濊瘯杩囦簬棰戠箒锛岃绋嶅悗鍐嶈瘯', 'LOGIN_RATE_LIMITED');
     $clientHash = app_security_client_hash('admin-login');
     $database = app_db();
+    $totpRequired = false;
     $database->beginTransaction();
     try {
         $database->prepare('INSERT IGNORE INTO admin_login_attempts (client_hash, failed_attempts, locked_until, updated_at) VALUES (?, 0, NULL, NOW())')->execute([$clientHash]);
@@ -2016,21 +2020,30 @@ function app_handle_login(): void
             app_error($currentlyLocked ? 429 : 401, $currentlyLocked ? 'Too many failed sign-in attempts. This IP is blocked for 24 hours.' : 'Invalid username or password.', $currentlyLocked ? 'LOGIN_LOCKED' : 'INVALID_CREDENTIALS');
         }
 
+        // A password-verified account with 2FA enabled is not authenticated
+        // yet. The last-login timestamp is written only after the TOTP code
+        // succeeds, so a stolen password cannot create a valid admin session.
+        $totpRequired = function_exists('app_schema_019_ready') && app_schema_019_ready() && !empty($admin['totp_enabled']);
         $database->prepare('DELETE FROM admin_login_attempts WHERE client_hash = ?')->execute([$clientHash]);
-        $database->prepare('UPDATE admin_account SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?')->execute([$admin['id']]);
+        if (!$totpRequired) {
+            $database->prepare('UPDATE admin_account SET failed_login_attempts = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?')->execute([$admin['id']]);
+        }
         $database->commit();
         app_security_maybe_cleanup();
     } catch (Throwable $error) {
         if ($database->inTransaction()) $database->rollBack();
         throw $error;
     }
-    session_regenerate_id(true);
-    $_SESSION['admin_id'] = (int) $admin['id'];
-    $_SESSION['admin_username'] = $admin['username'];
-    $_SESSION['admin_session_version'] = (int) $admin['session_version'];
-    $_SESSION['admin_created_at'] = time();
-    $_SESSION['admin_last_seen_at'] = time();
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    if ($totpRequired) {
+        if ((string) ($admin['totp_secret_encrypted'] ?? '') === '') {
+            app_error(500, '二步验证已开启，但密钥缺失。请联系主机管理员。', 'TWO_FACTOR_CONFIGURATION_INVALID');
+        }
+        app_admin_totp_begin_pending_login($admin);
+        app_audit_set_context(['action' => 'PASSWORD_VERIFIED_TOTP_REQUIRED', 'adminId' => (int) $admin['id'], 'username' => (string) $admin['username']]);
+        app_audit_set_details(['twoFactor' => ['stage' => 'password_verified']]);
+        app_json(['success' => true, 'requiresTwoFactor' => true, 'username' => $admin['username'], 'expiresIn' => APP_ADMIN_TOTP_PENDING_TTL]);
+    }
+    app_admin_complete_login($admin);
     app_json(['success' => true, 'username' => $admin['username'], 'csrfToken' => $_SESSION['csrf_token']]);
 }
 
@@ -2141,10 +2154,14 @@ function app_save_article(?int $id): void
     $password = (string) ($body['accessPassword'] ?? '');
     $hash = $password !== '' ? password_hash($password, PASSWORD_DEFAULT) : null;
     [$seriesName, $seriesKey] = app_series_name_parts((string) ($body['seriesName'] ?? ''));
+    // A blank series means that the article is removed from its previous
+    // series. Reset its order as well so stale ordering cannot leak into a
+    // later assignment or trigger strict SQL validation.
+    $seriesOrder = $seriesName === '' ? 0 : app_clamp(app_int($body['seriesOrder'] ?? 0), 0, 1000000);
     $values = [
         $title, trim((string) ($body['summary'] ?? '')), $content, trim((string) ($body['coverImage'] ?? '')),
         trim((string) ($body['category'] ?? '')), trim((string) ($body['tags'] ?? '')),
-        (function_exists('mb_substr') ? mb_substr($seriesName, 0, 120) : substr($seriesName, 0, 120)), app_int($body['seriesOrder'] ?? 0),
+        (function_exists('mb_substr') ? mb_substr($seriesName, 0, 120) : substr($seriesName, 0, 120)), $seriesOrder,
         array_key_exists('featured', $body) ? (app_bool($body['featured']) ? 1 : 0) : null,
         array_key_exists('displayOrder', $body) ? app_int($body['displayOrder']) : null,
         app_bool($body['published'] ?? false) ? 1 : 0,
@@ -2417,7 +2434,7 @@ function app_handle_request(): void
     app_audit_request_start($route, $method);
     app_audit_register_shutdown();
     $isAdminRoute = strpos($route, 'admin/') === 0;
-    $isAdminAuthRoute = $route === 'auth/login' || $route === 'auth/logout';
+    $isAdminAuthRoute = in_array($route, ['auth/login', 'auth/logout', 'auth/two-factor'], true);
     $isUserAuthRoute = in_array($route, ['auth/user-register', 'auth/user-login', 'auth/user-logout', 'auth/user-session', 'auth/user-register/email-code'], true)
         || strpos($route, 'auth/oauth/') === 0;
     if ($isAdminRoute || $isAdminAuthRoute) app_admin_entry_required();
@@ -2472,9 +2489,11 @@ function app_handle_request(): void
             app_require_schema_016();
             app_require_schema_017();
             app_require_schema_018();
-            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '018']);
+            app_require_schema_019();
+            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '019']);
         }
         if ($method === 'POST' && $route === 'auth/login') app_handle_login();
+        if ($method === 'POST' && $route === 'auth/two-factor') app_admin_totp_complete_pending_login();
         if ($method === 'POST' && $route === 'auth/logout') {
             if (!empty($_SESSION['admin_id'])) app_csrf_required();
             app_audit_logout();
@@ -2669,8 +2688,14 @@ function app_handle_request(): void
         if ($method === 'PUT' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_update((int) $match[1]);
         if ($method === 'DELETE' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_delete((int) $match[1]);
         if ($method === 'GET' && $route === 'admin/audit-logs') { app_require_schema_012(); app_json(app_audit_logs()); }
-        if ($method === 'GET' && $route === 'admin/backup-manifest') app_json(app_admin_backup_manifest());
-        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_require_schema_017(); app_require_schema_018(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '018', 'manifest' => app_admin_backup_manifest()]); }
+        if ($method === 'GET' && $route === 'admin/backup-manifest') { app_require_schema_019(); app_json(app_admin_backup_manifest()); }
+        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_require_schema_017(); app_require_schema_018(); app_require_schema_019(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '019', 'manifest' => app_admin_backup_manifest()]); }
+        // Keep the descriptive /two-factor aliases as the public contract;
+        // /2fa remains accepted for older clients and shared-host rollouts.
+        if ($method === 'GET' && in_array($route, ['admin/two-factor/status', 'admin/2fa/status'], true)) app_json(app_admin_totp_status());
+        if ($method === 'POST' && in_array($route, ['admin/two-factor/setup', 'admin/2fa/setup'], true)) app_json(app_admin_totp_setup());
+        if ($method === 'POST' && in_array($route, ['admin/two-factor/confirm', 'admin/2fa/confirm'], true)) app_json(app_admin_totp_confirm());
+        if ($method === 'POST' && in_array($route, ['admin/two-factor/disable', 'admin/2fa/disable'], true)) app_json(app_admin_totp_disable());
         if ($method === 'POST' && $route === 'admin/backup-export') app_admin_backup_export();
         if ($method === 'POST' && $route === 'admin/backup-import') app_admin_backup_import();
         if ($method === 'GET' && $route === 'admin/friends') app_json(app_admin_friend_links());

@@ -25,6 +25,11 @@ describe('classifyApiRequest', () => {
       isAdminAuth: true,
       isAuthMutation: true,
     })
+    expect(classifyApiRequest('/api/auth/two-factor', origin)).toEqual({
+      isAdminRequest: false,
+      isAdminAuth: true,
+      isAuthMutation: true,
+    })
     expect(classifyApiRequest('/api/public/search?q=/api/admin/', origin).isAdminRequest).toBe(false)
   })
 

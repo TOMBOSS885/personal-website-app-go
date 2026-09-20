@@ -20,8 +20,8 @@ export function classifyApiRequest(value, origin = typeof window === 'undefined'
     if (url.origin !== origin) return { isAdminRequest: false, isAdminAuth: false, isAuthMutation: false }
     const path = url.pathname.replace(/\/+$/, '')
     const isAdminRequest = path === '/api/admin' || path.startsWith('/api/admin/')
-    const isAdminAuth = path === '/api/auth/login' || path === '/api/auth/logout'
-    return { isAdminRequest, isAdminAuth, isAuthMutation: path === '/api/auth/logout' }
+    const isAdminAuth = path === '/api/auth/login' || path === '/api/auth/two-factor' || path === '/api/auth/logout'
+    return { isAdminRequest, isAdminAuth, isAuthMutation: path === '/api/auth/two-factor' || path === '/api/auth/logout' }
   } catch {
     return { isAdminRequest: false, isAdminAuth: false, isAuthMutation: false }
   }

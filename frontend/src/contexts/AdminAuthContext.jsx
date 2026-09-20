@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useLocation } from 'react-router-dom'
 import { setAdminCsrfToken } from '../api/adminFetch'
 import { getAdminEntrySuffix } from '../utils/adminEntry'
+import { apiFailureError } from '../utils/twoFactor'
 
 const AdminAuthContext = createContext(null)
 
@@ -54,10 +55,28 @@ export function AdminAuthProvider({ children }) {
       body: JSON.stringify({ username, password }),
     })
     const data = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(data.message || `登录失败（${response.status}）`)
+    if (!response.ok) throw apiFailureError(data, `登录失败（${response.status}）`)
+    if (data.requiresTwoFactor) {
+      clearAdmin()
+      return data
+    }
     setAdmin({ username: data.username || username })
     setAdminCsrfToken(data.csrfToken || '')
     localStorage.setItem('username', data.username || username)
+    return data
+  }, [clearAdmin])
+
+  const verifyTwoFactor = useCallback(async code => {
+    const response = await fetch('/api/auth/two-factor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw apiFailureError(data, `验证失败（${response.status}）`)
+    setAdmin({ username: data.username || 'admin' })
+    setAdminCsrfToken(data.csrfToken || '')
+    localStorage.setItem('username', data.username || 'admin')
     return data
   }, [])
 
@@ -69,7 +88,18 @@ export function AdminAuthProvider({ children }) {
     }
   }, [clearAdmin])
 
-  const value = useMemo(() => ({ admin, loading, login, logout, checkSession }), [admin, loading, login, logout, checkSession])
+  const cancelPendingLogin = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } finally {
+      clearAdmin()
+    }
+  }, [clearAdmin])
+
+  const value = useMemo(
+    () => ({ admin, loading, login, verifyTwoFactor, cancelPendingLogin, logout, checkSession }),
+    [admin, loading, login, verifyTwoFactor, cancelPendingLogin, logout, checkSession],
+  )
   return <AdminAuthContext.Provider value={value}>{children}</AdminAuthContext.Provider>
 }
 
