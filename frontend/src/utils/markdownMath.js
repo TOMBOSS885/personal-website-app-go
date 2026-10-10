@@ -47,6 +47,12 @@ export function normalizeMarkdownMath(markdown = '') {
     }
 
     if (displayMath === 'dollar') {
+      const glued = splitGluedDisplayMathCloser(line)
+      if (glued) {
+        output.push(...glued.lines)
+        displayMath = glued.displayMathOpen ? 'dollar' : null
+        continue
+      }
       const replacement = replaceInlineDelimitersOutsideCode(line, true)
       output.push(replacement.value)
       displayMath = replacement.displayMathOpen ? 'dollar' : null
@@ -182,6 +188,39 @@ function replaceInlineDelimitersOutsideCode(line, displayMathOpen = false) {
   }
 
   return { value: output, displayMathOpen }
+}
+
+function blockquotePrefix(line) {
+  return /^(?:\s*>\s?)*/.exec(line)?.[0] ?? ''
+}
+
+function isDisplayMathFenceLine(line) {
+  return line.replace(/^(?:\s*>\s?)*/, '').trim() === '$$'
+}
+
+/**
+ * micromark math-flow only closes on a line that *starts* with `$$`.
+ * Notes often write `$$\nformula$$`, which leaves the fence open and causes
+ * KaTeX to swallow the following Markdown as a red error.
+ */
+function splitGluedDisplayMathCloser(line) {
+  if (isDisplayMathFenceLine(line)) return null
+
+  const closingIndex = findUnescapedDelimiter(line, '$$', 0)
+  if (closingIndex < 0) return null
+
+  const quote = blockquotePrefix(line)
+  const body = line.slice(0, closingIndex).replace(/[ \t]+$/, '')
+  const rest = line.slice(closingIndex + 2).replace(/^[ \t]+/, '')
+  const lines = []
+  if (body.replace(/^(?:\s*>\s?)*/, '').trim() !== '') lines.push(body)
+  lines.push(`${quote}$$`)
+  if (rest === '') return { lines, displayMathOpen: false }
+
+  const restLine = quote && !rest.startsWith(quote) ? `${quote}${rest}` : rest
+  const replacement = replaceInlineDelimitersOutsideCode(restLine)
+  lines.push(replacement.value)
+  return { lines, displayMathOpen: replacement.displayMathOpen }
 }
 
 function findUnescapedDollar(value, startIndex) {

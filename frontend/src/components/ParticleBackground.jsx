@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { isConstrainedConnection, isLowEndDevice } from '../utils/network'
 
-const DPR_LIMIT = 2
+const DPR_LIMIT = 1.5
 const FRAME_INTERVAL = 33
 const LINK_DISTANCE = 120
 const LINK_DISTANCE_SQUARED = LINK_DISTANCE * LINK_DISTANCE
@@ -27,6 +27,20 @@ export default function ParticleBackground() {
     let resizeFrameId
     let particles = []
     let lastFrameTime = 0
+    let isRunning = false
+
+    const stopAnimation = () => {
+      isRunning = false
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId)
+        animationFrameId = null
+      }
+    }
+
+    const scheduleAnimation = () => {
+      if (!isRunning || document.visibilityState === 'hidden' || animationFrameId) return
+      animationFrameId = requestAnimationFrame(drawParticles)
+    }
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, DPR_LIMIT)
@@ -39,7 +53,7 @@ export default function ParticleBackground() {
 
     const createParticles = () => {
       const areaCount = Math.floor((window.innerWidth * window.innerHeight) / 28000)
-      const particleCount = Math.min(window.innerWidth < 768 ? 28 : 72, Math.max(18, areaCount))
+      const particleCount = Math.min(window.innerWidth < 768 ? 24 : 56, Math.max(16, areaCount))
       particles = []
       
       for (let i = 0; i < particleCount; i++) {
@@ -56,8 +70,10 @@ export default function ParticleBackground() {
     }
 
     const drawParticles = (timestamp = 0) => {
+      animationFrameId = null
+      if (!isRunning || document.visibilityState === 'hidden') return
       if (timestamp - lastFrameTime < FRAME_INTERVAL) {
-        animationFrameId = requestAnimationFrame(drawParticles)
+        scheduleAnimation()
         return
       }
       lastFrameTime = timestamp
@@ -79,7 +95,10 @@ export default function ParticleBackground() {
         ctx.fillStyle = particle.color + particle.opacity + ')'
         ctx.fill()
 
-        // 绘制连线
+        // Connecting every pair is quadratic and becomes expensive on slower
+        // integrated GPUs. Keep the decorative particles but omit links on
+        // constrained devices/connections.
+        if (isLowEndDevice() || isConstrainedConnection()) return
         particles.slice(i + 1).forEach(otherParticle => {
           const dx = particle.x - otherParticle.x
           const dy = particle.y - otherParticle.y
@@ -97,12 +116,13 @@ export default function ParticleBackground() {
         })
       })
 
-      animationFrameId = requestAnimationFrame(drawParticles)
+      scheduleAnimation()
     }
 
     resize()
     createParticles()
-    drawParticles()
+    isRunning = true
+    scheduleAnimation()
 
     const handleResize = () => {
       if (resizeFrameId) return
@@ -114,11 +134,22 @@ export default function ParticleBackground() {
     }
 
     window.addEventListener('resize', handleResize)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stopAnimation()
+        return
+      }
+      isRunning = true
+      lastFrameTime = 0
+      scheduleAnimation()
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      cancelAnimationFrame(animationFrameId)
+      stopAnimation()
       if (resizeFrameId) cancelAnimationFrame(resizeFrameId)
       window.removeEventListener('resize', handleResize)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [])
 

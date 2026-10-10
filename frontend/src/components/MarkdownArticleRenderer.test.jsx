@@ -57,6 +57,30 @@ describe('article markdown presentation', () => {
     expect(html).not.toContain('class="markdown-code-block"')
   })
 
+  it('renders notes that glue the closing $$ onto the formula line', () => {
+    const html = render([
+      '将多元正态向量分块：',
+      '',
+      '$$',
+      String.raw`\boldsymbol{X} = \begin{pmatrix} \boldsymbol{X}^{(1)} \\ \boldsymbol{X}^{(2)} \end{pmatrix}$$`,
+      '',
+      String.raw`其中 $\boldsymbol{X}^{(1)} \in \mathbb{R}^q$。`,
+      '',
+      '1. **边际分布仍为多元正态分布**：',
+      '',
+      '> [!WARNING]',
+      '> 主讲教师重点提醒：**反之不真！**',
+    ].join('\n'))
+
+    expect(html).toContain('katex-display')
+    expect(html).toContain('katex-html')
+    expect(html).not.toContain('katex-error')
+    expect(html).toContain('markdown-alert-warning')
+    expect(html).toContain('<strong>边际分布仍为多元正态分布</strong>')
+    expect(html).toContain('<strong>反之不真！</strong>')
+    expect(html).not.toMatch(/<p>[^<]*\\boldsymbol/)
+  })
+
   it('renders ECharts fences as chart containers and validates JSON options', () => {
     const html = render('```echarts\n{"xAxis":{"type":"value"},"series":[{"type":"line","data":[[0,1],[1,2]]}]}\n```')
     expect(html).toContain('class="markdown-echarts')

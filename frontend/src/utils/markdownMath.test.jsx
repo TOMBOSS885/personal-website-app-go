@@ -112,6 +112,40 @@ g(x)=1/(3\text{ ms})
 $$`)
   })
 
+  it('moves a glued closing $$ onto its own line so math-flow can close', () => {
+    const input = [
+      '将多元正态向量分块：',
+      '',
+      '$$',
+      String.raw`\boldsymbol{X} = \begin{pmatrix} \boldsymbol{X}^{(1)} \\ \boldsymbol{X}^{(2)} \end{pmatrix}$$`,
+      '',
+      String.raw`其中 $\boldsymbol{X}^{(1)} \in \mathbb{R}^q$。`,
+      '',
+      '> [!WARNING]',
+      '> **反之不真**',
+    ].join('\n')
+    const normalized = normalizeMarkdownMath(input)
+
+    expect(normalized).toContain(String.raw`\end{pmatrix}`)
+    expect(normalized).toContain('\n$$\n\n其中')
+    expect(normalized).not.toMatch(/\\end\{pmatrix\}\$\$/)
+    expect(normalized).toContain('> [!WARNING]')
+  })
+
+  it('keeps blockquote prefixes when splitting a glued display-math closer', () => {
+    const input = [
+      '> $$',
+      String.raw`> E(\boldsymbol{A}\boldsymbol{X}) = \boldsymbol{A} E(\boldsymbol{X}) \quad \blacksquare$$`,
+    ].join('\n')
+    const normalized = normalizeMarkdownMath(input)
+
+    expect(normalized.split('\n')).toEqual([
+      '> $$',
+      String.raw`> E(\boldsymbol{A}\boldsymbol{X}) = \boldsymbol{A} E(\boldsymbol{X}) \quad \blacksquare`,
+      '> $$',
+    ])
+  })
+
   it('does not cascade legacy parentheses conversion inside standard TeX delimiters', () => {
     const input = [
       String.raw`\[CPI=\frac{\sum_{i=1}^{n}(CPI_i\times I_i)}{I_N}\]`,

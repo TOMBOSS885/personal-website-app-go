@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion'
 import { Archive, ArrowRight, BookMarked, Code, PenTool, Briefcase, Sparkles, Github, Linkedin, Mail, ChevronDown, Star, Zap, Coffee, Rocket, Cpu, Database, Globe, Layers3, TrendingUp } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ParticleBackground from '../components/ParticleBackground'
@@ -11,6 +11,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { useTranslation } from '../i18n/translations'
 import { safeExternalHref } from '../utils/safeUrl'
 import { fetchPublicHomeData } from '../utils/publicHomeData'
+import { isConstrainedConnection, isLowEndDevice } from '../utils/network'
 
 export default function HomePage() {
   const [articles, setArticles] = useState([])
@@ -22,6 +23,8 @@ export default function HomePage() {
   const [discovery, setDiscovery] = useState({ featured: [], popular: [], series: [] })
   const { language } = useLanguage()
   const { t } = useTranslation()
+  const prefersReducedMotion = useReducedMotion()
+  const reduceVisualEffects = prefersReducedMotion || isLowEndDevice() || isConstrainedConnection()
   
   const heroRef = useRef(null)
   const { scrollYProgress } = useScroll()
@@ -41,6 +44,16 @@ export default function HomePage() {
 	  setFeatureCards(Array.isArray(result.featureCards) ? result.featureCards : [])
 	  setStats(result.stats || null)
 	  setProfile(result.profile || null)
+      if (result.discovery) {
+        setDiscovery(result.discovery)
+      } else {
+        // Compatibility fallback for a frontend deployed before the matching
+        // PHP update has reached every host.
+        fetch('/api/public/discovery?limit=3')
+          .then(response => response.ok ? response.json() : null)
+          .then(data => { if (!cancelled && data) setDiscovery(data) })
+          .catch(() => {})
+      }
     }
 
 	loadHomeData().catch((err) => {
@@ -57,15 +70,6 @@ export default function HomePage() {
       cancelled = true
     }
   }, [language])
-
-  useEffect(() => {
-    const controller = new AbortController()
-    fetch('/api/public/discovery?limit=3', { signal: controller.signal })
-      .then(response => response.ok ? response.json() : null)
-      .then(data => { if (data) setDiscovery(data) })
-      .catch(error => { if (error.name !== 'AbortError') setDiscovery({ featured: [], popular: [], series: [] }) })
-    return () => controller.abort()
-  }, [])
 
   const skillCategories = skills.reduce((acc, skill) => {
     if (!acc[skill.category]) acc[skill.category] = []
@@ -152,7 +156,7 @@ export default function HomePage() {
   const emailHref = safeExternalHref(profile?.emailPublic ? `mailto:${profile.emailPublic}` : 'mailto:hello@example.com')
 
   return (
-    <div className="min-h-screen relative overflow-hidden">
+    <div className="home-page min-h-screen relative overflow-hidden">
       {/* 粒子背景 */}
       <ParticleBackground />
       
@@ -171,7 +175,7 @@ export default function HomePage() {
         <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-pink-200/20 rounded-full blur-3xl float-delay-2" />
 
         <motion.div 
-          style={{ opacity: heroOpacity, scale: heroScale }}
+          style={reduceVisualEffects ? undefined : { opacity: heroOpacity, scale: heroScale }}
           className="relative z-10 text-center px-4 max-w-5xl mx-auto"
         >
           {/* 头像区域 */}
@@ -185,14 +189,14 @@ export default function HomePage() {
               {/* 外圈旋转装饰 */}
               <motion.div 
                 className="absolute inset-0 w-40 h-40 rounded-full border-2 border-dashed border-indigo-400/50"
-                animate={{ rotate: 360 }}
-                transition={{ duration: 20, repeat: Infinity, ease: 'linear' }}
+                animate={reduceVisualEffects ? undefined : { rotate: 360 }}
+                transition={reduceVisualEffects ? undefined : { duration: 20, repeat: Infinity, ease: 'linear' }}
               />
               {/* 中圈反向旋转 */}
               <motion.div 
                 className="absolute inset-2 w-36 h-36 rounded-full border-2 border-dashed border-purple-400/50"
-                animate={{ rotate: -360 }}
-                transition={{ duration: 15, repeat: Infinity, ease: 'linear' }}
+                animate={reduceVisualEffects ? undefined : { rotate: -360 }}
+                transition={reduceVisualEffects ? undefined : { duration: 15, repeat: Infinity, ease: 'linear' }}
               />
               {/* 头像容器 */}
               <div className="w-32 h-32 relative">
@@ -331,8 +335,8 @@ export default function HomePage() {
             className="absolute bottom-8 left-1/2 transform -translate-x-1/2"
           >
             <motion.div
-              animate={{ y: [0, 10, 0] }}
-              transition={{ duration: 2, repeat: Infinity }}
+              animate={reduceVisualEffects ? undefined : { y: [0, 10, 0] }}
+              transition={reduceVisualEffects ? undefined : { duration: 2, repeat: Infinity }}
               className="cursor-pointer"
               onClick={() => window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })}
             >
@@ -623,13 +627,13 @@ export default function HomePage() {
         {/* 浮动装饰 */}
         <motion.div 
           className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full blur-xl"
-          animate={{ y: [0, 20, 0] }}
-          transition={{ duration: 4, repeat: Infinity }}
+          animate={reduceVisualEffects ? undefined : { y: [0, 20, 0] }}
+          transition={reduceVisualEffects ? undefined : { duration: 4, repeat: Infinity }}
         />
         <motion.div 
           className="absolute bottom-10 right-10 w-32 h-32 bg-white/10 rounded-full blur-xl"
-          animate={{ y: [0, -20, 0] }}
-          transition={{ duration: 5, repeat: Infinity }}
+          animate={reduceVisualEffects ? undefined : { y: [0, -20, 0] }}
+          transition={reduceVisualEffects ? undefined : { duration: 5, repeat: Infinity }}
         />
 
         <div className="max-w-4xl mx-auto text-center relative">

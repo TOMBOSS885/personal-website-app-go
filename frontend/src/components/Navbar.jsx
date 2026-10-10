@@ -40,11 +40,19 @@ export default function Navbar({ profile }) {
   const identityName = user?.displayName || user?.nickname || user?.email || profile?.nickname || ''
 
   useEffect(() => {
+    let frameId = null
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20)
+      if (frameId !== null) return
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null
+        setScrolled(window.scrollY > 20)
+      })
     }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+      if (frameId !== null) window.cancelAnimationFrame(frameId)
+    }
   }, [])
 
   useEffect(() => {

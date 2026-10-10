@@ -6,12 +6,11 @@ import { AdminAuthProvider, useAdminAuth } from './contexts/AdminAuthContext'
 import { UserAuthProvider } from './contexts/UserAuthContext'
 import { installAdminFetchInterceptor } from './api/adminFetch'
 import Navbar from './components/Navbar'
-import CursorEffects from './components/CursorEffects'
 import DeferredMount from './components/DeferredMount'
 import VisitTracker from './components/VisitTracker'
 import RouteMetadata from './components/RouteMetadata'
 import LoadingIndicator from './components/LoadingIndicator'
-import { fetchWithTimeout } from './utils/network'
+import { fetchWithTimeout, isConstrainedConnection, isLowEndDevice } from './utils/network'
 import { getAdminBasePath } from './utils/adminEntry'
 import { fetchPublicHomeData, invalidatePublicHomeData } from './utils/publicHomeData'
 
@@ -54,6 +53,7 @@ const Footer = lazy(() => import('./components/Footer'))
 const HomeBackgroundCustomizer = lazy(() => import('./components/HomeBackgroundCustomizer'))
 const Live2DController = lazy(() => import('./components/Live2DController'))
 const CreatorCenterPage = lazy(() => import('./pages/CreatorCenterPage'))
+const CursorEffects = lazy(() => import('./components/CursorEffects'))
 
 function PageLoading() {
   return (
@@ -110,6 +110,15 @@ function App() {
     }
   }, [loadProfile])
 
+  useEffect(() => {
+    // Keep the full visual design on capable devices, but avoid expensive
+    // blur/animation layers on slower Linux laptops and data-saver networks.
+    // This class only affects decoration; routes and API behaviour are unchanged.
+    const reduced = isLowEndDevice() || isConstrainedConnection()
+    document.documentElement.classList.toggle('app-performance-reduced', reduced)
+    return () => document.documentElement.classList.remove('app-performance-reduced')
+  }, [])
+
   return (
     <ThemeProvider>
       <LanguageProvider>
@@ -118,7 +127,9 @@ function App() {
             <UserAuthProvider>
               <div className="theme-page-background" aria-hidden="true" />
               <div className="theme-app-shell min-h-screen flex flex-col">
-                <CursorEffects />
+                <DeferredMount afterLoad delay={1200} timeout={2000}>
+                  <Suspense fallback={null}><CursorEffects /></Suspense>
+                </DeferredMount>
                 <Suspense fallback={<PageLoading />}>
                   <Routes>
                   <Route path="/login" element={<UserLoginPage />} />

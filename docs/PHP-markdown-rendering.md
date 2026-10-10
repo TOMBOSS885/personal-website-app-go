@@ -7,7 +7,7 @@ is not sent to a diagram, code-execution, or third-party rendering service.
 ## Supported Markdown
 
 - GitHub Flavored Markdown: tables, task lists, strikethrough, and footnotes.
-- KaTeX math: `$E=mc^2$` for inline math and `$$ ... $$` for display math.
+- KaTeX math: `$E=mc^2$` for inline math and `$$ ... $$` for display math. A closing `$$` glued onto the formula line (`$$\nformula$$`) is moved onto its own line before parsing, so the rest of the article is not swallowed as a KaTeX error.
 - Fenced code blocks with syntax highlighting and a copy button.
 - Mermaid diagrams in fenced `mermaid` blocks. Mermaid is loaded only for an
   article that contains a Mermaid block.

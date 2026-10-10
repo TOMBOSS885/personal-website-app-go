@@ -1543,6 +1543,35 @@ html.theme-has-image:not(.surfaces-transparent) .public-shell :is(
   -webkit-backdrop-filter: blur(var(--theme-glass-blur, 0px)) saturate(1.15) !important;
 }
 
+/* Device/network-aware fallback. Backdrop blur is one of the most expensive
+   effects on integrated GPUs, especially while scrolling on Linux browsers. */
+html.app-performance-reduced.theme-has-image:not(.surfaces-transparent) .public-shell :is(
+  .adaptive-surface,
+  .card,
+  .card-glass,
+  .glass,
+  .theme-nav-surface
+) {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.app-performance-reduced .float,
+html.app-performance-reduced .float-delay-1,
+html.app-performance-reduced .float-delay-2,
+html.app-performance-reduced .glow,
+html.app-performance-reduced .rotate-slow,
+html.app-performance-reduced .animate-gradient {
+  animation: none !important;
+}
+
+/* Let Chromium defer layout and paint work for home sections that are still
+   far below the viewport. The intrinsic size keeps the scrollbar stable. */
+.home-page > section:not(:first-of-type) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
+}
+
 .theme-range {
   height: 1.25rem;
   accent-color: var(--theme-primary);

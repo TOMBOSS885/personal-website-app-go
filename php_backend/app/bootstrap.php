@@ -2531,8 +2531,9 @@ function app_handle_request(): void
             $language = strtolower((string) ($_GET['lang'] ?? 'zh')) === 'en' ? 'en' : 'zh';
             $payload = app_public_cache_remember('home-' . $language, 20, function (): array {
                 $articlePage=$_GET['page']??null; $articleSize=$_GET['size']??null; $_GET['page']=0; $_GET['size']=3; $articleResult=app_articles(false); if($articlePage===null)unset($_GET['page']);else $_GET['page']=$articlePage; if($articleSize===null)unset($_GET['size']);else $_GET['size']=$articleSize;
-                $profile=app_profile(true); $allProjects=app_projects(false); $projects=array_values(array_filter($allProjects, function(array $project): bool { return !empty($project['featured']); })); $skills=app_skills(); $cards=app_feature_cards(true); $stars=array_sum(array_column($allProjects,'stars'));
-                return ['profile'=>$profile,'articles'=>$articleResult['content'],'projects'=>$projects,'skills'=>$skills,'featureCards'=>$cards,'stats'=>['coffeeCount'=>$profile['coffeeCount'],'projectCount'=>count($allProjects),'articleCount'=>$articleResult['totalElements'],'starsCount'=>$profile['starsCount'] ?: $stars]];
+                $profile=app_profile(true); $projects=app_projects(true); $projectStats=app_db()->query('SELECT COUNT(*) AS total, COALESCE(SUM(stars),0) AS stars FROM projects')->fetch(); $skills=app_skills(); $cards=app_feature_cards(true); $stars=(int)($projectStats['stars']??0);
+                $discovery=['featured'=>app_discovery_articles('featured',3),'popular'=>app_discovery_articles('popular',3),'series'=>app_article_series(3)];
+                return ['profile'=>$profile,'articles'=>$articleResult['content'],'projects'=>$projects,'skills'=>$skills,'featureCards'=>$cards,'stats'=>['coffeeCount'=>$profile['coffeeCount'],'projectCount'=>(int)($projectStats['total']??0),'articleCount'=>$articleResult['totalElements'],'starsCount'=>$profile['starsCount'] ?: $stars],'discovery'=>$discovery];
             });
             app_json_cached($payload, 30, 120);
         }

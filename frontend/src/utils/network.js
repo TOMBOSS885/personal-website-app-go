@@ -18,7 +18,14 @@ export function isLowEndDevice() {
   if (typeof navigator === 'undefined') {
     return false
   }
-  return navigator.deviceMemory && navigator.deviceMemory <= 2
+  // `deviceMemory` is not exposed by every browser (notably some Linux
+  // Chromium builds), so also use the CPU count as a conservative signal.
+  // This is only used to disable decorative effects; it never changes
+  // application functionality or data fetching.
+  const memory = Number(navigator.deviceMemory)
+  const cores = Number(navigator.hardwareConcurrency)
+  return (Number.isFinite(memory) && memory > 0 && memory <= 4)
+    || (Number.isFinite(cores) && cores > 0 && cores <= 4)
 }
 
 export function requestIdle(callback, timeout = 1500) {

@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
+import { isConstrainedConnection, isLowEndDevice } from '../utils/network'
 
-const MAX_PARTICLES = 90
+const MAX_PARTICLES = 56
 const MOVE_DISTANCE = 10
 const MOVE_INTERVAL = 22
-const DPR_LIMIT = 2
+const DPR_LIMIT = 1.5
 
 function parseColor(value, fallback) {
   const text = String(value || '').trim()
@@ -62,7 +63,12 @@ export default function CursorEffects() {
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
     const coarsePointer = window.matchMedia('(pointer: coarse)')
-    if (reducedMotion.matches || coarsePointer.matches) {
+    if (
+      reducedMotion.matches
+      || coarsePointer.matches
+      || isConstrainedConnection()
+      || isLowEndDevice()
+    ) {
       canvas.style.display = 'none'
       return undefined
     }
@@ -81,6 +87,8 @@ export default function CursorEffects() {
     }
 
     const draw = () => {
+      rafRef.current = null
+      if (document.visibilityState === 'hidden') return
       const particles = particlesRef.current
       const rings = ringsRef.current
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
@@ -132,8 +140,6 @@ export default function CursorEffects() {
 
       if (particles.length || rings.length) {
         rafRef.current = window.requestAnimationFrame(draw)
-      } else {
-        rafRef.current = null
       }
     }
 
@@ -215,11 +221,23 @@ export default function CursorEffects() {
     window.addEventListener('resize', resize)
     window.addEventListener('pointermove', handlePointerMove, { passive: true })
     window.addEventListener('pointerdown', handlePointerDown, { passive: true })
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        particlesRef.current = []
+        ringsRef.current = []
+        if (rafRef.current) {
+          window.cancelAnimationFrame(rafRef.current)
+          rafRef.current = null
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       window.removeEventListener('resize', resize)
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerdown', handlePointerDown)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (rafRef.current) {
         window.cancelAnimationFrame(rafRef.current)
         rafRef.current = null
