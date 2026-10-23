@@ -34,7 +34,7 @@
     "docs:preview": "vitepress preview docs"
   },
   "devDependencies": {
-    "@hacxy/bump": "^0.3.2",
+    "@hacxy/bump": "^0.4.0",
     "@hacxy/eslint-config": "^0.5.5",
     "@hacxy/fe": "^0.6.1",
     "@hacxy/tsconfig": "^0.1.0",
