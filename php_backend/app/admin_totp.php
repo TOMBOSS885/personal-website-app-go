@@ -32,7 +32,14 @@ function app_require_schema_019(): void
 function app_admin_totp_encryption_key(): string
 {
     $config = app_config();
-    $material = (string) ($config['app']['setup_key'] ?? '') . '|' . (string) ($config['database']['name'] ?? '');
+    return hash('sha256', 'admin-totp-secret-v2|' . (string) ($config['app']['setup_key'] ?? ''), true);
+}
+
+function app_admin_totp_legacy_encryption_key(?string $databaseName = null): string
+{
+    $config = app_config();
+    $databaseName ??= (string) ($config['database']['name'] ?? '');
+    $material = (string) ($config['app']['setup_key'] ?? '') . '|' . $databaseName;
     return hash('sha256', 'admin-totp-secret|' . $material, true);
 }
 
@@ -43,20 +50,25 @@ function app_admin_totp_encrypt_secret(string $secret): string
     }
     $iv = random_bytes(12);
     $tag = '';
-    $cipher = openssl_encrypt($secret, 'aes-256-gcm', app_admin_totp_encryption_key(), OPENSSL_RAW_DATA, $iv, $tag, 'admin-totp-v1', 16);
+    $cipher = openssl_encrypt($secret, 'aes-256-gcm', app_admin_totp_encryption_key(), OPENSSL_RAW_DATA, $iv, $tag, 'admin-totp-v2', 16);
     if ($cipher === false || strlen($tag) !== 16) {
         throw new RuntimeException('Unable to encrypt the administrator two-factor secret.');
     }
-    return 'v1.' . base64_encode($iv) . '.' . base64_encode($tag) . '.' . base64_encode($cipher);
+    return 'v2.' . base64_encode($iv) . '.' . base64_encode($tag) . '.' . base64_encode($cipher);
 }
 
 function app_admin_totp_decrypt_secret(string $payload): string
+{
+    return app_admin_totp_decrypt_secret_with_database($payload, null);
+}
+
+function app_admin_totp_decrypt_secret_with_database(string $payload, ?string $legacyDatabaseName): string
 {
     if (!function_exists('openssl_decrypt')) {
         throw new RuntimeException('OpenSSL is required for administrator two-factor authentication.');
     }
     $parts = explode('.', $payload);
-    if (count($parts) !== 4 || $parts[0] !== 'v1') {
+    if (count($parts) !== 4 || !in_array($parts[0], ['v1', 'v2'], true)) {
         throw new RuntimeException('The administrator two-factor secret has an invalid format.');
     }
     $iv = base64_decode($parts[1], true);
@@ -65,11 +77,35 @@ function app_admin_totp_decrypt_secret(string $payload): string
     if ($iv === false || strlen($iv) !== 12 || $tag === false || strlen($tag) !== 16 || $cipher === false) {
         throw new RuntimeException('The administrator two-factor secret is damaged.');
     }
-    $secret = openssl_decrypt($cipher, 'aes-256-gcm', app_admin_totp_encryption_key(), OPENSSL_RAW_DATA, $iv, $tag, 'admin-totp-v1');
+    $isPortable = $parts[0] === 'v2';
+    $key = $isPortable ? app_admin_totp_encryption_key() : app_admin_totp_legacy_encryption_key($legacyDatabaseName);
+    $aad = $isPortable ? 'admin-totp-v2' : 'admin-totp-v1';
+    $secret = openssl_decrypt($cipher, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, $aad);
     if (!is_string($secret) || $secret === '') {
         throw new RuntimeException('Unable to decrypt the administrator two-factor secret. Check setup_key.');
     }
     return $secret;
+}
+
+function app_admin_totp_reencrypt_legacy_secret(string $payload, ?string $legacyDatabaseName = null): string
+{
+    if (!str_starts_with($payload, 'v1.')) return $payload;
+    $secret = app_admin_totp_decrypt_secret_with_database($payload, $legacyDatabaseName);
+    return $secret === '' ? $payload : app_admin_totp_encrypt_secret($secret);
+}
+
+function app_admin_totp_reencrypt_legacy_secrets(?string $legacyDatabaseName = null): int
+{
+    if (!app_schema_019_ready()) return 0;
+    $rows = app_db()->query("SELECT id, totp_secret_encrypted FROM admin_account WHERE totp_secret_encrypted IS NOT NULL AND totp_secret_encrypted LIKE 'v1.%'")->fetchAll();
+    $updated = 0;
+    foreach ($rows as $row) {
+        $next = app_admin_totp_reencrypt_legacy_secret((string) $row['totp_secret_encrypted'], $legacyDatabaseName);
+        if ($next === (string) $row['totp_secret_encrypted']) continue;
+        app_db()->prepare('UPDATE admin_account SET totp_secret_encrypted=?, updated_at=NOW() WHERE id=?')->execute([$next, (int) $row['id']]);
+        $updated++;
+    }
+    return $updated;
 }
 
 function app_admin_totp_base32_encode(string $binary): string

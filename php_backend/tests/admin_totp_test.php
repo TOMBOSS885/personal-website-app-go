@@ -38,8 +38,15 @@ assert_true(app_admin_totp_verify($encoded, '28708', null, 59) === null, 'short 
 
 $secret = 'JBSWY3DPEHPK3PXP';
 $encrypted = app_admin_totp_encrypt_secret($secret);
-assert_true(str_starts_with($encrypted, 'v1.'), 'encrypted secret should use v1 payload format');
+assert_true(str_starts_with($encrypted, 'v2.'), 'encrypted secret should use v2 payload format');
 assert_true(app_admin_totp_decrypt_secret($encrypted) === $secret, 'TOTP secret encrypt/decrypt roundtrip failed');
 assert_true($encrypted !== app_admin_totp_encrypt_secret($secret), 'TOTP encryption must use a unique IV');
+
+$legacyIv = random_bytes(12);
+$legacyTag = '';
+$legacyCipher = openssl_encrypt($secret, 'aes-256-gcm', app_admin_totp_legacy_encryption_key('personal_website_test'), OPENSSL_RAW_DATA, $legacyIv, $legacyTag, 'admin-totp-v1', 16);
+$legacyPayload = 'v1.' . base64_encode($legacyIv) . '.' . base64_encode($legacyTag) . '.' . base64_encode($legacyCipher);
+assert_true(app_admin_totp_decrypt_secret($legacyPayload) === $secret, 'legacy TOTP payload must remain readable');
+assert_true(str_starts_with(app_admin_totp_reencrypt_legacy_secret($legacyPayload), 'v2.'), 'legacy TOTP payload must be upgradeable');
 
 fwrite(STDOUT, "admin_totp_test ok\n");

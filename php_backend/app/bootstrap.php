@@ -16,6 +16,7 @@ require_once __DIR__ . '/mind_maps.php';
 require_once __DIR__ . '/mail_templates.php';
 require_once __DIR__ . '/mail.php';
 require_once __DIR__ . '/admin_totp.php';
+require_once __DIR__ . '/webdav_backup.php';
 
 const APP_BACKUP_MAX_ARCHIVE_BYTES = 536870912;
 const APP_BACKUP_MAX_FILES = 20000;
@@ -735,7 +736,7 @@ function app_public_feed(string $format = 'rss'): void
 
 function app_admin_backup_manifest(): array
 {
-    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'oauth_transactions', 'articles', 'projects', 'skills', 'feature_cards', 'tags', 'article_tags', 'project_tags', 'site_profile', 'site_settings', 'mail_settings', 'email_verification_codes', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'site_visits', 'site_analytics_visitors', 'site_analytics_totals', 'admin_operation_logs', 'mind_maps', 'mind_map_revisions'];
+    $tables = ['admin_account', 'user_accounts', 'oauth_identities', 'oauth_transactions', 'articles', 'projects', 'skills', 'feature_cards', 'tags', 'article_tags', 'project_tags', 'site_profile', 'site_settings', 'mail_settings', 'email_verification_codes', 'themes', 'live2d_settings', 'live2d_models', 'upload_settings', 'friend_links', 'guest_messages', 'guest_message_rate_limits', 'site_visits', 'site_visit_dedup', 'site_analytics_visitors', 'site_analytics_totals', 'analytics_rate_limits', 'analytics_report_cache', 'admin_login_attempts', 'article_unlock_attempts', 'admin_operation_logs', 'mind_maps', 'mind_map_revisions', 'webdav_backup_settings'];
     $counts = [];
     foreach ($tables as $table) {
         try { $counts[$table] = (int) app_db()->query("SELECT COUNT(*) FROM `$table`")->fetchColumn(); } catch (Throwable $error) { $counts[$table] = null; }
@@ -762,7 +763,7 @@ function app_admin_backup_manifest(): array
             error_log('Backup manifest upload scan failed: ' . $error->getMessage());
         }
     }
-    return ['generatedAt' => date(DATE_ATOM), 'schema' => '019', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '清单包含数据表数量和 uploads 文件列表。'];
+    return ['generatedAt' => date(DATE_ATOM), 'schema' => '020', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '数据库导出会动态包含当前数据库的全部表，清单同时显示 WebDAV 配置和上传文件。'];
 }
 
 function app_schema_010_ready(): bool
@@ -1206,6 +1207,23 @@ function app_backup_validate_app_settings(array $settings): array
     return $validated;
 }
 
+function app_backup_read_settings_file(string $path): array
+{
+    $raw = @file_get_contents($path);
+    if (!is_string($raw) || strlen($raw) > APP_BACKUP_MAX_SETTINGS_BYTES) throw new RuntimeException('Backup application settings are invalid.');
+    $decoded = json_decode($raw, true);
+    if (is_array($decoded)) return $decoded;
+    return app_backup_parse_legacy_settings($path);
+}
+
+function app_backup_source_database_name(string $path): string
+{
+    $settings = app_backup_read_settings_file($path);
+    $source = trim((string) ($settings['source_database_name'] ?? ''));
+    if ($source !== '' && !preg_match('/^[A-Za-z0-9_]+$/', $source)) throw new RuntimeException('Backup source database name is invalid.');
+    return $source;
+}
+
 function app_backup_validate_oauth_settings($oauth): array
 {
     if (!is_array($oauth)) throw new RuntimeException('Backup OAuth settings are invalid.');
@@ -1237,9 +1255,7 @@ function app_backup_validate_oauth_settings($oauth): array
 function app_backup_apply_app_settings(array|string $settings): void
 {
     if (is_string($settings)) {
-        $raw = @file_get_contents($settings);
-        $decoded = is_string($raw) ? json_decode($raw, true) : null;
-        $settings = is_array($decoded) ? $decoded : app_backup_parse_legacy_settings($settings);
+        $settings = app_backup_read_settings_file($settings);
     }
     $oauth = array_key_exists('oauth', $settings) ? app_backup_validate_oauth_settings($settings['oauth']) : null;
     unset($settings['oauth']);
@@ -1255,6 +1271,14 @@ function app_backup_apply_app_settings(array|string $settings): void
         @unlink($temporary);
         throw new RuntimeException('鎭㈠搴旂敤閰嶇疆澶辫触');
     }
+}
+
+function app_rekey_legacy_secrets(?string $legacyDatabaseName = null): array
+{
+    $result = ['smtp' => false, 'totp' => 0];
+    try { $result['smtp'] = app_mail_reencrypt_legacy_settings($legacyDatabaseName); } catch (Throwable $error) { error_log('SMTP secret migration skipped: ' . $error->getMessage()); }
+    try { $result['totp'] = app_admin_totp_reencrypt_legacy_secrets($legacyDatabaseName); } catch (Throwable $error) { error_log('TOTP secret migration skipped: ' . $error->getMessage()); }
+    return $result;
 }
 
 function app_backup_add_uploads_to_archive(ZipArchive $zip): void
@@ -1285,12 +1309,13 @@ function app_backup_create_archive(string $zipPath, string $password): array
         $fullConfig = app_config();
         $safeSettings = [];
         foreach (['production', 'timezone', 'session_name', 'admin_path_suffix', 'setup_key', 'analytics_key', 'site_url', 'article_site_url_ttl_seconds'] as $key) if (array_key_exists($key, $app)) $safeSettings[$key] = $app[$key];
+        $safeSettings['source_database_name'] = (string) ($fullConfig['database']['name'] ?? '');
         if (isset($fullConfig['oauth']) && is_array($fullConfig['oauth'])) $safeSettings['oauth'] = $fullConfig['oauth'];
         $settingsPath = $working . '/app-settings.json';
         $settingsJson = json_encode($safeSettings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         if (@file_put_contents($settingsPath, $settingsJson, LOCK_EX) === false) throw new RuntimeException('Unable to create encrypted app settings.');
         $encryptedSettings = app_backup_encrypt_file($settingsPath, $password);
-        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 3, 'generatedAt' => date(DATE_ATOM), 'schema' => '019', 'database' => $databaseStats + ['schemaTables' => $schemaStats['tables']], 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'database-schema.json.enc' => $encryptedSchema['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'Database structure, data, OAuth settings, and uploads are included. Database and settings are encrypted with the backup password.'], 'manifest' => app_admin_backup_manifest()];
+        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 3, 'generatedAt' => date(DATE_ATOM), 'schema' => '020', 'database' => $databaseStats + ['schemaTables' => $schemaStats['tables']], 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'database-schema.json.enc' => $encryptedSchema['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'Database structure, data, OAuth/SMTP/2FA/WebDAV settings, and uploads are included. Database and settings are encrypted with the backup password.'], 'manifest' => app_admin_backup_manifest()];
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('Unable to create the backup archive.');
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
@@ -1378,7 +1403,7 @@ function app_admin_backup_export(): void
 {
     app_require_schema_010();
     app_require_schema_011();
-    app_require_schema_019();
+    app_require_schema_020();
     $body = app_body();
     $password = app_backup_require_password($body['password'] ?? '');
     if (!class_exists('ZipArchive')) app_error(503, '涓绘満鏈惎鐢?PHP ZipArchive 鎵╁睍', 'ZIP_EXTENSION_REQUIRED');
@@ -1402,7 +1427,7 @@ function app_admin_backup_export(): void
 
 function app_admin_backup_import(): void
 {
-    app_require_schema_019();
+    app_require_schema_020();
     $password = app_backup_require_password($_POST['password'] ?? '');
     if (!class_exists('ZipArchive')) app_error(503, '涓绘満鏈惎鐢?PHP ZipArchive 鎵╁睍', 'ZIP_EXTENSION_REQUIRED');
     $file = $_FILES['backup'] ?? null;
@@ -1419,6 +1444,7 @@ function app_admin_backup_import(): void
     $zip = new ZipArchive();
     $oldUploads = '';
     $newUploads = '';
+    $sourceDatabaseName = '';
     $configPath = dirname(__DIR__) . '/config/config.php';
     $configBefore = $working . '/config-before.php';
     try {
@@ -1471,6 +1497,7 @@ function app_admin_backup_import(): void
             app_backup_execute_schema($working . '/database-schema.json');
         }
         app_backup_decrypt_file($working . '/config/app-settings.php.enc', $password, $encryption['config/app-settings.php.enc'], $working . '/app-settings.php');
+        $sourceDatabaseName = app_backup_source_database_name($working . '/app-settings.php');
         app_backup_apply_app_settings($working . '/app-settings.php');
         $uploadRoot = rtrim((string) app_config()['app']['upload_dir'], '/\\');
         $newUploads = $uploadRoot . '.restore-' . bin2hex(random_bytes(6));
@@ -1492,6 +1519,7 @@ function app_admin_backup_import(): void
         if (is_dir($uploadRoot) && !@rename($uploadRoot, $oldUploads)) throw new RuntimeException('鏃犳硶鏆傚瓨鍘?uploads 鐩綍');
         if (is_dir($newUploads) && !@rename($newUploads, $uploadRoot)) { if ($oldUploads !== '' && is_dir($oldUploads)) @rename($oldUploads, $uploadRoot); throw new RuntimeException('鏃犳硶鍒囨崲鏂扮殑 uploads 鐩綍'); }
         app_backup_execute_sql($working . '/database.sql');
+        app_rekey_legacy_secrets($sourceDatabaseName !== '' ? $sourceDatabaseName : null);
         if ($oldUploads !== '' && is_dir($oldUploads)) app_backup_remove_tree($oldUploads);
         app_backup_remove_tree($working);
         app_destroy_session_state();
@@ -2490,10 +2518,12 @@ function app_handle_request(): void
             app_require_schema_017();
             app_require_schema_018();
             app_require_schema_019();
-            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '019']);
+            app_require_schema_020();
+            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '020']);
         }
         if ($method === 'POST' && $route === 'auth/login') app_handle_login();
         if ($method === 'POST' && $route === 'auth/two-factor') app_admin_totp_complete_pending_login();
+        if (in_array($method, ['GET', 'POST'], true) && $route === 'webdav-backup/cron') app_webdav_cron();
         if ($method === 'POST' && $route === 'auth/logout') {
             if (!empty($_SESSION['admin_id'])) app_csrf_required();
             app_audit_logout();
@@ -2689,8 +2719,8 @@ function app_handle_request(): void
         if ($method === 'PUT' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_update((int) $match[1]);
         if ($method === 'DELETE' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_delete((int) $match[1]);
         if ($method === 'GET' && $route === 'admin/audit-logs') { app_require_schema_012(); app_json(app_audit_logs()); }
-        if ($method === 'GET' && $route === 'admin/backup-manifest') { app_require_schema_019(); app_json(app_admin_backup_manifest()); }
-        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_require_schema_017(); app_require_schema_018(); app_require_schema_019(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '019', 'manifest' => app_admin_backup_manifest()]); }
+        if ($method === 'GET' && $route === 'admin/backup-manifest') { app_require_schema_020(); app_json(app_admin_backup_manifest()); }
+        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_require_schema_017(); app_require_schema_018(); app_require_schema_019(); app_require_schema_020(); app_rekey_legacy_secrets(); app_webdav_maybe_run_due(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '020', 'manifest' => app_admin_backup_manifest(), 'webdav' => app_webdav_settings_public(app_webdav_settings_ensure())]); }
         // Keep the descriptive /two-factor aliases as the public contract;
         // /2fa remains accepted for older clients and shared-host rollouts.
         if ($method === 'GET' && in_array($route, ['admin/two-factor/status', 'admin/2fa/status'], true)) app_json(app_admin_totp_status());
@@ -2699,6 +2729,12 @@ function app_handle_request(): void
         if ($method === 'POST' && in_array($route, ['admin/two-factor/disable', 'admin/2fa/disable'], true)) app_json(app_admin_totp_disable());
         if ($method === 'POST' && $route === 'admin/backup-export') app_admin_backup_export();
         if ($method === 'POST' && $route === 'admin/backup-import') app_admin_backup_import();
+        if ($method === 'GET' && $route === 'admin/webdav-backup/settings') { app_require_schema_020(); $webdavSettings = app_webdav_settings_ensure(); app_json(app_webdav_settings_public($webdavSettings, app_webdav_decrypt((string) ($webdavSettings['cron_token_encrypted'] ?? '')))); }
+        if ($method === 'PUT' && $route === 'admin/webdav-backup/settings') app_json(app_webdav_save_settings());
+        if ($method === 'POST' && $route === 'admin/webdav-backup/test') { app_require_schema_020(); app_json(app_webdav_test()); }
+        if ($method === 'GET' && $route === 'admin/webdav-backup/list') { app_require_schema_020(); app_json(['items' => app_webdav_list_remote()]); }
+        if ($method === 'POST' && $route === 'admin/webdav-backup/run') { app_require_schema_020(); app_json(app_webdav_run_backup(true)); }
+        if ($method === 'POST' && $route === 'admin/webdav-backup/restore') { app_require_schema_020(); app_webdav_restore_remote(); }
         if ($method === 'GET' && $route === 'admin/friends') app_json(app_admin_friend_links());
         if ($method === 'POST' && $route === 'admin/friends') app_json(app_save_friend_link(null), 201);
         if (preg_match('#^admin/friends/(\d+)$#', $route, $match)) {

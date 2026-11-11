@@ -54,7 +54,13 @@ function app_mail_settings_public(array $row): array
 
 function app_mail_crypto_key(): string
 {
-    return hash('sha256', 'smtp-password|' . (string) (app_config()['app']['setup_key'] ?? '') . '|' . (string) (app_config()['database']['name'] ?? ''), true);
+    return hash('sha256', 'smtp-password-v2|' . (string) (app_config()['app']['setup_key'] ?? ''), true);
+}
+
+function app_mail_legacy_crypto_key(?string $databaseName = null): string
+{
+    $databaseName ??= (string) (app_config()['database']['name'] ?? '');
+    return hash('sha256', 'smtp-password|' . (string) (app_config()['app']['setup_key'] ?? '') . '|' . $databaseName, true);
 }
 
 function app_mail_encrypt_password(string $password): string
@@ -63,22 +69,48 @@ function app_mail_encrypt_password(string $password): string
     if (!function_exists('openssl_encrypt')) app_error(500, '服务器不支持安全的 SMTP 密码加密。', 'SMTP_ENCRYPTION_UNAVAILABLE');
     $iv = random_bytes(12);
     $tag = '';
-    $cipher = openssl_encrypt($password, 'aes-256-gcm', app_mail_crypto_key(), OPENSSL_RAW_DATA, $iv, $tag, '', 16);
+    $cipher = openssl_encrypt($password, 'aes-256-gcm', app_mail_crypto_key(), OPENSSL_RAW_DATA, $iv, $tag, 'smtp-password-v2', 16);
     if (!is_string($cipher) || $cipher === '' || $tag === '') app_error(500, 'SMTP 密码加密失败。', 'SMTP_ENCRYPTION_FAILED');
-    return 'v1.' . base64_encode($iv) . '.' . base64_encode($tag) . '.' . base64_encode($cipher);
+    return 'v2.' . base64_encode($iv) . '.' . base64_encode($tag) . '.' . base64_encode($cipher);
 }
 
 function app_mail_decrypt_password(string $value): string
 {
+    return app_mail_decrypt_password_with_database($value, null);
+}
+
+function app_mail_decrypt_password_with_database(string $value, ?string $legacyDatabaseName): string
+{
     if (!function_exists('openssl_decrypt')) return '';
     $parts = explode('.', $value);
-    if (count($parts) !== 4 || $parts[0] !== 'v1') return '';
+    if (count($parts) !== 4 || !in_array($parts[0], ['v1', 'v2'], true)) return '';
     $iv = base64_decode($parts[1], true);
     $tag = base64_decode($parts[2], true);
     $cipher = base64_decode($parts[3], true);
     if ($iv === false || $tag === false || $cipher === false) return '';
-    $plain = openssl_decrypt($cipher, 'aes-256-gcm', app_mail_crypto_key(), OPENSSL_RAW_DATA, $iv, $tag);
+    $isPortable = $parts[0] === 'v2';
+    $key = $isPortable ? app_mail_crypto_key() : app_mail_legacy_crypto_key($legacyDatabaseName);
+    $aad = $isPortable ? 'smtp-password-v2' : '';
+    $plain = openssl_decrypt($cipher, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag, $aad);
     return is_string($plain) ? $plain : '';
+}
+
+function app_mail_reencrypt_legacy_password(string $value, ?string $legacyDatabaseName = null): string
+{
+    if (!str_starts_with($value, 'v1.')) return $value;
+    $plain = app_mail_decrypt_password_with_database($value, $legacyDatabaseName);
+    return $plain === '' ? $value : app_mail_encrypt_password($plain);
+}
+
+function app_mail_reencrypt_legacy_settings(?string $legacyDatabaseName = null): bool
+{
+    if (!app_schema_017_ready()) return false;
+    $row = app_db()->query('SELECT id, smtp_password_encrypted FROM mail_settings WHERE id = 1')->fetch();
+    if (!is_array($row) || !str_starts_with((string) ($row['smtp_password_encrypted'] ?? ''), 'v1.')) return false;
+    $next = app_mail_reencrypt_legacy_password((string) $row['smtp_password_encrypted'], $legacyDatabaseName);
+    if ($next === (string) $row['smtp_password_encrypted']) return false;
+    app_db()->prepare('UPDATE mail_settings SET smtp_password_encrypted=?, updated_at=NOW() WHERE id=1')->execute([$next]);
+    return true;
 }
 
 function app_mail_validate_settings(array $row, bool $requireEnabled = true): void
