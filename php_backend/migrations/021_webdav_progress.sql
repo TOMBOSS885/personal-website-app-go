@@ -1,0 +1,8 @@
+SET NAMES utf8mb4;
+SET time_zone = '+08:00';
+
+ALTER TABLE webdav_backup_settings
+    ADD COLUMN progress_percent TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    ADD COLUMN progress_stage VARCHAR(64) NOT NULL DEFAULT '',
+    ADD COLUMN progress_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    ADD COLUMN progress_total BIGINT UNSIGNED NOT NULL DEFAULT 0;

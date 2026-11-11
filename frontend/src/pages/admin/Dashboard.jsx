@@ -16,6 +16,9 @@ export default function Dashboard() {
   const [webdav, setWebdav] = useState(null)
   const [webdavForm, setWebdavForm] = useState({ enabled: false, endpointUrl: '', remotePath: 'personal-website', username: '', webdavPassword: '', backupPassword: '', scheduleMinutes: 1440, retentionCount: 7 })
   const [webdavNotice, setWebdavNotice] = useState('')
+  const [webdavDiagnostic, setWebdavDiagnostic] = useState(null)
+  const [webdavSaveState, setWebdavSaveState] = useState('idle')
+  const [webdavProgress, setWebdavProgress] = useState({ active: false, percent: 0, label: '' })
   const [webdavBusy, setWebdavBusy] = useState(false)
   const [remoteBackups, setRemoteBackups] = useState([])
   const [loading, setLoading] = useState(true)
@@ -33,6 +36,30 @@ export default function Dashboard() {
       .catch(err => console.error('获取统计失败:', err))
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (webdav?.lastStatus !== 'running') return undefined
+    const timer = window.setInterval(() => {
+      fetch(`${API_BASE}/api/admin/webdav-backup/settings`, { cache: 'no-store' })
+        .then(response => response.ok ? response.json() : null)
+        .then(data => { if (data) { setWebdav(data); if (data.lastStatus === 'running') setWebdavProgress({ active: true, percent: Number(data.progressPercent) || 0, label: data.progressStage || '自动备份执行中' }) } })
+        .catch(() => {})
+    }, 3000)
+    setWebdavProgress(current => current.active ? current : { active: true, percent: 0, label: '自动备份执行中' })
+    return () => window.clearInterval(timer)
+  }, [webdav?.lastStatus])
+
+  useEffect(() => {
+    if (!webdavProgress.active || !webdavProgress.label.startsWith('自动备份')) return
+    if (webdav?.lastStatus === 'success' || webdav?.lastStatus === 'error') {
+      const success = webdav.lastStatus === 'success'
+      setWebdavProgress({ active: true, percent: 100, label: success ? '自动备份保存成功' : '自动备份保存失败' })
+      setWebdavNotice(success ? `自动备份保存成功：${webdav.lastRemoteName || '已上传'}` : `自动备份保存失败：${webdav.lastError || '请查看详细诊断'}`)
+      const timer = window.setTimeout(() => setWebdavProgress(current => ({ ...current, active: false })), 1800)
+      return () => window.clearTimeout(timer)
+    }
+    return undefined
+  }, [webdav?.lastStatus, webdav?.lastRemoteName, webdav?.lastError, webdavProgress.active, webdavProgress.label])
 
   const loadHealth = () => {
     setHealthLoading(true)
@@ -53,30 +80,30 @@ export default function Dashboard() {
 
   const updateWebdavForm = (key, value) => setWebdavForm(current => ({ ...current, [key]: value }))
   const saveWebdav = async () => {
-    setWebdavBusy(true); setWebdavNotice('')
+    setWebdavBusy(true); setWebdavNotice(''); setWebdavSaveState('idle')
     try {
       const response = await fetch(`${API_BASE}/api/admin/webdav-backup/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(webdavForm) })
       const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || '保存 WebDAV 设置失败')
-      setWebdav(data); setWebdavForm(current => ({ ...current, webdavPassword: '', backupPassword: '' })); setWebdavNotice('WebDAV 设置已保存')
-    } catch (error) { setWebdavNotice(error.message || '保存 WebDAV 设置失败') } finally { setWebdavBusy(false) }
+      setWebdav(data); setWebdavForm(current => ({ ...current, webdavPassword: '', backupPassword: '' })); setWebdavNotice('WebDAV 设置保存成功'); setWebdavSaveState('success')
+    } catch (error) { setWebdavNotice(`WebDAV 设置保存失败：${error.message || '未知错误'}`); setWebdavSaveState('error') } finally { setWebdavBusy(false) }
   }
   const testWebdav = async () => {
-    setWebdavBusy(true); setWebdavNotice('正在测试 WebDAV...')
-    try { const response = await fetch(`${API_BASE}/api/admin/webdav-backup/test`, { method: 'POST' }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || '连接失败'); setWebdavNotice(data.message || 'WebDAV 连接成功') } catch (error) { setWebdavNotice(error.message || 'WebDAV 连接失败') } finally { setWebdavBusy(false) }
+    setWebdavBusy(true); setWebdavNotice('正在测试 WebDAV...'); setWebdavDiagnostic(null)
+    try { const response = await fetch(`${API_BASE}/api/admin/webdav-backup/test`, { method: 'POST' }); const data = await response.json().catch(() => ({})); if (!response.ok) { const error = new Error(data.message || '连接失败'); error.diagnostics = data.details; throw error } setWebdavNotice(data.message || 'WebDAV 连接成功'); setWebdavDiagnostic(data.diagnostics || null) } catch (error) { setWebdavNotice(error.message || 'WebDAV 连接失败'); setWebdavDiagnostic(error.diagnostics || { phase: 'browser', httpStatus: 0, reason: error.message || '浏览器请求失败', hint: '检查站点网络、登录状态和浏览器开发者工具中的 Network 请求。' }) } finally { setWebdavBusy(false) }
   }
   const runWebdavBackup = async () => {
-    setWebdavBusy(true); setWebdavNotice('正在生成并上传备份...')
-    try { const response = await fetch(`${API_BASE}/api/admin/webdav-backup/run`, { method: 'POST' }); const result = await response.json().catch(() => ({})); if (!response.ok) throw new Error(result.message || 'WebDAV 备份失败'); setWebdavNotice(`备份已上传：${result.remoteName || '完成'}`); setWebdav(current => ({ ...(current || {}), lastStatus: 'success', lastRemoteName: result.remoteName || '' })) } catch (error) { setWebdavNotice(error.message || 'WebDAV 备份失败') } finally { setWebdavBusy(false) }
+    setWebdavBusy(true); setWebdavNotice('正在生成并上传备份...'); setWebdavDiagnostic(null); setWebdavProgress({ active: true, percent: 1, label: '准备备份' });
+    try { const response = await fetch(`${API_BASE}/api/admin/webdav-backup/run`, { method: 'POST' }); const result = await response.json().catch(() => ({})); if (!response.ok) { const error = new Error(result.message || 'WebDAV 备份失败'); error.diagnostics = result.details; throw error } setWebdavProgress({ active: true, percent: 100, label: '备份保存成功' }); setWebdavNotice(`备份保存成功：${result.remoteName || '已上传'}`); setWebdav(current => ({ ...(current || {}), lastStatus: 'success', lastRemoteName: result.remoteName || '', progressPercent: 100, progressStage: '保存成功' })); window.setTimeout(() => setWebdavProgress(current => ({ ...current, active: false })), 1200) } catch (error) { setWebdavProgress({ active: true, percent: 100, label: '备份保存失败' }); setWebdavNotice(`备份保存失败：${error.message || '未知错误'}`); setWebdavDiagnostic(error.diagnostics || { phase: 'upload', httpStatus: 0, reason: error.message || '上传失败', hint: '查看服务器 PHP error_log。' }); window.setTimeout(() => setWebdavProgress(current => ({ ...current, active: false })), 1800) } finally { setWebdavBusy(false) }
   }
   const listWebdavBackups = async () => {
-    setWebdavBusy(true)
-    try { const response = await fetch(`${API_BASE}/api/admin/webdav-backup/list`, { cache: 'no-store' }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || '读取远程备份失败'); setRemoteBackups(Array.isArray(data.items) ? data.items : []); setWebdavNotice(`已读取 ${Array.isArray(data.items) ? data.items.length : 0} 个远程备份`) } catch (error) { setWebdavNotice(error.message || '读取远程备份失败') } finally { setWebdavBusy(false) }
+    setWebdavBusy(true); setWebdavDiagnostic(null)
+    try { const response = await fetch(`${API_BASE}/api/admin/webdav-backup/list`, { cache: 'no-store' }); const data = await response.json().catch(() => ({})); if (!response.ok) { const error = new Error(data.message || '读取远程备份失败'); error.diagnostics = data.details; throw error } setRemoteBackups(Array.isArray(data.items) ? data.items : []); setWebdavNotice(`已读取 ${Array.isArray(data.items) ? data.items.length : 0} 个远程备份`) } catch (error) { setWebdavNotice(error.message || '读取远程备份失败'); setWebdavDiagnostic(error.diagnostics || { phase: 'list', httpStatus: 0, reason: error.message || '读取失败', hint: '检查远程目录读取权限。' }) } finally { setWebdavBusy(false) }
   }
   const restoreWebdavBackup = async name => {
     if (!window.confirm(`恢复 ${name} 会替换当前数据库和 uploads，确定继续吗？`)) return
     const password = window.prompt('请输入该备份密码'); if (!password) return
-    setWebdavBusy(true); setWebdavNotice('正在下载并恢复远程备份...')
-    try { const response = await fetch(`${API_BASE}/api/admin/webdav-backup/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, password }) }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || '远程恢复失败'); setWebdavNotice('恢复成功，正在返回登录页...'); window.setTimeout(() => { window.location.href = `${adminBasePath}/login` }, 700) } catch (error) { setWebdavNotice(error.message || '远程恢复失败') } finally { setWebdavBusy(false) }
+    setWebdavBusy(true); setWebdavNotice('正在下载并恢复远程备份...'); setWebdavDiagnostic(null)
+    try { const response = await fetch(`${API_BASE}/api/admin/webdav-backup/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, password }) }); const data = await response.json().catch(() => ({})); if (!response.ok) { const error = new Error(data.message || '远程恢复失败'); error.diagnostics = data.details; throw error } setWebdavNotice('恢复成功，正在返回登录页...'); window.setTimeout(() => { window.location.href = `${adminBasePath}/login` }, 700) } catch (error) { setWebdavNotice(error.message || '远程恢复失败'); setWebdavDiagnostic(error.diagnostics || { phase: 'restore', httpStatus: 0, reason: error.message || '恢复失败', hint: '确认备份密码和远程文件读取权限。' }) } finally { setWebdavBusy(false) }
   }
   const copyCronToken = async () => { if (!webdav?.cronToken) return; try { await navigator.clipboard.writeText(webdav.cronToken); setWebdavNotice('Cron Token 已复制') } catch { setWebdavNotice('复制失败，请手动复制') } }
 
@@ -187,8 +214,11 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3"><label className="text-sm text-gray-600 dark:text-slate-300">间隔（分钟）<input type="number" min="5" max="10080" value={webdavForm.scheduleMinutes} onChange={event => updateWebdavForm('scheduleMinutes', event.target.value)} className="admin-input mt-1" /></label><label className="text-sm text-gray-600 dark:text-slate-300">保留份数<input type="number" min="1" max="100" value={webdavForm.retentionCount} onChange={event => updateWebdavForm('retentionCount', event.target.value)} className="admin-input mt-1" /></label></div>
           </div>
           <div className="mt-4 flex flex-wrap items-center gap-3"><label className="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-200"><input type="checkbox" checked={webdavForm.enabled} onChange={event => updateWebdavForm('enabled', event.target.checked)} />启用自动备份</label><button type="button" onClick={saveWebdav} disabled={webdavBusy} className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"><Save className="h-4 w-4" />保存设置</button></div>
+          {webdavSaveState !== 'idle' && <p className={`mt-2 text-sm ${webdavSaveState === 'success' ? 'text-emerald-600' : 'text-rose-600'}`} role="status">{webdavSaveState === 'success' ? '设置保存成功' : '设置保存失败，请查看提示信息'}</p>}
+          {webdavProgress.active && <div className="mt-4 rounded-lg border border-sky-100 bg-sky-50/60 p-3 dark:border-sky-500/20 dark:bg-sky-500/10" role="status" aria-live="polite"><div className="flex items-center justify-between gap-3 text-sm text-sky-800 dark:text-sky-200"><span>{webdavProgress.label}</span><span>{webdavProgress.percent}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-sky-100 dark:bg-slate-700"><div className={`h-full rounded-full bg-sky-500 transition-all duration-500 ${webdavProgress.percent < 100 ? 'animate-pulse' : ''}`} style={{ width: `${webdavProgress.percent}%` }} /></div></div>}
           <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs text-gray-500 dark:bg-slate-800/70 dark:text-slate-400"><p>状态：{webdav.lastStatus === 'success' ? '正常' : webdav.lastStatus === 'error' ? '最近一次失败' : '尚未执行'}{webdav.lastRunAt ? ` · ${webdav.lastRunAt}` : ''}{webdav.nextRunAt ? ` · 下次 ${webdav.nextRunAt}` : ''}</p>{webdav.lastError && <p className="mt-1 text-rose-500">最近错误：{webdav.lastError}</p>}<p className="mt-1">请在主机 Cron/Web Cron 中定期访问下面接口，频率由后台设置控制。</p>{webdav.cronToken && <div className="mt-2 flex flex-wrap items-center gap-2"><code className="break-all">/api/webdav-backup/cron?token={webdav.cronToken}</code><button type="button" onClick={copyCronToken} className="inline-flex items-center gap-1 text-sky-600 hover:underline"><Copy className="h-3.5 w-3.5" />复制 Token</button></div>}</div>
           {webdavNotice && <p className="mt-3 text-sm text-sky-600 dark:text-sky-300" role="status">{webdavNotice}</p>}
+          {webdavDiagnostic && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200" role="alert"><p className="font-semibold">详细诊断</p><dl className="mt-2 grid gap-1 sm:grid-cols-[120px_1fr]"><dt>操作</dt><dd>{webdavDiagnostic.operation || 'WebDAV'}</dd><dt>阶段</dt><dd>{webdavDiagnostic.phase || '未知'}</dd><dt>HTTP 状态</dt><dd>{webdavDiagnostic.httpStatus || '无 HTTP 响应'}</dd><dt>原因</dt><dd className="break-words">{webdavDiagnostic.reason || '未提供原因'}</dd><dt>建议</dt><dd className="break-words">{webdavDiagnostic.hint || '请查看服务器 PHP error_log。'}</dd></dl></div>}
           {remoteBackups.length > 0 && <div className="mt-4 overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700"><table className="min-w-full text-left text-sm"><thead className="bg-gray-50 dark:bg-slate-800"><tr><th className="px-3 py-2">远程备份</th><th className="px-3 py-2 text-right">操作</th></tr></thead><tbody className="divide-y divide-gray-100 dark:divide-slate-800">{remoteBackups.map(item => <tr key={item.name}><td className="px-3 py-2 font-mono text-xs text-gray-600 dark:text-slate-300">{item.name}</td><td className="px-3 py-2 text-right"><button type="button" onClick={() => restoreWebdavBackup(item.name)} disabled={webdavBusy} className="text-amber-600 hover:underline disabled:opacity-50">输入密码并恢复</button></td></tr>)}</tbody></table></div>}
         </>}
       </div>

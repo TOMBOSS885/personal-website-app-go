@@ -216,10 +216,12 @@ function app_security_maybe_cleanup(): void
     }
 }
 
-function app_error(int $status, string $message, string $code = 'REQUEST_FAILED'): void
+function app_error(int $status, string $message, string $code = 'REQUEST_FAILED', array $details = []): void
 {
     if (function_exists('app_audit_set_context')) app_audit_set_context(['message' => $message]);
-    app_json(['message' => $message, 'code' => $code], $status);
+    $payload = ['message' => $message, 'code' => $code];
+    if ($details !== []) $payload['details'] = $details;
+    app_json($payload, $status);
 }
 
 function app_body(): array
@@ -763,7 +765,7 @@ function app_admin_backup_manifest(): array
             error_log('Backup manifest upload scan failed: ' . $error->getMessage());
         }
     }
-    return ['generatedAt' => date(DATE_ATOM), 'schema' => '020', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '数据库导出会动态包含当前数据库的全部表，清单同时显示 WebDAV 配置和上传文件。'];
+    return ['generatedAt' => date(DATE_ATOM), 'schema' => '021', 'tables' => $counts, 'uploadBytes' => $bytes, 'uploadFiles' => $files, 'uploadFilesTruncated' => $filesTruncated, 'note' => '数据库导出会动态包含当前数据库的全部表，清单同时显示 WebDAV 配置和实际上传进度。'];
 }
 
 function app_schema_010_ready(): bool
@@ -1315,7 +1317,7 @@ function app_backup_create_archive(string $zipPath, string $password): array
         $settingsJson = json_encode($safeSettings, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
         if (@file_put_contents($settingsPath, $settingsJson, LOCK_EX) === false) throw new RuntimeException('Unable to create encrypted app settings.');
         $encryptedSettings = app_backup_encrypt_file($settingsPath, $password);
-        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 3, 'generatedAt' => date(DATE_ATOM), 'schema' => '020', 'database' => $databaseStats + ['schemaTables' => $schemaStats['tables']], 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'database-schema.json.enc' => $encryptedSchema['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'Database structure, data, OAuth/SMTP/2FA/WebDAV settings, and uploads are included. Database and settings are encrypted with the backup password.'], 'manifest' => app_admin_backup_manifest()];
+        $manifest = ['format' => 'personal-website-portable-backup', 'version' => 3, 'generatedAt' => date(DATE_ATOM), 'schema' => '021', 'database' => $databaseStats + ['schemaTables' => $schemaStats['tables']], 'encryption' => ['algorithm' => 'AES-256-GCM', 'kdf' => 'PBKDF2-HMAC-SHA256', 'files' => ['database.sql.enc' => $encryptedSql['meta'], 'database-schema.json.enc' => $encryptedSchema['meta'], 'config/app-settings.json.enc' => $encryptedSettings['meta']], 'note' => 'Database structure, data, OAuth/SMTP/2FA/WebDAV settings, and uploads are included. Database and settings are encrypted with the backup password.'], 'manifest' => app_admin_backup_manifest()];
         $zip = new ZipArchive();
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('Unable to create the backup archive.');
         $zip->addFromString('manifest.json', json_encode($manifest, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT));
@@ -1403,7 +1405,7 @@ function app_admin_backup_export(): void
 {
     app_require_schema_010();
     app_require_schema_011();
-    app_require_schema_020();
+    app_require_schema_021();
     $body = app_body();
     $password = app_backup_require_password($body['password'] ?? '');
     if (!class_exists('ZipArchive')) app_error(503, '涓绘満鏈惎鐢?PHP ZipArchive 鎵╁睍', 'ZIP_EXTENSION_REQUIRED');
@@ -1427,7 +1429,7 @@ function app_admin_backup_export(): void
 
 function app_admin_backup_import(): void
 {
-    app_require_schema_020();
+    app_require_schema_021();
     $password = app_backup_require_password($_POST['password'] ?? '');
     if (!class_exists('ZipArchive')) app_error(503, '涓绘満鏈惎鐢?PHP ZipArchive 鎵╁睍', 'ZIP_EXTENSION_REQUIRED');
     $file = $_FILES['backup'] ?? null;
@@ -2518,8 +2520,8 @@ function app_handle_request(): void
             app_require_schema_017();
             app_require_schema_018();
             app_require_schema_019();
-            app_require_schema_020();
-            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '020']);
+            app_require_schema_021();
+            app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '021']);
         }
         if ($method === 'POST' && $route === 'auth/login') app_handle_login();
         if ($method === 'POST' && $route === 'auth/two-factor') app_admin_totp_complete_pending_login();
@@ -2719,8 +2721,8 @@ function app_handle_request(): void
         if ($method === 'PUT' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_update((int) $match[1]);
         if ($method === 'DELETE' && preg_match('#^admin/(?:users|user-accounts)/(\\d+)$#', $route, $match)) app_admin_user_delete((int) $match[1]);
         if ($method === 'GET' && $route === 'admin/audit-logs') { app_require_schema_012(); app_json(app_audit_logs()); }
-        if ($method === 'GET' && $route === 'admin/backup-manifest') { app_require_schema_020(); app_json(app_admin_backup_manifest()); }
-        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_require_schema_017(); app_require_schema_018(); app_require_schema_019(); app_require_schema_020(); app_rekey_legacy_secrets(); app_webdav_maybe_run_due(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '020', 'manifest' => app_admin_backup_manifest(), 'webdav' => app_webdav_settings_public(app_webdav_settings_ensure())]); }
+        if ($method === 'GET' && $route === 'admin/backup-manifest') { app_require_schema_021(); app_json(app_admin_backup_manifest()); }
+        if ($method === 'GET' && $route === 'admin/health') { app_require_schema_010(); app_require_schema_011(); app_require_schema_012(); app_require_schema_013(); app_require_schema_014(); app_require_schema_015(); app_require_schema_016(); app_require_schema_017(); app_require_schema_018(); app_require_schema_019(); app_require_schema_021(); app_rekey_legacy_secrets(); app_webdav_maybe_run_due(); app_json(['status' => 'ok', 'database' => 'ok', 'schema' => '021', 'manifest' => app_admin_backup_manifest(), 'webdav' => app_webdav_settings_public(app_webdav_settings_ensure())]); }
         // Keep the descriptive /two-factor aliases as the public contract;
         // /2fa remains accepted for older clients and shared-host rollouts.
         if ($method === 'GET' && in_array($route, ['admin/two-factor/status', 'admin/2fa/status'], true)) app_json(app_admin_totp_status());
@@ -2729,12 +2731,28 @@ function app_handle_request(): void
         if ($method === 'POST' && in_array($route, ['admin/two-factor/disable', 'admin/2fa/disable'], true)) app_json(app_admin_totp_disable());
         if ($method === 'POST' && $route === 'admin/backup-export') app_admin_backup_export();
         if ($method === 'POST' && $route === 'admin/backup-import') app_admin_backup_import();
-        if ($method === 'GET' && $route === 'admin/webdav-backup/settings') { app_require_schema_020(); $webdavSettings = app_webdav_settings_ensure(); app_json(app_webdav_settings_public($webdavSettings, app_webdav_decrypt((string) ($webdavSettings['cron_token_encrypted'] ?? '')))); }
+        if ($method === 'GET' && $route === 'admin/webdav-backup/settings') { app_require_schema_021(); $webdavSettings = app_webdav_settings_ensure(); app_json(app_webdav_settings_public($webdavSettings, app_webdav_decrypt((string) ($webdavSettings['cron_token_encrypted'] ?? '')))); }
         if ($method === 'PUT' && $route === 'admin/webdav-backup/settings') app_json(app_webdav_save_settings());
-        if ($method === 'POST' && $route === 'admin/webdav-backup/test') { app_require_schema_020(); app_json(app_webdav_test()); }
-        if ($method === 'GET' && $route === 'admin/webdav-backup/list') { app_require_schema_020(); app_json(['items' => app_webdav_list_remote()]); }
-        if ($method === 'POST' && $route === 'admin/webdav-backup/run') { app_require_schema_020(); app_json(app_webdav_run_backup(true)); }
-        if ($method === 'POST' && $route === 'admin/webdav-backup/restore') { app_require_schema_020(); app_webdav_restore_remote(); }
+        if ($method === 'POST' && $route === 'admin/webdav-backup/test') {
+            app_require_schema_021();
+            try { app_json(app_webdav_test()); }
+            catch (Throwable $error) { error_log('WebDAV test failed: ' . $error->__toString()); app_error(502, 'WebDAV 连接失败：' . $error->getMessage(), 'WEBDAV_TEST_FAILED'); }
+        }
+        if ($method === 'GET' && $route === 'admin/webdav-backup/list') {
+            app_require_schema_021();
+            try { app_json(['items' => app_webdav_list_remote()]); }
+            catch (Throwable $error) { app_webdav_fail($error, 'LIST'); }
+        }
+        if ($method === 'POST' && $route === 'admin/webdav-backup/run') {
+            app_require_schema_021();
+            try { app_json(app_webdav_run_backup(true)); }
+            catch (Throwable $error) { app_webdav_fail($error, 'UPLOAD'); }
+        }
+        if ($method === 'POST' && $route === 'admin/webdav-backup/restore') {
+            app_require_schema_021();
+            try { app_webdav_restore_remote(); }
+            catch (Throwable $error) { app_webdav_fail($error, 'RESTORE'); }
+        }
         if ($method === 'GET' && $route === 'admin/friends') app_json(app_admin_friend_links());
         if ($method === 'POST' && $route === 'admin/friends') app_json(app_save_friend_link(null), 201);
         if (preg_match('#^admin/friends/(\d+)$#', $route, $match)) {

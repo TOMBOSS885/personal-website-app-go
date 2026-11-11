@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-version="20261106-webdav-portable"
+version="20261111-webdav-real-progress"
 prefix="r${version}"
 release_dir="${repo_root}/release/personal-website-webdav-portable-update-${version}"
 archive="${repo_root}/release/personal-website-webdav-portable-update-${version}.zip"
@@ -24,6 +24,7 @@ cp -a "${repo_root}/php_backend/app/mail.php" "${release_dir}/app/mail.php"
 cp -a "${repo_root}/php_backend/app/admin_totp.php" "${release_dir}/app/admin_totp.php"
 cp -a "${repo_root}/php_backend/app/webdav_backup.php" "${release_dir}/app/webdav_backup.php"
 cp -a "${repo_root}/php_backend/migrations/020_webdav_backup.sql" "${release_dir}/migrations/020_webdav_backup.sql"
+cp -a "${repo_root}/php_backend/migrations/021_webdav_progress.sql" "${release_dir}/migrations/021_webdav_progress.sql"
 cp -a "${repo_root}/docs/webdav-backup-deploy.md" "${release_dir}/DEPLOY-WEBDAV.md"
 
 echo "[3/5] Checksums..."
